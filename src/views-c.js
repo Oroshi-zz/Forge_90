@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Oroshi-zz
 /* ============================================================
    FORGE 90 — Foods & recipes (editors), food preferences,
    section backgrounds

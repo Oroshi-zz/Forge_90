@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Oroshi-zz
 'use strict';
 /* ============================================================
    FORGE 90 server — accounts, sign-in, admin console API, per-user plan storage,

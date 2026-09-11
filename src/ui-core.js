@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Oroshi-zz
+// AGPL-3.0 §13: if you run a modified FORGE 90 for other people, point this at your own source code.
+const SOURCE_URL = 'https://github.com/Oroshi-zz/Forge_90';
 /* ============================================================
    FORGE 90 — UI core: helpers, icons, art, muscle map, tooltip,
    charts, toast/modal, undo, router

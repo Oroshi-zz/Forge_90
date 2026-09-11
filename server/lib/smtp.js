@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Oroshi-zz
 'use strict';
 /* Minimal, dependency-free SMTP client: implicit TLS (465), STARTTLS (587) or plain (local relays / testing).
    Supports AUTH PLAIN / LOGIN, UTF-8 subjects, multipart/alternative text+HTML and inline (CID) images. */

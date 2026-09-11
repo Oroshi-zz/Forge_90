@@ -1,8 +1,13 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Oroshi-zz
 const fs=require('fs');
-const css=fs.readFileSync('src/styles.css','utf8');
+const strip=s=>s.replace(/^\/\/ SPDX-License-Identifier:.*\n\/\/ Copyright \(C\).*\n/,'').replace(/^\/\* SPDX-License-Identifier:[\s\S]*?\*\/\n/,'');
+const css=strip(fs.readFileSync('src/styles.css','utf8'));
 const VERSION='v'+(fs.existsSync('VERSION')?fs.readFileSync('VERSION','utf8').trim().replace(/^v/i,''):'1.0');
-const js=`const APP_VERSION = ${JSON.stringify(VERSION)};\n`+['exercises','nutrition','foods-db','engine','ui-core','views-a','views-b','views-c','views-d','views-e','views-f','main'].map(f=>`/* ==== ${f}.js ==== */\n`+fs.readFileSync('src/'+f+'.js','utf8')).join('\n');
+const js=`const APP_VERSION = ${JSON.stringify(VERSION)};\n`+['exercises','nutrition','foods-db','engine','ui-core','views-a','views-b','views-c','views-d','views-e','views-f','main'].map(f=>`/* ==== ${f}.js ==== */\n`+strip(fs.readFileSync('src/'+f+'.js','utf8'))).join('\n');
+const SRC=(fs.readFileSync('src/ui-core.js','utf8').match(/const SOURCE_URL = '([^']+)'/)||[])[1]||'';
 const html=`<!DOCTYPE html>
+<!-- FORGE 90 ${VERSION} · Copyright (C) 2026 Oroshi-zz · SPDX-License-Identifier: AGPL-3.0-or-later · Source: ${SRC} -->
 <html lang="en" data-theme="dark" style="--dim:.7">
 <head>
 <meta charset="utf-8">

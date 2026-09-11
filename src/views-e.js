@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Oroshi-zz
 /* ============================================================
    FORGE 90 — accounts: sign-in screens, server sync, account settings, admin console
    When the page is served by server.js the app requires an account; opened as a plain
@@ -386,7 +388,7 @@ function admTabHTML() {
     return `<div class="grid g2"><div class="card"><div class="card-h"><h2>Full backup</h2></div><div class="small sub">Downloads every account (without passwords), each account’s plan data and the app settings (without the email password) as one JSON file.</div>
       <div class="row" style="margin-top:12px"><button class="btn primary" data-act="adm-backup">${icon('download')}Download backup</button></div>
       <div class="note" style="margin-top:12px">${icon('info')}<span>To back up everything including passwords, copy the server’s <code>data</code> folder while it’s stopped.</span></div></div>
-      <div class="card"><div class="card-h"><h2>Server</h2></div><table class="tbl"><tbody><tr><td>Data folder</td><td class="small"><code>${esc(s.dataDir)}</code></td></tr><tr><td>Stored data</td><td class="num">${kb(s.dataBytes)}</td></tr><tr><td>Accounts</td><td class="num">${s.users} · ${s.invites || 0} invited · ${s.disabled} disabled</td></tr><tr><td>FORGE 90</td><td>${esc(s.version || APP_VERSION)}</td></tr><tr><td>Node.js</td><td>${esc(s.node)}</td></tr><tr><td>Up for</td><td>${s.uptime > 86400 ? fmt(s.uptime / 86400, 1) + ' days' : s.uptime > 3600 ? fmt(s.uptime / 3600, 1) + ' h' : Math.round(s.uptime / 60) + ' min'}</td></tr></tbody></table></div></div>`; }
+      <div class="card"><div class="card-h"><h2>Server</h2></div><table class="tbl"><tbody><tr><td>Data folder</td><td class="small"><code>${esc(s.dataDir)}</code></td></tr><tr><td>Stored data</td><td class="num">${kb(s.dataBytes)}</td></tr><tr><td>Accounts</td><td class="num">${s.users} · ${s.invites || 0} invited · ${s.disabled} disabled</td></tr><tr><td>FORGE 90</td><td>${esc(s.version || APP_VERSION)}</td></tr><tr><td>License</td><td><a href="${SOURCE_URL}/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0</a> · <a href="${SOURCE_URL}" target="_blank" rel="noopener">Source code</a></td></tr><tr><td>Node.js</td><td>${esc(s.node)}</td></tr><tr><td>Up for</td><td>${s.uptime > 86400 ? fmt(s.uptime / 86400, 1) + ' days' : s.uptime > 3600 ? fmt(s.uptime / 3600, 1) + ' h' : Math.round(s.uptime / 60) + ' min'}</td></tr></tbody></table></div></div>`; }
   return '';
 }
 /* Admin → Server & proxy: what the server sees for this very request, with fixes for common reverse-proxy mistakes */

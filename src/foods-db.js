@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Oroshi-zz
 /* ============================================================
    FORGE 90 — Comprehensive food database + food-group tree
    Values per 100 g (or per 100 ml where noted, or per unit when a unit is given),

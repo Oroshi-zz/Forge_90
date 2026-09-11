@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Oroshi-zz
 /* ============================================================
    FORGE 90 — Ingredients (USDA-based) and recipes
    Macros per 100 g, or per unit when `u` is set.

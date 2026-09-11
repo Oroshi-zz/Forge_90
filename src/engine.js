@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Oroshi-zz
 /* ============================================================
    FORGE 90 — Engine: state, targets, plan generation, portioning,
    leftovers/batches, PRs and trends. (No DOM in this file.)

@@ -147,6 +147,10 @@ docker run --rm -v /path/to/data:/app/data ghcr.io/oroshi-zz/forge_90:latest \
 - Behind a proxy, the client IP comes from the entry your proxy added to `X-Forwarded-For`, so a client can't dodge rate limits by sending its own header.
 - Synced users only see each other's shared meals and portions.
 
+## License
+
+FORGE 90 is licensed under the GNU Affero General Public License v3.0 or later. See [LICENSE](LICENSE). If you run a modified version for other people, the AGPL requires you to offer them its source; change `SOURCE_URL` in `src/ui-core.js` to point at your copy.
+
 ## Credits
 
 Background photos are from Unsplash: Victor Freitas, Jorge Alberto Vega Barrera, Mina Rad, Shan A. Rajpoot, Rodrigo Rodrigues, Jason Briscoe, Vitaly Gariev, Jakob Owens, Alina Rubo, and Jonathan Borba for the sign-in page. Food values are approximations based on USDA FoodData Central. Recipe links go to their original authors.

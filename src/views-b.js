@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2026 Oroshi-zz
 /* ============================================================
    FORGE 90 — Views: workout plan, diet, grocery & prep, progress,
    settings; router, actions, init
@@ -304,7 +306,7 @@ function viewSettings() {
       <div class="small sub">When on, the planner orders each week’s meals so recipes reuse the same fresh ingredients — fewer packages to buy and less food going bad. Variety and favorites are unchanged. See the formula and this week’s savings on <a href="#/grocery">Grocery & prep</a>. Package sizes can be edited on any food.</div></div>
     <div style="height:16px"></div>
     <div class="card"><div class="card-h"><h2>Food preferences</h2><a class="btn sm" href="#/foods">Manage foods & recipes ${icon('right')}</a></div>${foodPrefsHTML()}</div>
-    <div class="tiny muted" style="margin-top:14px;text-align:center">FORGE 90 ${APP_VERSION}</div>
+    <div class="tiny muted" style="margin-top:14px;text-align:center">FORGE 90 ${APP_VERSION} · <a href="${SOURCE_URL}/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0</a> · <a href="${SOURCE_URL}" target="_blank" rel="noopener">Source code</a></div>
 `;
 }
 
