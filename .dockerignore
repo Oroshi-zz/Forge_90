@@ -1,0 +1,9 @@
+.git
+.github
+.env
+data
+server/data
+dist
+docs
+unraid
+*.md

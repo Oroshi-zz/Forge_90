@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>forge90</Name>
+  <Repository>ghcr.io/oroshi-zz/forge_90:latest</Repository>
+  <Registry>https://github.com/Oroshi-zz/Forge_90/pkgs/container/forge_90</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/Oroshi-zz/Forge_90/issues</Support>
+  <Project>https://github.com/Oroshi-zz/Forge_90</Project>
+  <Overview>FORGE 90 — a self-hosted weight-lifting and meal-planning web app. A 90-day Push/Pull/Legs program that keeps going in 13-week cycles, macro-scaled meals from 36 high-protein recipes and 650+ foods, a money-saving grocery planner, weigh-in and PR tracking, and invite-only accounts with an admin console and password-reset email.</Overview>
+  <Category>Productivity: Tools: HomeAutomation:</Category>
+  <WebUI>http://[IP]:[PORT:8090]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/Oroshi-zz/Forge_90/main/unraid/forge90.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/Oroshi-zz/Forge_90/main/server/public/icon.png</Icon>
+  <ExtraParams/>
+  <PostArgs/>
+  <CPUset/>
+  <DonateText/>
+  <DonateLink/>
+  <Requires>Invite and password-reset emails need a Gmail App Password (Google account → Security → 2-Step Verification → App passwords) in SMTP_PASS.</Requires>
+  <Config Name="Web UI port" Target="8090" Default="8090" Mode="tcp" Description="Port you open FORGE 90 on." Type="Port" Display="always" Required="true" Mask="false">8090</Config>
+  <Config Name="App data" Target="/app/data" Default="/mnt/user/appdata/forge90" Mode="rw" Description="Accounts, settings and every user's plan. Back this folder up." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/forge90</Config>
+  <Config Name="APP_URL" Target="APP_URL" Default="http://192.168.1.10:8090" Mode="" Description="The address people open FORGE 90 at (used in invite and password-reset links). Use your Unraid IP and port, or your https:// domain behind a reverse proxy." Type="Variable" Display="always" Required="true" Mask="false">http://192.168.1.10:8090</Config>
+  <Config Name="SMTP_USER" Target="SMTP_USER" Default="admin.oroshii@gmail.com" Mode="" Description="Gmail account that sends invite and password-reset emails." Type="Variable" Display="always" Required="false" Mask="false">admin.oroshii@gmail.com</Config>
+  <Config Name="SMTP_PASS" Target="SMTP_PASS" Default="" Mode="" Description="16-letter Gmail App Password for SMTP_USER (spaces are fine). Can also be set later in Admin → Email." Type="Variable" Display="always" Required="false" Mask="true"></Config>
+  <Config Name="MAIL_FROM" Target="MAIL_FROM" Default="admin.oroshii@gmail.com" Mode="" Description="From address on emails (normally the same as SMTP_USER)." Type="Variable" Display="always" Required="false" Mask="false">admin.oroshii@gmail.com</Config>
+  <Config Name="MAIL_FROM_NAME" Target="MAIL_FROM_NAME" Default="FORGE 90" Mode="" Description="From name on emails." Type="Variable" Display="advanced" Required="false" Mask="false">FORGE 90</Config>
+  <Config Name="SMTP_HOST" Target="SMTP_HOST" Default="smtp.gmail.com" Mode="" Description="SMTP server." Type="Variable" Display="advanced" Required="false" Mask="false">smtp.gmail.com</Config>
+  <Config Name="SMTP_PORT" Target="SMTP_PORT" Default="465" Mode="" Description="465 with SMTP_SECURITY=tls, or 587 with starttls." Type="Variable" Display="advanced" Required="false" Mask="false">465</Config>
+  <Config Name="SMTP_SECURITY" Target="SMTP_SECURITY" Default="tls" Mode="" Description="tls (port 465), starttls (port 587) or none (local relay)." Type="Variable" Display="advanced" Required="false" Mask="false">tls</Config>
+  <Config Name="ADMIN_EMAIL" Target="ADMIN_EMAIL" Default="admin@forge90.local" Mode="" Description="Default administrator, created on first start only. You choose a new password (and can change the email) at first sign-in." Type="Variable" Display="advanced" Required="false" Mask="false">admin@forge90.local</Config>
+  <Config Name="ADMIN_PASSWORD" Target="ADMIN_PASSWORD" Default="forge90-admin" Mode="" Description="First-start password for the default administrator (must be changed at first sign-in)." Type="Variable" Display="advanced" Required="false" Mask="true">forge90-admin</Config>
+  <Config Name="TRUST_PROXY" Target="TRUST_PROXY" Default="false" Mode="" Description="Set to true behind a reverse proxy (Nginx Proxy Manager, SWAG, Traefik, Cloudflare Tunnel) so HTTPS and client IPs are detected." Type="Variable" Display="advanced" Required="false" Mask="false">false</Config>
+  <Config Name="COOKIE_SECURE" Target="COOKIE_SECURE" Default="auto" Mode="" Description="auto marks the sign-in cookie Secure whenever HTTPS is used." Type="Variable" Display="advanced" Required="false" Mask="false">auto</Config>
+</Container>

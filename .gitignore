@@ -1,0 +1,16 @@
+# secrets — never commit
+.env
+*.env.local
+# runtime data (accounts, settings, every user's plan)
+data/
+server/data/
+# build output (made by `node build.js` / the Docker build)
+dist/
+server/public/index.html
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+node_modules/
+*.log
