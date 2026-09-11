@@ -191,8 +191,8 @@ function syncTake(next) {
   syncRerender();
 }
 function syncRerender() {
-  const h = location.hash; invalidate();
-  if (($('#view')) && (/^#\/(calendar|day|diet|grocery)(\/|$)/.test(h) || h === '' || h === '#/' || h === '#')) {
+  const h = location.hash; invalidate(); if (typeof pantrySyncReconcile === 'function') pantrySyncReconcile();
+  if (($('#view')) && (/^#\/(calendar|day|diet|grocery|pantry)(\/|$)/.test(h) || h === '' || h === '#/' || h === '#')) {
     const ae = document.activeElement; if (ae && ae.closest && ae.closest('#view input, #view select, #view textarea')) SY.needRender = true; else render();
   }
   refreshSyncUI();
@@ -331,10 +331,11 @@ function syncCardHTML() {
     <div class="tiny muted">If you accept, these meals are re-planned together from ${fmtDate(addDays(todayISO(), 1), { weekday: 'long', month: 'short', day: 'numeric' })} for both of you. You can change which meals are shared later — ${esc(syncName())} will be asked to approve.</div>
     <div class="row" style="margin-top:12px"><button class="btn primary" data-act="sync-accept">${icon('check')}Accept and sync</button><button class="btn ghost" data-act="sync-decline">Decline</button></div>`;
   else { const mineReq = sy.slotReq && sy.slotReq.by === AUTH.user.id, theirReq = sy.slotReq && !mineReq; const n = sy.changesIn.length;
-    body = `<div class="row" style="gap:12px"><span class="avatar">${esc(initials(syncName()))}</span><div style="flex:1;min-width:0"><b>Synced with ${esc(syncName())}</b><div class="tiny muted">${esc(sy.partner ? sy.partner.email : '')} · since ${fmtDate(sy.since, { month: 'short', day: 'numeric', year: 'numeric' })}</div></div>${syncBtnHTML('sm')}</div>
+    body = `<div class="row" style="gap:12px">${avatarHTML(Object.assign({}, (SY.data && SY.data.partner) || {}, { name: syncName() }))}<div style="flex:1;min-width:0"><b>Synced with ${esc(syncName())}</b><div class="tiny muted">${esc(sy.partner ? sy.partner.email : '')} · since ${fmtDate(sy.since, { month: 'short', day: 'numeric', year: 'numeric' })}</div></div>${syncBtnHTML('sm')}</div>
     ${theirReq ? `<div class="note warn" style="margin-top:12px">${icon('users')}<span style="flex:1"><b>${esc(syncName())}</b> wants to share: ${MEAL_SLOTS.filter(k => sy.slotReq.slots[k]).map(k => SLOT_LABEL[k]).join(', ')}.</span><button class="btn sm primary" data-act="sync-slots-ok" data-v="1">Approve</button><button class="btn sm ghost" data-act="sync-slots-ok" data-v="0">Keep as is</button></div>` : ''}
     <form data-form="sync-slots" style="margin-top:12px"><div class="field"><label>Shared meals ${mineReq ? `<span class="pill warn-pill">Waiting for ${esc(syncName())} to approve</span>` : ''}</label>${slotBoxes(mineReq ? sy.slotReq.slots : sy.slots, theirReq)}</div>
       <div class="row wrap" style="margin-top:10px"><button class="btn" type="submit" ${theirReq ? 'disabled' : ''}>${mineReq ? 'Update request' : 'Ask to change shared meals'}</button>${n ? `<span class="small">${n} change${n === 1 ? '' : 's'} waiting on you</span>` : ''}</div></form>
+    <hr class="sep"><div class="danger-zone sync-pantry"><div><b>${icon('box')}Share the pantry ${sy.pantry && sy.pantry.on ? '<span class="pill acc">On</span>' : ''}</b><div class="tiny muted">${sy.pantry && sy.pantry.on ? `You and ${esc(syncName())} use one pantry — scans, edits and meals eaten update it for both of you. If it’s turned off, you each keep a copy.` : `One pantry for both of you instead of one each. Your pantry items move into it, and ${esc(syncName())}’s do too.`}</div></div><button class="btn ${sy.pantry && sy.pantry.on ? '' : 'primary'}" data-act="pan-share" data-v="${sy.pantry && sy.pantry.on ? 0 : 1}">${sy.pantry && sy.pantry.on ? 'Stop sharing' : 'Share pantry'}</button></div>
     <hr class="sep"><div class="danger-zone"><div><b>Unsync meal plans</b><div class="tiny muted">You both keep your current meals; from then on your plans change independently.</div></div><button class="btn danger" data-act="sync-end">Unsync</button></div>`; }
   return `<div class="card-h"><h2>${icon('users')}Meal-plan sync</h2>${sy && sy.status === 'active' ? '<span class="pill acc">Active</span>' : sy ? '<span class="pill warn-pill">Pending</span>' : ''}</div>${body}`;
 }

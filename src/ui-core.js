@@ -16,6 +16,8 @@ function saveUI() { try { localStorage.setItem('forge90.ui', JSON.stringify(UI))
 
 /* ---------- icons (24px stroke) ---------- */
 const IC = {
+  print: '<path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
+  expand: '<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>',
   grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/>',
   cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   dumbbell: '<path d="M6.5 6.5v11M17.5 6.5v11M3 9.5v5M21 9.5v5M6.5 12h11"/>',
@@ -57,6 +59,8 @@ const IC = {
   list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
   edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
   pull: '<path d="M12 3v12M7 10l5 5 5-5M5 21h14"/>',
+  scan: '<path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10 8v8M13 8v8M17 8v8"/>',
+  box: '<path d="M21 8v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8"/><path d="M1.5 3.5h21v4.5h-21z"/><path d="M10 12h4"/>',
   book: '<path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="M8 7h8M8 11h6"/>'
 };
 const icon = (n, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n] || ''}</svg>`;
@@ -126,7 +130,7 @@ function exTipHTML(exId, extra = '') {
   const ex = EX[exId]; if (!ex) return '';
   const muscles = ex.primary.map(k => REGION_LABEL[k]).join(', ') + (ex.secondary.length ? ` <span class="muted">· ${ex.secondary.map(k => REGION_LABEL[k]).join(', ')}</span>` : '');
   return `<div class="tmm">${muscleMap(ex.primary, ex.secondary)}<div><h4>${esc(ex.name)}</h4><div class="tmeta">${esc(ex.equip)} · ${ex.compound ? 'Compound' : 'Isolation'}</div><div class="small">${muscles}</div></div></div>
-    ${extra}<ol>${ex.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>
+    ${extra}${ex.why ? `<div class="why"><b>Why it’s here:</b> ${esc(ex.why)}</div>` : ''}<ol>${ex.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>
     <div class="cue"><b>Cues:</b> ${ex.cues.map(esc).join(' · ')}</div><div class="mistake"><b>Avoid:</b> ${esc(ex.mistake)}</div>`;
 }
 function woTipHTML(date) {
@@ -268,10 +272,10 @@ function confirmBox(title, text, okLabel, onOk, danger) {
 
 /* ---------- undo ---------- */
 const undoStack = [];
-function pushUndo(label) { undoStack.push({ plan: JSON.stringify(S.plan), fav: JSON.stringify(S.favRecipes || {}), share: S.settings.shareIngredients !== false, label }); if (undoStack.length > 40) undoStack.shift(); }
+function pushUndo(label) { undoStack.push({ plan: JSON.stringify(S.plan), fav: JSON.stringify(S.favRecipes || {}), share: S.settings.shareIngredients !== false, swap: JSON.stringify(S.slotSwap || {}), gym: JSON.stringify({ c: S.gymCards || [], a: S.gymActive || null }), label }); if (undoStack.length > 40) undoStack.shift(); }
 function undo() {
   const u = undoStack.pop(); if (!u) { toast('Nothing to undo'); return; }
-  S.plan = JSON.parse(u.plan); if (u.fav) S.favRecipes = JSON.parse(u.fav); if (u.share != null) S.settings.shareIngredients = u.share; invalidate(); saveState(); render(); refreshFavButtons();
+  S.plan = JSON.parse(u.plan); if (u.fav) S.favRecipes = JSON.parse(u.fav); if (u.swap) S.slotSwap = JSON.parse(u.swap); if (u.gym) { const g = JSON.parse(u.gym); S.gymCards = g.c; S.gymActive = g.a; } if (u.share != null) S.settings.shareIngredients = u.share; invalidate(); saveState(); render(); refreshFavButtons();
   if (typeof renderQuickEdit === 'function' && QE && $('#modal .qe-sec')) renderQuickEdit();
   toast('Undid: ' + u.label);
 }

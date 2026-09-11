@@ -101,7 +101,8 @@ const findUser = email => db.users.find(u => u.email === normEmail(email));
 const userById = id => db.users.find(u => u.id === id);
 const admins = () => db.users.filter(u => u.role === 'admin' && u.status === 'active');
 const isLocked = u => !!(u.lockedUntil && u.lockedUntil > now());
-function pubUser(u) { return u && { id: u.id, email: u.email, name: u.name, firstName: u.firstName || '', lastName: u.lastName || '', role: u.role, status: u.status, mustChange: !!u.mustChange, createdAt: u.createdAt, lastLoginAt: u.lastLoginAt || null, notify: Object.assign({ passwordChange: true, newSignIn: false }, u.notify || {}) }; }
+const avatarUrl = u => u && u.avatar ? `/api/avatar/${u.id}?v=${encodeURIComponent(u.avatarV || '1')}` : null;
+function pubUser(u) { return u && { id: u.id, email: u.email, name: u.name, firstName: u.firstName || '', lastName: u.lastName || '', avatarUrl: avatarUrl(u), role: u.role, status: u.status, mustChange: !!u.mustChange, createdAt: u.createdAt, lastLoginAt: u.lastLoginAt || null, notify: Object.assign({ passwordChange: true, newSignIn: false }, u.notify || {}) }; }
 function audit(type, { userId = null, actorId = null, ip = null, detail = '' } = {}) {
   db.audit.push({ id: uid(), t: now(), type, userId, actorId, ip, detail: String(detail).slice(0, 300) });
   if (db.audit.length > 5000) db.audit.splice(0, db.audit.length - 5000);
@@ -202,7 +203,7 @@ function notifyPasswordChanged(user, req, via) {
 /* ---------- HTTP plumbing ---------- */
 const SEC_HEADERS = {
   'X-Content-Type-Options': 'nosniff', 'X-Frame-Options': 'DENY', 'Referrer-Policy': 'no-referrer', 'Cross-Origin-Opener-Policy': 'same-origin',
-  'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  'Permissions-Policy': 'camera=(self), microphone=(), geolocation=()',
   'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
 };
 function send(res, code, obj, headers = {}) { const body = JSON.stringify(obj); res.writeHead(code, Object.assign({ 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }, SEC_HEADERS, headers)); res.end(body); }
@@ -330,6 +331,41 @@ route('PATCH', '/api/account', { auth: true, allowMustChange: true }, async (req
   saveDb(); if (changes.length) audit('profile_updated', { userId: u.id, ip: clientIp(req), detail: changes.join(', ') });
   send(res, 200, { user: pubUser(u) });
 });
+/* ---------- profile pictures: DATA/avatars/<userId>-<version>.<ext> — a new upload deletes the old file ---------- */
+const AVATAR_DIR = path.join(DATA, 'avatars'); fs.mkdirSync(AVATAR_DIR, { recursive: true });
+const AVATAR_MAX = 512 * 1024;
+const AVATAR_TYPES = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
+const avatarPath = u => u && u.avatar ? path.join(AVATAR_DIR, path.basename(String(u.avatar))) : null;
+function removeAvatar(u) { const f = avatarPath(u); if (f) { try { fs.unlinkSync(f); } catch (e) { /* already gone */ } } delete u.avatar; delete u.avatarV; }
+function imageExt(buf) {
+  if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpg';
+  if (buf.length > 8 && buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
+  if (buf.length > 12 && buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'webp';
+  return null;
+}
+route('PUT', '/api/account/avatar', { auth: true, maxBody: 1024 * 1024 }, async (req, res, ctx) => {
+  const u = ctx.me.u; if (limited('avatar:' + u.id, 30, 60 * 60000)) err(429, 'Too many picture changes. Try again later.');
+  const m = String(ctx.body.data || '').match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/); if (!m) err(400, 'Upload a JPEG, PNG or WebP image.');
+  const buf = Buffer.from(m[2], 'base64'); if (!buf.length) err(400, 'That image is empty.'); if (buf.length > AVATAR_MAX) err(413, 'That picture is too large (512 KB max).');
+  const ext = imageExt(buf); if (!ext) err(400, 'That file isn’t a JPEG, PNG or WebP image.');
+  const v = Date.now().toString(36); const name = `${u.id.replace(/[^A-Za-z0-9_-]/g, '')}-${v}.${ext}`;
+  writeAtomic(path.join(AVATAR_DIR, name), buf);
+  const had = !!u.avatar; removeAvatar(u);                 // the old picture is deleted, not kept
+  u.avatar = name; u.avatarV = v; saveDb();
+  audit('avatar_changed', { userId: u.id, ip: clientIp(req), detail: had ? 'replaced' : 'added' });
+  send(res, 200, { user: pubUser(u) });
+});
+route('DELETE', '/api/account/avatar', { auth: true }, async (req, res, ctx) => {
+  const u = ctx.me.u; if (u.avatar) { removeAvatar(u); saveDb(); audit('avatar_changed', { userId: u.id, ip: clientIp(req), detail: 'removed' }); }
+  send(res, 200, { user: pubUser(u) });
+});
+route('GET', '/api/avatar/:id', { auth: true }, async (req, res, ctx) => {
+  const u = userById(ctx.params.id); const f = avatarPath(u); if (!f || (ctx.query.v && ctx.query.v !== u.avatarV)) err(404, 'No picture.');   // an old version's URL stops working once it's replaced
+  let buf; try { buf = fs.readFileSync(f); } catch (e) { err(404, 'No picture.'); }
+  const type = AVATAR_TYPES[path.extname(f).slice(1)] || 'application/octet-stream';
+  res.writeHead(200, Object.assign({}, SEC_HEADERS, { 'Content-Type': type, 'Content-Length': buf.length, 'Cache-Control': 'private, max-age=31536000, immutable', 'Content-Security-Policy': "default-src 'none'" }));
+  res.end(buf);
+});
 route('POST', '/api/account/password', { auth: true, allowMustChange: true, limit: 'auth' }, async (req, res, ctx) => {
   const u = ctx.me.u, b = ctx.body;
   if (!(await verifyPw(String(b.current || ''), u.pw))) err(403, 'Your current password didn’t match.');
@@ -350,7 +386,7 @@ route('DELETE', '/api/account', { auth: true, limit: 'auth' }, async (req, res, 
   if (u.role === 'admin' && admins().length <= 1) err(400, 'You’re the only administrator. Make someone else an admin before deleting your account.');
   deleteUser(u); audit('account_deleted', { userId: u.id, ip: clientIp(req), detail: u.email }); setCookie(res, req, '', 0); send(res, 200, { ok: true });
 });
-function deleteUser(u) { const sy = syncOf(u.id); if (sy) dropSync(sy); db.users = db.users.filter(x => x !== u); db.sessions = db.sessions.filter(s => s.userId !== u.id); db.resets = db.resets.filter(r => r.userId !== u.id); try { fs.unlinkSync(stateFile(u.id)); } catch (e) { /* none */ } saveDb(); }
+function deleteUser(u) { removeAvatar(u); const sy = syncOf(u.id); if (sy) dropSync(sy); db.users = db.users.filter(x => x !== u); db.sessions = db.sessions.filter(s => s.userId !== u.id); db.resets = db.resets.filter(r => r.userId !== u.id); try { fs.unlinkSync(stateFile(u.id)); } catch (e) { /* none */ } saveDb(); }
 
 /* ---------- meal-plan sync between two accounts ----------
    A sync links two users. Both agree which meal slots are shared. `agreed` holds the shared meal for every
@@ -374,9 +410,9 @@ function pruneSync(s) {                          // forget days that are over
 }
 function syncView(s, me) {
   const p = userById(partnerId(s, me)); let snapAt = null; try { snapAt = fs.statSync(snapFile(s.id, partnerId(s, me))).mtimeMs; } catch (e) { /* none yet */ }
-  return { id: s.id, status: s.status, role: s.by === me ? 'requester' : 'recipient', partner: p ? { id: p.id, name: p.name, email: p.email } : null,
+  return { id: s.id, status: s.status, role: s.by === me ? 'requester' : 'recipient', partner: p ? { id: p.id, name: p.name, email: p.email, avatarUrl: avatarUrl(p) } : null,
     slots: s.slots, slotReq: s.slotReq, since: s.since, agreed: s.agreed, through: s.through, div: s.div, baseRev: s.baseRev, rev: s.rev,
-    changesIn: s.changes.filter(c => c.from !== me), changesOut: s.changes.filter(c => c.from === me), events: s.events.slice(-20), grocery: s.grocery, partnerSnapAt: snapAt, createdAt: s.createdAt, activeAt: s.activeAt };
+    changesIn: s.changes.filter(c => c.from !== me), changesOut: s.changes.filter(c => c.from === me), events: s.events.slice(-20), grocery: s.grocery, pantry: { on: !!(s.pantry && s.pantry.on), items: (s.pantry && s.pantry.on && s.pantry.items) || [], rev: (s.pantry && s.pantry.rev) || 0, by: (s.pantry && s.pantry.by) || null }, partnerSnapAt: snapAt, createdAt: s.createdAt, activeAt: s.activeAt };
 }
 function syncMail(req, to, subject, heading, lines, label) {
   if (!to || !emailReady()) return;
@@ -482,10 +518,146 @@ route('POST', '/api/sync/resolve', { auth: true }, async (req, res, ctx) => {   
   send(res, 200, { done, sync: syncView(s, me.id) });
 });
 route('PUT', '/api/sync/grocery', { auth: true }, async (req, res, ctx) => {       // shared shopping-list check-offs
-  const s = needSync(ctx, 'active'); const b = ctx.body; if (!isoDate(b.week) || typeof b.id !== 'string' || b.id.length > 80) err(400, 'Bad item');
-  const w = s.grocery[b.week] = s.grocery[b.week] || {}; if (b.got) w[b.id] = 1; else delete w[b.id];
+  // { week, id, got } for one tick, or { week, set: { id: 1 | 0 | null } } for many (0 = unticked on purpose, for items the pantry covers)
+  const s = needSync(ctx, 'active'); const b = ctx.body;
+  const changes = b.set && typeof b.set === 'object' && !Array.isArray(b.set) ? Object.entries(b.set).slice(0, 500) : Array.isArray(b.ids) ? b.ids.slice(0, 500).map(id => [id, b.got ? 1 : null]) : [[b.id, b.got ? 1 : null]];
+  if (!isoDate(b.week) || !changes.length || changes.some(([id, v]) => typeof id !== 'string' || !/^[A-Za-z0-9_.:-]{1,80}$/.test(id) || /^(__proto__|constructor|prototype)$/.test(id) || ![1, 0, null, true, false].includes(v))) err(400, 'Bad item');
+  const w = s.grocery[b.week] = s.grocery[b.week] || {}; changes.forEach(([id, v]) => { if (v === null || v === false) delete w[id]; else w[id] = v ? 1 : 0; });
   const weeks = Object.keys(s.grocery).sort(); while (weeks.length > 20) delete s.grocery[weeks.shift()];
   bumpSync(s); send(res, 200, { ok: true, rev: s.rev });
+});
+
+/* shared household pantry (optional, either synced user can switch it on or off) */
+const PANTRY_MAX = 600;
+function cleanPantryItem(it) {
+  if (!it || typeof it !== 'object') err(400, 'Bad pantry item');
+  const id = String(it.id || ''); const food = String(it.food || '');
+  if (!/^[A-Za-z0-9_.:-]{1,60}$/.test(id) || !/^[A-Za-z0-9_.:-]{1,80}$/.test(food) || /^(__proto__|constructor|prototype)$/.test(food)) err(400, 'Bad pantry item');
+  const qty = Math.max(0, Math.min(1e6, +it.qty || 0)); const exp = it.exp && isoDate(it.exp) ? it.exp : null; const added = isoDate(it.added) ? it.added : new Date().toISOString().slice(0, 10);
+  return { id, food, qty: Math.round(qty * 100) / 100, exp, added, by: null };
+}
+route('POST', '/api/sync/pantry/share', { auth: true }, async (req, res, ctx) => {
+  const s = needSync(ctx, 'active'); const on = !!ctx.body.on; const me = ctx.me.u;
+  s.pantry = s.pantry || { on: false, items: [], used: {}, rev: 0 };
+  const prev = s.pantry.items.slice();
+  if (on && !s.pantry.on) { s.pantry.on = true; s.pantry.items = []; s.pantry.used = {}; }
+  if (!on && s.pantry.on) { s.pantry.on = false; s.pantry.items = []; }
+  s.pantry.by = me.id; s.pantry.rev = (s.pantry.rev || 0) + 1;
+  syncEvent(s, me.id, 'pantry', on ? `${me.name} started sharing the pantry` : `${me.name} stopped sharing the pantry`); bumpSync(s);
+  send(res, 200, { pantry: { on: s.pantry.on, items: s.pantry.items, rev: s.pantry.rev }, previous: on ? [] : prev });
+});
+route('POST', '/api/sync/pantry', { auth: true, limit: 'state' }, async (req, res, ctx) => {
+  const s = needSync(ctx, 'active'); if (!s.pantry || !s.pantry.on) err(409, 'The pantry isn’t shared.');
+  const P = s.pantry; const me = ctx.me.u.id; const ops = Array.isArray(ctx.body.ops) ? ctx.body.ops.slice(0, 400) : [];
+  ops.forEach(o => {
+    if (!o || typeof o !== 'object') return;
+    if (o.op === 'add') { const it = cleanPantryItem(o.item); it.by = me; if (!P.items.some(x => x.id === it.id) && P.items.length < PANTRY_MAX) P.items.push(it); }
+    else if (o.op === 'set') { const it = P.items.find(x => x.id === o.id); if (it) { if (o.qty != null) it.qty = Math.max(0, Math.min(1e6, Math.round(+o.qty * 100) / 100 || 0)); if (o.exp !== undefined) it.exp = o.exp && isoDate(o.exp) ? o.exp : null; if (o.food && /^[A-Za-z0-9_.:-]{1,80}$/.test(o.food) && !/^(__proto__|constructor|prototype)$/.test(o.food)) it.food = o.food; } }
+    else if (o.op === 'del') P.items = P.items.filter(x => x.id !== o.id);
+  });
+  // automatic use-up: each person sends what their own planned meals used, once per day
+  const c = ctx.body.consume;
+  if (c && isoDate(c.through) && c.use && typeof c.use === 'object') {
+    P.used = P.used || {}; const last = P.used[me] || '';
+    if (c.through > last) {
+      Object.entries(c.use).slice(0, 400).forEach(([food, amt]) => {
+        let left = Math.max(0, +amt || 0); if (!left) return;
+        P.items.filter(x => x.food === food && x.qty > 0).sort((a, b) => (a.exp || '9999') < (b.exp || '9999') ? -1 : 1).forEach(x => { const t = Math.min(left, x.qty); x.qty = Math.round((x.qty - t) * 100) / 100; left -= t; });
+      });
+      P.items = P.items.filter(x => x.qty > 0.001); P.used[me] = c.through;
+    }
+  }
+  P.rev = (P.rev || 0) + 1; bumpSync(s);
+  send(res, 200, { pantry: { on: true, items: P.items, rev: P.rev }, used: (P.used || {})[me] || null });
+});
+
+/* ---------- shared product database (barcode-scanned foods everyone can use) ---------- */
+const PROD = require('./lib/products');
+const FOODS_FILE = path.join(DATA, 'foods.json');
+let sharedFoods = { rev: 0, foods: {} };
+try { if (fs.existsSync(FOODS_FILE)) sharedFoods = Object.assign({ rev: 0, foods: {} }, JSON.parse(fs.readFileSync(FOODS_FILE, 'utf8'))); } catch (e) { console.error('Could not read', FOODS_FILE, e.message); }
+let foodsT = null; const saveFoods = () => { clearTimeout(foodsT); foodsT = setTimeout(() => writeAtomic(FOODS_FILE, JSON.stringify(sharedFoods, null, 1)), 100); };
+const SUB_RE = /^[a-z_]{2,30}$/;
+const AISLE_OK = ['Meat & Seafood', 'Dairy & Eggs', 'Produce', 'Grains & Bread', 'Frozen', 'Pantry', 'Snacks', 'Beverages', 'Deli & Prepared'];
+function cleanSharedFood(b, cur) {
+  const n = String(b.n || '').replace(/\s+/g, ' ').trim().slice(0, 80); if (!n) err(400, 'Give the product a name.');
+  const numv = (k, max) => { const v = +b[k]; if (!isFinite(v) || v < 0 || v > max) err(400, `Check the ${({ k: 'calories', p: 'protein', c: 'carbs', f: 'fat', g: 'item weight', pk: 'package size', srv: 'serving size' })[k] || k} value.`); return Math.round(v * 100) / 100; };
+  const basis = ['g', 'ml', 'u'].includes(b.basis) ? b.basis : 'g';
+  const out = { n, brand: String(b.brand || '').replace(/\s+/g, ' ').trim().slice(0, 60), sub: SUB_RE.test(b.sub || '') ? b.sub : 'sauces', a: AISLE_OK.includes(b.a) ? b.a : 'Pantry',
+    r: ['P', 'C', 'F', 'V'].includes(b.r) ? b.r : null, k: numv('k', basis === 'u' ? 5000 : 950), p: numv('p', basis === 'u' ? 500 : 100), c: numv('c', basis === 'u' ? 500 : 100), f: numv('f', basis === 'u' ? 500 : 100),
+    ml: basis === 'ml', u: basis === 'u' ? (String(b.u || 'item').trim().slice(0, 20) || 'item') : null, g: basis === 'u' ? numv('g', 5000) || null : null,
+    pk: b.pk ? numv('pk', 1e5) : null, srv: b.srv ? numv('srv', 1e4) : null, src: cur ? cur.src : (b.src === 'off' ? 'off' : 'user') };
+  if (out.p + out.c + out.f > (basis === 'u' ? 5000 : 101)) err(400, 'Protein, carbs and fat add up to more than the total weight.');
+  return out;
+}
+route('GET', '/api/foods/shared', { auth: true }, async (req, res) => send(res, 200, sharedFoods));
+route('GET', '/api/barcode/:code', { auth: true }, async (req, res, ctx) => {
+  if (limited('barcode:' + ctx.me.u.id, 150, 10 * 60000)) err(429, 'Too many lookups. Wait a few minutes.');
+  const code = PROD.normGtin(ctx.params.code); if (!code) err(400, 'That isn’t a valid barcode number.');
+  const hit = Object.values(sharedFoods.foods).find(f => f.gtin === code);
+  if (hit) return send(res, 200, { gtin: code, food: hit });
+  let off = null; let offError = null;
+  try { off = await PROD.offLookup(code); } catch (e) { offError = e.message; }
+  send(res, 200, { gtin: code, suggest: off, error: offError });
+});
+route('POST', '/api/foods/shared', { auth: true }, async (req, res, ctx) => {
+  if (limited('foodadd:' + ctx.me.u.id, 60, 60 * 60000)) err(429, 'Too many new products in an hour.');
+  const b = ctx.body; const gtin = b.gtin ? PROD.normGtin(b.gtin) : null; if (b.gtin && !gtin) err(400, 'That isn’t a valid barcode number.');
+  if (gtin) { const hit = Object.values(sharedFoods.foods).find(f => f.gtin === gtin); if (hit) return send(res, 200, { food: hit, existed: true, rev: sharedFoods.rev }); }
+  if (Object.keys(sharedFoods.foods).length >= 20000) err(400, 'The product list is full.');
+  const food = Object.assign(cleanSharedFood(b), { id: gtin ? 'bc_' + gtin : 'sf_' + uid().replace(/[^A-Za-z0-9]/g, ''), gtin, by: ctx.me.u.id, byName: ctx.me.u.name, at: now() });
+  sharedFoods.foods[food.id] = food; sharedFoods.rev++; saveFoods();
+  audit('product_added', { userId: ctx.me.u.id, ip: clientIp(req), detail: `${food.n}${gtin ? ' · ' + gtin : ''}` });
+  send(res, 200, { food, rev: sharedFoods.rev });
+});
+route('PATCH', '/api/foods/shared/:id', { auth: true }, async (req, res, ctx) => {
+  const cur = sharedFoods.foods[ctx.params.id]; if (!cur) err(404, 'Product not found.');
+  if (cur.by !== ctx.me.u.id && ctx.me.u.role !== 'admin') err(403, 'Only the person who added this product or an administrator can edit it.');
+  const food = Object.assign({}, cur, cleanSharedFood(Object.assign({}, cur, { basis: cur.u ? 'u' : cur.ml ? 'ml' : 'g' }, ctx.body), cur), { id: cur.id, gtin: cur.gtin, by: cur.by, byName: cur.byName, at: cur.at, editedAt: now() });
+  sharedFoods.foods[cur.id] = food; sharedFoods.rev++; saveFoods();
+  audit('product_edited', { userId: ctx.me.u.id, ip: clientIp(req), detail: food.n });
+  send(res, 200, { food, rev: sharedFoods.rev });
+});
+route('DELETE', '/api/foods/shared/:id', { admin: true }, async (req, res, ctx) => {
+  const cur = sharedFoods.foods[ctx.params.id]; if (!cur) err(404, 'Product not found.');
+  delete sharedFoods.foods[cur.id]; sharedFoods.rev++; saveFoods();
+  audit('product_deleted', { userId: ctx.me.u.id, actorId: ctx.me.u.id, ip: clientIp(req), detail: cur.n });
+  send(res, 200, { ok: true, rev: sharedFoods.rev });
+});
+
+/* ---------- recipe import: web links and Mealie ---------- */
+const IMP = require('./lib/recipe-import');
+if (!db.integrations || typeof db.integrations !== 'object' || Array.isArray(db.integrations)) db.integrations = {};
+const mealieCfg = () => { const m = db.integrations.mealie; return m && m.url && m.token ? m : null; };
+function mealieView(u) { const m = db.integrations.mealie || {}; return { configured: !!mealieCfg(), url: m.url || '', tokenSet: !!m.token, user: m.user || '', version: m.version || '', checkedAt: m.checkedAt || null, canEdit: u.role === 'admin' }; }
+function importLimit(ctx, kind) { if (limited(`import-${kind}:` + ctx.me.u.id, kind === 'search' ? 240 : 60, 10 * 60000)) err(429, 'Too many imports in a short time. Wait a few minutes and try again.'); }
+async function impCall(fn) { try { return await fn(); } catch (e) { if (e instanceof IMP.ImportErr) err(e.code, e.message, e.extra && e.extra.partial ? { partial: e.extra.partial } : undefined); throw e; } }
+function mealieInput(body) {
+  const cur = db.integrations.mealie || {};
+  const url = IMP.mealieBase(body.url != null ? body.url : cur.url);
+  if (!/^https?:\/\/[^\s/]+/i.test(url) || url.length > 300) err(400, 'Enter the address you open Mealie at, e.g. http://192.168.1.10:9925');
+  const token = body.token ? String(body.token).trim() : cur.token;
+  if (!token) err(400, 'Paste a Mealie API token.');
+  if (token.length > 4000 || /\s/.test(token)) err(400, 'That API token doesn’t look right.');
+  return { url, token };
+}
+route('GET', '/api/integrations', { auth: true }, async (req, res, ctx) => send(res, 200, { mealie: mealieView(ctx.me.u) }));
+route('POST', '/api/integrations/mealie/test', { admin: true }, async (req, res, ctx) => { const r = await impCall(() => IMP.mealieTest(mealieInput(ctx.body))); send(res, 200, Object.assign({ ok: true }, r)); });
+route('PUT', '/api/integrations/mealie', { admin: true }, async (req, res, ctx) => {
+  const cfg = mealieInput(ctx.body); const r = await impCall(() => IMP.mealieTest(cfg));
+  db.integrations.mealie = { url: cfg.url, token: cfg.token, user: r.user, group: r.group, version: r.version, checkedAt: now(), updatedAt: now(), by: ctx.me.u.id }; saveDb();
+  audit('integration_changed', { userId: ctx.me.u.id, actorId: ctx.me.u.id, ip: clientIp(req), detail: `Mealie connected (${cfg.url})` });
+  send(res, 200, { mealie: mealieView(ctx.me.u) });
+});
+route('DELETE', '/api/integrations/mealie', { admin: true }, async (req, res, ctx) => {
+  delete db.integrations.mealie; saveDb(); audit('integration_changed', { userId: ctx.me.u.id, actorId: ctx.me.u.id, ip: clientIp(req), detail: 'Mealie disconnected' });
+  send(res, 200, { mealie: mealieView(ctx.me.u) });
+});
+route('GET', '/api/import/mealie/recipes', { auth: true }, async (req, res, ctx) => { importLimit(ctx, 'search'); send(res, 200, await impCall(() => IMP.mealieSearch(mealieCfg(), ctx.query.q, ctx.query.page))); });
+route('GET', '/api/import/mealie/recipes/:slug', { auth: true }, async (req, res, ctx) => { importLimit(ctx, 'get'); const m = mealieCfg(); send(res, 200, { recipe: await impCall(() => IMP.mealieRecipe(m, ctx.params.slug, m && m.group)) }); });
+route('POST', '/api/import/url', { auth: true }, async (req, res, ctx) => {
+  importLimit(ctx, 'get'); const u = String(ctx.body.url || '').trim(); if (!u || u.length > 2000) err(400, 'Paste a link to a recipe page.');
+  send(res, 200, { recipe: await impCall(() => IMP.importFromUrl(u)) });
 });
 
 /* administrator */
@@ -542,6 +714,7 @@ route('PATCH', '/api/admin/users/:id', { admin: true }, async (req, res, ctx) =>
   if (b.email != null && normEmail(b.email) !== u.email) { const e = normEmail(b.email); if (!validEmail(e)) err(400, 'Enter a valid email address.'); if (findUser(e)) err(409, 'Another account already uses that email.'); audit('email_changed', { userId: u.id, actorId: me.id, ip: clientIp(req), detail: `${u.email} → ${e}` }); u.email = e; log.push('email'); }
   saveDb(); send(res, 200, { user: adminUserRow(u), changed: log });
 });
+route('DELETE', '/api/admin/users/:id/avatar', { admin: true }, async (req, res, ctx) => { const u = target(ctx); if (u.avatar) { removeAvatar(u); saveDb(); audit('avatar_changed', { userId: u.id, actorId: ctx.me.u.id, ip: clientIp(req), detail: 'removed by admin' }); } send(res, 200, { user: adminUserRow(u) }); });
 route('POST', '/api/admin/users/:id/unlock', { admin: true }, async (req, res, ctx) => { const u = target(ctx); u.failed = 0; u.lockedUntil = null; saveDb(); audit('unlocked', { userId: u.id, actorId: ctx.me.u.id, ip: clientIp(req) }); send(res, 200, { user: adminUserRow(u) }); });
 route('POST', '/api/admin/users/:id/send-reset', { admin: true }, async (req, res, ctx) => { const u = target(ctx); if (u.status === 'disabled') err(400, 'Enable the account first.'); const r = await sendReset(u, 'admin', req, { actorId: ctx.me.u.id }); if (!r.sent) err(502, 'The reset email couldn’t be sent: ' + r.error); send(res, 200, { ok: true, minutes: RESET_MINUTES }); });
 route('POST', '/api/admin/users/:id/temp-password', { admin: true }, async (req, res, ctx) => {
@@ -622,7 +795,7 @@ route('GET', '/api/admin/stats', { admin: true }, async (req, res) => {
     emails24: a.filter(x => x.type === 'reset_email_sent').length, emailFail24: a.filter(x => /email_failed|reset_email_failed/.test(x.type)).length, dataBytes: bytes, dataDir: DATA, node: process.version, version: VERSION, uptime: Math.round(process.uptime()) });
 });
 route('GET', '/api/admin/backup', { admin: true }, async (req, res, ctx) => {
-  const out = { app: 'FORGE 90', exportedAt: new Date().toISOString(), settings: adminSettingsView(), invites: db.invites.map(inviteRow), users: db.users.map(u => Object.assign(pubUser(u), { state: readState(u.id) })) };
+  const out = { app: 'FORGE 90', exportedAt: new Date().toISOString(), settings: adminSettingsView(), invites: db.invites.map(inviteRow), users: db.users.map(u => Object.assign(pubUser(u), { state: readState(u.id) })), sharedFoods: sharedFoods.foods };
   audit('backup_downloaded', { actorId: ctx.me.u.id, ip: clientIp(req) });
   send(res, 200, out, { 'Content-Disposition': `attachment; filename="forge90-backup-${new Date().toISOString().slice(0, 10)}.json"` });
 });
@@ -655,7 +828,7 @@ async function handle(req, res) {
     if ((r.opts.auth || r.opts.admin) && !me) err(401, 'Please sign in again.');
     if (me && me.u.mustChange && (r.opts.auth || r.opts.admin) && !r.opts.allowMustChange) err(403, 'Set a new password first.', { mustChange: true });
     if (r.opts.admin && me.u.role !== 'admin') err(403, 'Administrators only.');
-    const body = req.method === 'GET' || req.method === 'HEAD' ? {} : await readBody(req, r.opts.limit === 'state' ? MAX_STATE_BYTES : 256 * 1024);
+    const body = req.method === 'GET' || req.method === 'HEAD' ? {} : await readBody(req, r.opts.limit === 'state' ? MAX_STATE_BYTES : r.opts.maxBody || 256 * 1024);
     await r.fn(req, res, { me, body, params: pathname.match(r.re).groups || {}, query: Object.fromEntries(url.searchParams) });
   } catch (e) {
     if (e instanceof HttpErr) return send(res, e.code, Object.assign({ error: e.message }, e.extra || {}));

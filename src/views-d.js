@@ -7,7 +7,7 @@ const GROUP_REGION = { Chest: 'chest', Back: 'lats', Shoulders: 'sideDelt', Bice
 let XE = null;
 function slotOptionsFor(group, sel) {
   const slots = Object.entries(SLOTS).filter(([, v]) => v.group === group);
-  return `<option value="">Library only — don’t add to the rotation</option>` + slots.map(([k, v]) => `<option value="${k}" ${sel === k ? 'selected' : ''}>Add to “${esc(v.label)}” rotation (${v.vars.length + (CUSTOM_SLOT[k] || []).filter(e => e.id !== (XE && XE.id)).length} → ${v.vars.length + (CUSTOM_SLOT[k] || []).filter(e => e.id !== (XE && XE.id)).length + 1} variations)</option>`).join('');
+  return `<option value="">Library only — don’t add to the rotation</option>` + slots.map(([k, v]) => `<option value="${k}" ${sel === k ? 'selected' : ''}>Add to “${esc(v.label)}” rotation (${v.vars.filter(id => !exOffNow(id)).length + (CUSTOM_SLOT[k] || []).filter(e => e.id !== (XE && XE.id)).length} → ${v.vars.filter(id => !exOffNow(id)).length + (CUSTOM_SLOT[k] || []).filter(e => e.id !== (XE && XE.id)).length + 1} variations)</option>`).join('');
 }
 function exerciseEditor(id, group) {
   const e = id ? S.customExercises[id] : null;
@@ -86,7 +86,8 @@ function renderQuickEdit() {
   let woBody = '';
   if (e.w && TEMPLATES[e.w.t]) { const t = TEMPLATES[e.w.t]; const rows = sessionRows(e.w);
     woBody = `<div class="row wrap" style="gap:6px;margin-top:10px"><span class="pill" style="background:${KIND_VAR(t.kind)};color:#fff">${esc(t.short || t.name)}</span><span class="small muted">${rows.reduce((a, r) => a + r.sets, 0)} sets · ~${estMinutes(rows)} min</span></div>
-      <div class="sets" style="margin-top:8px;gap:5px">${rows.map(r => `<span class="pill" data-tip-ex="${r.ex.id}" style="cursor:help">${esc(r.ex.name)} <span class="muted">${r.sets}×${esc(r.reps)}</span></span>`).join('')}</div>`; }
+      <div class="sets" style="margin-top:8px;gap:5px">${rows.map(r => `<button type="button" class="pill qe-ex ${r.daySwap ? 'acc' : ''}" data-act="swap-day" data-date="${d}" data-i="${r.i}" data-back="qe" data-tip-ex="${r.ex.id}" title="Swap ${esc(r.ex.name)} for this day">${esc(r.ex.name)} <span class="muted">${r.sets}×${esc(r.reps)}</span>${icon('loop')}</button>`).join('')}</div>
+      <div class="tiny muted" style="margin-top:6px">Tap an exercise to swap it for this day.</div>`; }
   else woBody = `<div class="small muted" style="margin-top:8px">Rest day — pick a session above to train on this day.</div>`;
   const mealRow = sl => { const cur = e.m && e.m[sl]; const cat = SLOT_CAT[sl]; const m = x.meals.find(q => q.slot === sl);
     const list = sortRecipes(RECIPES.filter(r => r.cat === cat && (recipeAllowed(r) || r.id === cur))).sort((a, b) => isFav(b.id) - isFav(a.id));
@@ -99,7 +100,7 @@ function renderQuickEdit() {
       <button class="btn icon ghost" data-act="qe-day" data-d="${next || ''}" ${next ? '' : 'disabled'} aria-label="Next day">${icon('right')}</button><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
     <section class="qe-sec ${QE.focus === 'wo' ? 'focus' : ''}"><div class="row"><h3 style="flex:1">${icon('dumbbell')}Workout</h3>${e.w ? `<button class="btn sm ${S.done[d] ? 'primary' : ''}" data-act="qe-done">${icon('check')}${S.done[d] ? 'Completed' : 'Mark complete'}</button>` : ''}</div>
       <select class="inp" id="qe-wo" data-input="qe-wo" style="margin-top:8px;width:100%">${woOpts}</select>${woBody}
-      <div class="row wrap" style="gap:6px;margin-top:10px"><a class="btn sm ghost" href="#/day/${d}" data-act="close-go" data-h="#/day/${d}">${icon('list')}Open day to log sets</a><a class="btn sm ghost" href="#/workouts" data-act="close-go" data-h="#/workouts">${icon('grip')}Change exercises in Workout plan</a></div></section>
+      <div class="row wrap" style="gap:6px;margin-top:10px"><a class="btn sm ghost" href="#/day/${d}" data-act="close-go" data-h="#/day/${d}">${icon('list')}Open day to log sets</a><a class="btn sm ghost" href="#/workouts" data-act="close-go" data-h="#/workouts">${icon('grip')}Swap in the program</a></div></section>
     <section class="qe-sec ${QE.focus !== 'wo' ? 'focus' : ''}"><div class="row"><h3 style="flex:1">${icon('food')}Meals</h3><span class="tiny muted">★ favorites first · changes keep your hand-picked meals when the plan re-plans</span></div>
       ${MEAL_SLOTS.map(mealRow).join('')}
       <div class="qe-tot"><div><span class="tiny muted">Day total</span><b class="num">${fmt(x.totals.k)}</b><span class="small muted"> / ${fmt(x.tg.kcal)} kcal</span></div><div class="small num"><span style="color:var(--prot)"><b>${fmt(x.totals.p)}</b>/${fmt(x.tg.protein)}g P</span> · <span style="color:var(--carb)">${fmt(x.totals.c)}C</span> · <span style="color:var(--fat)">${fmt(x.totals.f)}F</span></div><span class="tiny muted">Portions resize automatically</span></div></section>

@@ -55,11 +55,11 @@ function viewDashboard() {
     return `<div class="row" style="padding:7px 0;border-top:1px solid var(--line)" data-tip-meal="${focus}|${m.slot}"><span style="font-size:20px;width:26px;text-align:center">${esc(m.r.emoji)}</span><div style="flex:1;min-width:0"><div class="tiny muted" style="text-transform:uppercase;letter-spacing:.08em;font-weight:700">${SLOT_LABEL[m.slot]}</div><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.r.name)} ${batchBadge(b)}${shareBadge(focus, m.slot)}</div></div><span class="num small"><b>${fmt(m.m.k)}</b> kcal · <span style="color:var(--prot)">${fmt(m.m.p)}P</span></span><button class="btn icon ghost qe-pen" data-act="qe" data-d="${focus}" data-f="meal:${m.slot}" title="Swap this meal" aria-label="Swap ${SLOT_LABEL[m.slot].toLowerCase()}">${icon('edit')}</button></div>`; }).join('');
   const kfrac = day.totals.k / day.tg.kcal;
   const todayCard = `<div class="card"><div class="card-h"><h2>${focus === today ? 'Today' : fmtDate(focus, { weekday: 'long', month: 'short', day: 'numeric' })}</h2><span class="pill ${day.isTrain ? 'acc' : ''}">${day.isTrain ? 'Training day' : 'Rest day'}</span>${syncBtnHTML('sm')}<a class="btn sm ghost" href="#/day/${focus}">Open day ${icon('right')}</a></div>
-    <div class="qe-links"><button class="btn sm" data-act="qe" data-d="${focus}" data-f="wo">${icon('dumbbell')}Edit workout</button><button class="btn sm" data-act="qe" data-d="${focus}" data-f="meals">${icon('food')}Edit meals</button><a class="btn sm ghost" href="#/workouts">${icon('grip')}Workout plan</a><a class="btn sm ghost" href="#/foods">${icon('book')}Recipes</a></div>
+    <div class="qe-links"><button class="btn sm" data-act="qe" data-d="${focus}" data-f="wo">${icon('dumbbell')}Edit workout</button><button class="btn sm" data-act="qe" data-d="${focus}" data-f="meals">${icon('food')}Edit meals</button>${focus === today ? scanBtnHTML('today', 'sm') + addFoodBtnHTML('', 'sm') : ''}<a class="btn sm ghost" href="#/workouts">${icon('grip')}Workout plan</a><a class="btn sm ghost" href="#/foods">${icon('book')}Recipes</a></div>
     ${wo}<hr class="sep"><div class="grid ring-row" style="grid-template-columns:auto 1fr;gap:20px;align-items:center">
       <div class="ring">${ringSVG(kfrac, 'var(--kcal)')}<div class="c"><b>${fmt(day.totals.k)}</b><span>of ${fmt(day.tg.kcal)} kcal</span></div></div>
       <div>${macroBars(day.totals, day.tg)}<div class="tiny muted" style="margin-top:6px">Portion multipliers: protein ×${day.pF.toFixed(2)} · carbs/fats ×${day.cF.toFixed(2)}</div></div></div>
-    <div style="margin-top:12px">${meals}</div></div>`;
+    <div style="margin-top:12px">${meals}${extrasHTML(day, null)}</div></div>`;
 
   // outlook
   const outlook = `<div class="card"><div class="card-h"><h2>Goal outlook</h2></div>
@@ -83,11 +83,10 @@ function viewDashboard() {
     ${prs.length ? `<table class="tbl">${prs.map(p => `<tr><td><span class="prb">${icon('trophy')}PR</span></td><td><span class="ex-name" data-tip-ex="${p.ex}">${esc(EX[p.ex].name)}</span></td><td>${fmt(p.set.w)} lb × ${p.set.r}</td><td class="muted">e1RM ${fmt(p.best)}</td><td class="muted">${fmtDate(p.d)}</td></tr>`).join('')}</table>`
       : `<div class="empty-state">${icon('trophy')}<div>Log your sets on any training day and personal records show up here.</div></div>`}</div>`;
 
-  return `<div class="hero">${heroArt()}<div class="eyebrow">${eyebrow}</div><h1 style="margin-top:6px">${title}</h1><p>${esc(ph.summary)}</p>
-      <div class="weekbar">${bars}</div><div class="weekbar-l"><span>${fmtDate(cStart, { month: 'short', day: 'numeric' })}</span>${barLabels}<span>${fmtDate(cEnd, { month: 'short', day: 'numeric' })}</span></div></div>
-    <div style="height:16px"></div>${syncInviteNote()}${bfEstimateNote()}${tiles}<div style="height:16px"></div>
-    <div class="g-split">${todayCard}${outlook}</div><div style="height:16px"></div>
-    ${strip}<div style="height:16px"></div>${prCard}`;
+  const hero = `<div class="hero">${heroArt()}<div class="eyebrow">${eyebrow}</div><h1 style="margin-top:6px">${title}</h1><p>${esc(ph.summary)}</p>
+      <div class="weekbar">${bars}</div><div class="weekbar-l"><span>${fmtDate(cStart, { month: 'short', day: 'numeric' })}</span>${barLabels}<span>${fmtDate(cEnd, { month: 'short', day: 'numeric' })}</span></div></div>`;
+  // panels in the order (and with the ones hidden) the user picked — see views-k
+  return dashLayoutHTML({ hero, stats: tiles, today: todayCard, outlook, gym: gymPanelHTML(), week: strip, prs: prCard }, syncInviteNote() + bfEstimateNote());
 }
 function recentPRs(n) {
   const out = [];
@@ -179,7 +178,7 @@ function viewCalendar() {
   const showLib = UI.showLib && !compact;
   const lib = showLib ? libraryHTML() : '';
   const fitsCollapsed = compact && !UI.navCollapsed && innerWidth > 860 && (() => { const w = ($('#view') ? $('#view').clientWidth : innerWidth) + 162 - 48; const lib = UI.showLib && w >= 1130 ? 280 : 0; return (w - lib - 36) / 7 >= (UI.calView === 'week' ? 124 : 116); })();
-  return `<div class="page-head"><div class="t"><h1>Plan calendar</h1><p>${compact ? 'Tap any day for the full breakdown — swap meals or change the session there.' + (fitsCollapsed ? ` <button class="btn sm ghost" data-act="nav-toggle" style="vertical-align:middle">${icon('sideL')}Collapse the menu for the drag-and-drop grid</button>` : '') : 'Drag workouts and meals between days — portions and macros recalculate instantly. <span class="kbd">Ctrl</span>/<span class="kbd">Alt</span>-drag copies. Click a day for the full breakdown.'}</p></div></div>
+  return `<div class="page-head"><div class="t"><h1>Plan calendar</h1><p>${compact ? 'Tap any day for the full breakdown — swap meals or change the session there.' + (fitsCollapsed ? ` <button class="btn sm ghost" data-act="nav-toggle" style="vertical-align:middle">${icon('sideL')}Collapse the menu for the drag-and-drop grid</button>` : '') : 'Drag workouts and meals between days — portions and macros recalculate instantly. <span class="kbd">Ctrl</span>/<span class="kbd">Alt</span>-drag copies. Click a day for the full breakdown.'}</p></div>${inPlan(t) ? `<div class="row wrap">${scanBtnHTML('today')}${addFoodBtnHTML()}</div>` : ''}</div>
     <div class="cal-wrap ${showLib ? '' : 'nolib'}"><div>
       <div class="cal-bar"><button class="btn icon" data-act="cal-prev">${icon('left')}</button><h2>${title}</h2><button class="btn icon" data-act="cal-next">${icon('right')}</button>
         <button class="btn sm" data-act="cal-today">Today</button><div class="spacer"></div>${syncBtnHTML('sm')}
@@ -305,33 +304,31 @@ function viewDay(date) {
   const mealsHTML = MEAL_SLOTS.map(slot => {
     const m = day.meals.find(x => x.slot === slot);
     const sel = `<select class="inp" data-input="day-meal" data-date="${date}" data-slot="${slot}" style="height:30px;font-size:12px;max-width:190px"><option value="">— none —</option>${['breakfast', 'lunch', 'dinner', 'snack'].map(c => `<optgroup label="${c[0].toUpperCase() + c.slice(1)}">${RECIPES.filter(r => r.cat === c && (recipeAllowed(r) || (m && m.r.id === r.id))).map(r => `<option value="${r.id}" ${m && m.r.id === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</optgroup>`).join('')}</select>`;
-    if (!m) return `<div class="meal-card" style="border-style:dashed"><div class="top"><div class="em" style="opacity:.4">+</div><div style="flex:1"><div class="slot">${SLOT_LABEL[slot]}</div><div class="muted small">Nothing planned</div></div>${sel}</div></div>`;
+    if (!m) return `<div class="dmeal empty"><span class="em">+</span><div class="dmeal-t"><span class="slot">${SLOT_LABEL[slot]}</span><span class="muted small">Nothing planned</span></div>${sel}${extrasHTML(day, slot)}</div>`;
     const b = A.batches.info[date + '|' + slot];
     let bnote = '';
     if (b && b.role === 'cook') {
       const list = Object.entries(b.batch.amounts).map(([id, a]) => { const t = amountText(id, a); return `<span>${esc(ING[id].n)}</span><span class="q">${t.main}${t.sub ? `<small>${t.sub}</small>` : ''}</span>`; }).join('');
-      bnote = `<div class="note acc" style="margin-top:10px">${icon('flame')}<div style="flex:1"><b>Cook today: ${b.batch.size} serving${b.batch.size > 1 ? 's' : ''}</b>${b.batch.partnerServ ? ` (${b.batch.size - b.batch.partnerServ} for you, ${b.batch.partnerServ} for ${esc(syncName())})` : ''}${b.batch.size < m.r.yield ? ` (recipe scaled to ${Math.round(b.batch.scale * 100)}%)` : ''} — leftovers on ${b.batch.members.slice(1).map(o => fmtDate(o.date, { weekday: 'short' }) + ' ' + SLOT_LABEL[o.slot].toLowerCase()).join(', ') || '—'}.
-        <details><summary>Full batch ingredients (sized to each day’s portions)</summary><div class="ing-list">${list}</div></details></div></div>`;
-    } else if (b) bnote = `<div class="note" style="margin-top:10px">${icon('loop')}<span>Leftover ${b.idx}/${b.batch.size} — cooked ${fmtDate(b.batch.cook)}${b.frozen ? '. Move from freezer to fridge the night before.' : '.'}</span></div>`;
+      bnote = `<details class="dmeal-note cook"><summary>${icon('flame')}<b>Cook ${b.batch.size} serving${b.batch.size > 1 ? 's' : ''} today</b>${b.batch.partnerServ ? ` (${b.batch.size - b.batch.partnerServ} for you, ${b.batch.partnerServ} for ${esc(syncName())})` : ''}${b.batch.size < m.r.yield ? ` · recipe at ${Math.round(b.batch.scale * 100)}%` : ''} · leftovers ${b.batch.members.slice(1).map(o => fmtDate(o.date, { weekday: 'short' }) + ' ' + SLOT_LABEL[o.slot].toLowerCase()).join(', ') || '—'}</summary><div class="ing-list">${list}</div></details>`;
+    } else if (b && b.frozen) bnote = `<span class="dmeal-note">${icon('snow')}Frozen leftover — move it to the fridge the night before</span>`;
     const items = m.items.map(it => { const t = amountText(it.id, it.amt); const dir = it.role === 'P' ? day.pF : (it.role === 'C' || it.role === 'F') ? day.cF : 1;
-      return `<span>${esc(ING[it.id].n)}</span><span class="q ${dir > 1.02 ? 'scaled-up' : dir < 0.98 ? 'scaled-dn' : ''}">${t.main}${t.sub ? `<small>${t.sub}</small>` : ''}</span>`; }).join('');
-    return `<div class="meal-card"><div class="top"><div class="em">${esc(m.r.emoji)}</div><div style="flex:1;min-width:0"><div class="slot">${SLOT_LABEL[slot]} ${batchBadge(b)}${shareBadge(date, slot)}</div><div class="nm">${esc(m.r.name)}</div></div>
-      <div class="mk"><b>${fmt(m.m.k)} kcal</b><div class="pcf" style="justify-content:flex-end"><span class="p">${fmt(m.m.p)}P</span><span class="c">${fmt(m.m.c)}C</span><span class="f">${fmt(m.m.f)}F</span></div></div></div>
-      <div class="ing-list">${items}</div>${bnote}
-      <details><summary>How to make it</summary><ol>${m.r.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol></details>
-      <div class="row" style="margin-top:8px"><span class="tiny muted">Swap:</span>${sel}</div></div>`;
+      return `<span class="di">${esc(ING[it.id].n.split(',')[0])} <b class="q ${dir > 1.02 ? 'scaled-up' : dir < 0.98 ? 'scaled-dn' : ''}">${t.main}</b></span>`; }).join('');
+    return `<div class="dmeal"><div class="dmeal-top"><button type="button" class="dmeal-h" data-act="recipe" data-rid="${m.r.id}" title="Show the recipe"><span class="em">${esc(m.r.emoji)}</span><span class="dmeal-t"><span class="slot">${SLOT_LABEL[slot]} ${batchBadge(b)}${shareBadge(date, slot)}</span><b class="nm">${esc(m.r.name)}</b></span>
+      <span class="mk"><b>${fmt(m.m.k)} kcal</b><span class="pcf"><span class="p">${fmt(m.m.p)}P</span><span class="c">${fmt(m.m.c)}C</span><span class="f">${fmt(m.m.f)}F</span></span></span></button>
+      <label class="dmeal-swap" title="Swap this meal">${icon('loop')}<span class="sr">Swap ${esc(SLOT_LABEL[slot].toLowerCase())}</span>${sel}</label></div>
+      <div class="dmeal-ings">${items}</div>${bnote ? `<div class="dmeal-f">${bnote}</div>` : ''}${extrasHTML(day, slot)}</div>`;
   }).join('');
-  const nutCard = `<div class="card"><div class="card-h"><h2>Nutrition</h2><span class="pill">${day.isTrain ? 'Training' : 'Rest'} target</span></div>
+  const nutCard = `<div class="card"><div class="card-h"><h2>Nutrition</h2><span class="pill">${day.isTrain ? 'Training' : 'Rest'} target</span><div class="spacer"></div>${scanBtnHTML('today', 'sm', date)}${addFoodBtnHTML(date, 'sm')}</div>
     <div class="grid" style="grid-template-columns:auto 1fr;gap:18px;align-items:center"><div class="ring">${ringSVG(day.totals.k / tg.kcal, 'var(--kcal)')}<div class="c"><b>${fmt(day.totals.k)}</b><span>of ${fmt(tg.kcal)} kcal</span></div></div><div>${macroBars(day.totals, tg)}</div></div>
     <div class="note" style="margin-top:12px">${icon('scale')}<span>Portions sized from <b>${fmt(st.w, 1)} lb · ${fmt(st.bf, 1)}% BF${st.est ? ' (est.)' : ''}</b> ${st.src === 'start' ? '(starting stats)' : '(weigh-in ' + fmtDate(st.src) + ')'}: protein sources ×${day.pF.toFixed(2)}, carb &amp; fat sources ×${day.cF.toFixed(2)}. <span class="scaled-up" style="color:var(--good)">Green</span> amounts are scaled up, <span style="color:var(--kcal)">orange</span> scaled down.</span></div>
-    <div style="margin-top:14px">${mealsHTML}</div></div>`;
+    <div class="dmeals">${mealsHTML}</div><div class="tiny muted" style="margin-top:4px">Tap a meal for the full recipe. Amounts above are today’s portions${(day.extras || []).length ? ', already made smaller to fit the foods you added' : ''}.</div></div>`;
   return head + `<div class="day-grid"><div>${woCard}</div><div>${nutCard}</div></div>`;
 }
 function exRowHTML(date, r, i) {
   const sug = suggestion(r.ex.id, r.reps, date);
   const sets = setInputsHTML(date, r); const typeB = typeBadge(r);
   return `<tr><td class="muted" style="font-weight:700">${i + 1}</td>
-    <td style="min-width:190px"><span class="ex-name" data-tip-ex="${r.ex.id}">${esc(r.ex.name)}</span><div class="ex-meta">${esc(SLOTS[r.slot].label)} · variation ${r.vi + 1}/${r.nv}</div>${r.note ? `<div class="ex-meta" style="color:var(--accent-text)">${esc(r.note)}</div>` : ''}</td>
+    <td style="min-width:190px"><div class="ex-line"><span class="ex-name" data-tip-ex="${r.ex.id}">${esc(r.ex.name)}</span>${swapBtnHTML(date, r)}</div><div class="ex-meta">${esc(SLOTS[r.slot].label)} · ${r.daySwap ? `swapped for this day <span class="muted">(planned: ${esc(r.planned.name)})</span>` : r.progSwap ? `swapped in the program <span class="muted">(was ${esc(EX[r.progSwap] ? EX[r.progSwap].name : '')})</span>` : `variation ${r.vi + 1}/${r.nv}`}</div>${r.note ? `<div class="ex-meta" style="color:var(--accent-text)">${esc(r.note)}</div>` : ''}</td>
     <td style="white-space:nowrap">${typeB} <b>${r.sets} × ${esc(r.reps)}</b><div class="ex-meta">RIR ${esc(r.rir)} · rest ${r.rest >= 120 ? (r.rest / 60) + ' min' : r.rest + ' s'}</div></td>
     <td><div class="sets">${sets}</div>${hintHTML(date, r, sug)}</td></tr>`;
 }
@@ -340,6 +337,7 @@ function setInputsHTML(date, r) {
   return Array.from({ length: r.sets }, (_, k) => { const s = logs[k] || {};
     return `<div class="set ${s.r > 0 ? 'logged' : ''}"><span class="n">${k + 1}</span><input class="w num" type="number" inputmode="decimal" step="2.5" min="0" placeholder="${wl}" value="${s.w != null ? esc(s.w) : ''}" data-log="${date}|${r.ex.id}|${k}|w" aria-label="${esc(r.ex.name)} set ${k + 1} weight"><span class="x">×</span><input class="r num" type="number" inputmode="numeric" min="0" max="100" placeholder="reps" value="${s.r != null ? esc(s.r) : ''}" data-log="${date}|${r.ex.id}|${k}|r" aria-label="${esc(r.ex.name)} set ${k + 1} reps"></div>`; }).join('');
 }
+const swapBtnHTML = (date, r, back) => `<button type="button" class="swap-btn ${r.daySwap ? 'on' : ''}" data-act="swap-day" data-date="${date}" data-i="${r.i}"${back ? ` data-back="${back}"` : ''} title="Swap ${esc(r.ex.name)} for this day" aria-label="Swap ${esc(r.ex.name)} for this day">${icon('loop')}</button>`;
 const typeBadge = r => `<span class="type-${r.type.toLowerCase()}">${r.type === 'S' ? 'S' : r.type === 'T' ? 'TEST' : 'H'}</span>`;
 const hintHTML = (date, r, sug) => `<div class="hint" id="hint-${r.ex.id}">${prBadge(date, r.ex.id)}${sug ? icon('zap') + `<span>${esc(sug.text)}</span>` : `<span class="muted">First time — pick a weight you can do for the target reps at RIR ${esc(r.rir)}.</span>`}</div>`;
 /* sets logged (reps entered) for a session, counting only the planned sets */
@@ -349,7 +347,7 @@ function exLogged(date, r) { const l = (S.logs[date] || {})[r.ex.id] || []; for 
 function todayLogHTML(date, rows) {
   const c = loggedSets(date, rows); const rest = r => r.rest >= 120 ? (r.rest / 60) + ' min' : r.rest + ' s';
   return `<div class="tlog" data-tlog="${date}"><div class="tlog-h"><h3>Log sets</h3><span class="tiny muted">weight × reps — saves as you type</span><span class="pill ${c.done >= c.total ? 'acc' : ''}" id="tlog-count">${c.done} / ${c.total} sets</span></div>
-    ${rows.map((r, i) => `<div class="tlog-ex ${exLogged(date, r) ? 'done' : ''}" data-tlog-ex="${r.ex.id}"><div class="tlog-name"><span class="tlog-n">${exLogged(date, r) ? icon('check') : i + 1}</span><div style="min-width:0"><span class="ex-name" data-tip-ex="${r.ex.id}">${esc(r.ex.name)}</span><div class="ex-meta">${typeBadge(r)} <b>${r.sets} × ${esc(r.reps)}</b> · RIR ${esc(r.rir)} · rest ${rest(r)}</div></div></div>
+    ${rows.map((r, i) => `<div class="tlog-ex ${exLogged(date, r) ? 'done' : ''}" data-tlog-ex="${r.ex.id}"><div class="tlog-name"><span class="tlog-n">${exLogged(date, r) ? icon('check') : i + 1}</span><div style="min-width:0"><div class="ex-line"><span class="ex-name" data-tip-ex="${r.ex.id}">${esc(r.ex.name)}</span>${swapBtnHTML(date, r)}</div><div class="ex-meta">${typeBadge(r)} <b>${r.sets} × ${esc(r.reps)}</b> · RIR ${esc(r.rir)} · rest ${rest(r)}${r.daySwap ? ' · swapped today' : ''}</div></div></div>
       <div class="tlog-sets"><div class="sets">${setInputsHTML(date, r)}</div>${hintHTML(date, r, suggestion(r.ex.id, r.reps, date))}</div></div>`).join('')}
     <div class="row wrap tlog-foot"><button class="btn ${S.done[date] ? 'primary' : ''}" data-act="toggle-done" data-date="${date}">${icon('check')}${S.done[date] ? 'Workout completed' : 'Mark workout complete'}</button><a class="btn ghost sm" href="#/day/${date}">Full day view ${icon('right')}</a></div></div>`;
 }

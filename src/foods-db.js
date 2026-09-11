@@ -462,7 +462,7 @@ const MORE_FOODS = [
   ['red_lentils', 'Red lentils, cooked', 'lentils', 116, 9, 20, 0.4],
   ['roasted_chickpeas', 'Roasted chickpea snack', 'lentils', 400, 18, 55, 11, { a: 'Snacks' }],
   ['falafel', 'Falafel, baked', 'lentils', 333, 13.3, 31.8, 17.8, { a: 'Frozen' }],
-  ['basmati_rice', 'Basmati rice, cooked', 'rice', 121, 3.5, 25, 0.4, { dry: 3, dryName: 'Basmati rice, dry' }],
+  ['basmati_rice', 'Basmati rice, cooked', 'rice', 121, 3.5, 25, 0.4, { dry: 0.33, dryName: 'Basmati rice, dry' }],
   ['fried_rice', 'Fried rice', 'rice', 174, 4, 30, 4],
   ['spanish_rice', 'Spanish / Mexican rice', 'rice', 150, 3, 28, 3],
   ['sticky_rice', 'Sticky (glutinous) rice, cooked', 'rice', 97, 2, 21, 0.2],

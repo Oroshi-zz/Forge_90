@@ -33,37 +33,42 @@ function viewWorkouts() {
       ${t.rows.map(r => { const [slot, type, sets, reps, rest, off, note] = r;
         return `<tr><td><b>${esc(SLOTS[slot].label)}</b><div class="tiny muted">${SLOTS[slot].group}</div></td><td style="white-space:nowrap"><span class="type-${type.toLowerCase()}">${type === 'T' ? 'TEST' : type}</span> ${sets} × ${esc(reps)}<div class="tiny muted">rest ${rest >= 120 ? rest / 60 + ' min' : rest + ' s'}${note ? ' · ' + esc(note) : ''}</div></td>
           ${weeks.map(w => { const vv = slotVars(slot, w); const exId = vv[((w - 1 + off) % vv.length + vv.length) % vv.length]; const wip = weekInPhase(w); const rir = type === 'T' ? 'top set' : ph.key === 'test' ? 'RIR 3–4' : 'RIR ' + RIR[type][wip - 1];
-            return `<td><div class="var-cell"><span class="ex-name" data-tip-ex="${exId}">${esc(EX[exId].name)}</span><span class="tiny muted">${rir}</span></div></td>`; }).join('')}</tr>`; }).join('')}</tbody></table></div></div>`; }).join('');
+            const swapped = S.slotSwap && slotSwapsOn(slot, planWeekStart(w)).some(x => x[1] === exId);
+            return `<td><div class="var-cell"><span class="ex-name" data-tip-ex="${exId}">${esc(EX[exId].name)}</span><span class="tiny muted">${rir}${swapped ? ' · <span class="swap-mark">swapped</span>' : ''}</span><button type="button" class="swap-btn" data-act="swap-prog" data-slot="${slot}" data-ex="${exId}" title="Swap ${esc(EX[exId].name)} in the program" aria-label="Swap ${esc(EX[exId].name)} in the program">${icon('loop')}</button></div></td>`; }).join('')}</tr>`; }).join('')}</tbody></table></div></div>`; }).join('');
   const lib = MUSCLE_GROUPS.map(g => {
     const exs = Object.values(EX).filter(e => exGroupOf(e) === g); const onN = exs.filter(e => !exOffNow(e.id)).length;
+    const cw = curPlanWeekStart(); const inProg = new Set(Object.keys(S.slotSwap || {}).flatMap(sl => SLOTS[sl] ? slotSwapsOn(sl, cw).map(x => x[1]) : []));
     return `<div style="margin-bottom:18px"><h3 style="margin-bottom:8px">${g} <span class="muted small" style="font-weight:500">· ${onN} of ${exs.length} in rotation</span></h3><div class="grid g4" style="gap:10px">
       ${exs.map(e => { const on = !exOffNow(e.id); const last = on && onN <= 1;
-        return `<div class="ex-card ${e.custom ? 'custom' : ''} ${on ? '' : 'off'}" data-tip-ex="${e.id}">${muscleMap(e.primary, e.secondary)}<div style="min-width:0;flex:1"><b>${esc(e.name)}</b><span>${esc(e.equip || '—')}</span><div class="row wrap" style="margin-top:4px;gap:4px"><span class="pill" style="font-size:10.5px">${e.compound ? 'Compound' : 'Isolation'}</span>${e.custom ? `<span class="pill acc" style="font-size:10.5px">Yours${e.slot && SLOTS[e.slot] ? ' · in rotation' : ''}</span>` : ''}</div>
+        return `<div class="ex-card ${e.custom ? 'custom' : ''} ${on ? '' : 'off'}" data-tip-ex="${e.id}">${muscleMap(e.primary, e.secondary)}<div style="min-width:0;flex:1"><b>${esc(e.name)}</b><span>${esc(e.equip || '—')}</span><div class="row wrap" style="margin-top:4px;gap:4px">${inProg.has(e.id) ? '<span class="pill acc" style="font-size:10.5px">Swapped in</span>' : ''}<span class="pill" style="font-size:10.5px">${e.compound ? 'Compound' : 'Isolation'}</span>${e.custom ? `<span class="pill acc" style="font-size:10.5px">Yours${e.slot && SLOTS[e.slot] ? ' · in rotation' : ''}</span>` : ''}</div>
           <label class="ex-tog" title="${last ? `This is the only ${g.toLowerCase()} exercise switched on — every muscle group keeps at least one` : on ? 'Switch off to keep it out of your sessions' : 'Switch on to add it back to the rotation'}"><input type="checkbox" data-input="ex-on" data-id="${e.id}" ${on ? 'checked' : ''} ${last ? 'disabled' : ''}><i class="switch ${on ? 'on' : ''}" aria-hidden="true"><i></i></i><span>${on ? (last ? 'Required' : 'In rotation') : 'Off'}</span></label></div>
         ${e.custom ? `<button class="ex-edit" data-act="ex-edit" data-id="${e.id}" title="Edit exercise" aria-label="Edit ${esc(e.name)}">${icon('edit')}</button>` : ''}</div>`; }).join('')}
       <button class="ex-card ex-add" data-act="ex-new" data-group="${g === 'Rear delts' ? 'Shoulders' : g}" aria-label="Add a ${g.toLowerCase()} exercise"><span class="plus">${icon('plus')}</span><span>Add ${g === 'Rear delts' ? 'rear delt' : g.toLowerCase()} exercise</span></button></div></div>`; }).join('');
-  return `<div class="page-head"><div class="t"><h1>Workout plan</h1><p>A 90-day launch, then repeating 13-week cycles · ${S.settings.trainDays.length} training day${S.settings.trainDays.length === 1 ? '' : 's'} a week (change in <a href="#/settings">Settings</a>) · Push / Pull / Legs — push and pull never share a session. Every muscle group rotates through 3+ exercise variations.</p></div></div>
-    <h2 style="margin-bottom:10px">Cycle 1 · the 90-day launch</h2><div class="grid g4">${phaseCards}</div><div style="height:18px"></div>
-    <div class="row wrap" style="margin-bottom:10px"><h2 style="flex:1">Cycle 2 onward · repeats every 13 weeks</h2><span class="pill">Next: ${fmtDate(cycleStartDate(2), { month: 'short', day: 'numeric', year: 'numeric' })}</span></div>
+  const libCard = `<div class="card ${collCls('lib')}" data-coll="lib"><div class="card-h">${collHead('lib', 'Exercise library', `<span class="muted small">Hover for step-by-step form · switch exercises on or off · add your own with the + card</span>`)}</div><div class="coll-body">
+      <div class="note" style="margin-bottom:14px">${icon('info')}<span>Switching an exercise off removes it from the rotation from this plan week on (next week if you’ve already logged it this week); past sessions keep what you did. Every muscle group keeps at least one exercise on — if every variation for a slot is off, the plan borrows another switched-on exercise for the same muscles. Research picks start switched off; hover one to see why it’s included.</span></div>${lib}</div></div>`;
+  return `<div class="page-head"><div class="t"><h1>Workout plan</h1><p>A 90-day launch, then repeating 13-week cycles · ${S.settings.trainDays.length} training day${S.settings.trainDays.length === 1 ? '' : 's'} a week (change it below or in <a href="#/settings">Settings</a>) · Push / Pull / Legs — push and pull never share a session. Every muscle group rotates through 3+ exercise variations.</p></div></div>
+    ${trainingDaysCardHTML(true)}<div style="height:16px"></div>
+    <section class="${collCls('cycle1')}" data-coll="cycle1"><div class="coll-row">${collHead('cycle1', 'Cycle 1 · the 90-day launch')}</div><div class="coll-body"><div class="grid g4">${phaseCards}</div></div></section><div style="height:18px"></div>
+    <section class="${collCls('cycle2')}" data-coll="cycle2"><div class="coll-row">${collHead('cycle2', 'Cycle 2 onward · repeats every 13 weeks', `<span class="pill">Next: ${fmtDate(cycleStartDate(2), { month: 'short', day: 'numeric', year: 'numeric' })}</span>`)}</div><div class="coll-body">
     <div class="grid g4">${contCards}</div>
-    <div class="note" style="margin-top:12px">${icon('loop')}<span>Legs stay at full frequency from here on. The exercise rotation keeps counting week by week, so each new cycle pairs the variations differently. The calendar adds the next cycle automatically; the diet keeps adjusting from your weigh-ins and switches to maintenance when you hit your goal (changeable in Settings).</span></div><div style="height:16px"></div>
+    <div class="note" style="margin-top:12px">${icon('loop')}<span>Legs stay at full frequency from here on. The exercise rotation keeps counting week by week, so each new cycle pairs the variations differently. The calendar adds the next cycle automatically; the diet keeps adjusting from your weigh-ins and switches to maintenance when you hit your goal (changeable in Settings).</span></div></div></section><div style="height:16px"></div>
     <div class="g-half">
-      <div class="card"><div class="card-h"><h2>How the program works</h2></div>
+      <div class="card ${collCls('how')}" data-coll="how"><div class="card-h">${collHead('how', 'How the program works')}</div><div class="coll-body">
         <div class="small" style="display:grid;gap:10px">
           <div class="note">${icon('pull')}<span><b>Push / Pull / Legs.</b> Push days train chest, shoulders and triceps; pull days train back, rear delts and biceps; legs get their own day. Sessions are handed out in a rolling order across your training days, so it works with any number of days.</span></div>
           <div class="note">${icon('dumbbell')}<span><b>Isolation-first.</b> Machines, cables and dumbbells carry most of the volume. Compound lifts appear only in the “strength” slot of a session (stable machine/DB versions), which keeps joint stress and fatigue low while you’re in a calorie deficit.</span></div>
-          <div class="note">${icon('loop')}<span><b>Variation rotation.</b> Each slot has 3 exercises that cycle weekly (Week 1 → A, Week 2 → B, Week 3 → C, repeat). Each variation comes back every 3 weeks — beat what you did last time on it. The B session of each pair uses a different variation from the A session.</span></div>
+          <div class="note">${icon('loop')}<span><b>Variation rotation.</b> Each slot has 3 exercises that cycle weekly (Week 1 → A, Week 2 → B, Week 3 → C, repeat). Each variation comes back every 3 weeks — beat what you did last time on it. The B session of each pair uses a different variation from the A session. Swap any exercise with the ${icon('loop').replace('<svg', '<svg style="width:12px;height:12px;vertical-align:-2px"')} button — in a day’s session for that day only, or in the table below for the whole program.</span></div>
           <div class="note">${icon('trend')}<span><b>Double progression.</b> Work in the rep range at the target RIR. When every set hits the top of the range, add load (≈5 lb dumbbells/cables, 10 lb machines) and start again at the bottom.</span></div>
           <div class="note">${icon('flame')}<span><b>Effort waves.</b> RIR drops across each 4-week phase, then resets as the next phase changes the split. Every 13th week is a deload plus PR tests on the strength slots.</span></div>
         </div>
         <table class="tbl" style="margin-top:12px"><thead><tr><th>Week of phase</th><th>1</th><th>2</th><th>3</th><th>4</th></tr></thead><tbody>
-          <tr><td>Hypertrophy sets (H)</td>${RIR.H.map(v => `<td>RIR ${v}</td>`).join('')}</tr><tr><td>Strength sets (S)</td>${RIR.S.map(v => `<td>RIR ${v}</td>`).join('')}</tr></tbody></table></div>
-      <div class="card"><div class="card-h"><h2>Direct weekly sets by muscle</h2><span class="pill">${S.settings.trainDays.length} days / week</span></div><div class="small sub" style="margin:-6px 0 10px">Average sets per week with your current training days. Legs stay low in month 1, then rise to their full share.</div><div class="scroll-x">${heat}</div></div></div>
+          <tr><td>Hypertrophy sets (H)</td>${RIR.H.map(v => `<td>RIR ${v}</td>`).join('')}</tr><tr><td>Strength sets (S)</td>${RIR.S.map(v => `<td>RIR ${v}</td>`).join('')}</tr></tbody></table></div></div>
+      <div class="card ${collCls('sets')}" data-coll="sets"><div class="card-h">${collHead('sets', 'Direct weekly sets by muscle', `<span class="pill">${S.settings.trainDays.length} days / week</span>`)}</div><div class="coll-body"><div class="small sub" style="margin:-6px 0 10px">Average sets per week with your current training days. Legs stay low in month 1, then rise to their full share.</div><div class="scroll-x">${heat}</div></div></div></div>
     <div style="height:16px"></div>
-    <div class="row wrap" style="margin-bottom:12px"><h2 style="flex:1">Sessions & rotation</h2><div class="seg">${ALL_PHASES.map(p => `<button class="${ph.key === p.key ? 'on' : ''}" data-act="plan-phase" data-v="${p.key}">${p.name}</button>`).join('')}</div></div>
-    ${sessions}
-    <div class="card"><div class="card-h"><h2>Exercise library</h2><span class="muted small">Hover for step-by-step form · switch exercises off to keep them out of your sessions · add your own with the + card</span></div>
-      <div class="note" style="margin-bottom:14px">${icon('info')}<span>Switching an exercise off removes it from the rotation from this plan week on (next week if you’ve already logged it this week); past sessions keep what you did. Every muscle group keeps at least one exercise on — if every variation for a slot is off, the plan borrows another switched-on exercise for the same muscles.</span></div>${lib}</div>`;
+    ${libCard}
+    <div style="height:16px"></div>
+    <section class="${collCls('sessions')}" data-coll="sessions"><div class="coll-row" style="margin-bottom:12px">${collHead('sessions', 'Sessions & rotation', `<div class="seg">${ALL_PHASES.map(p => `<button class="${ph.key === p.key ? 'on' : ''}" data-act="plan-phase" data-v="${p.key}">${p.name}</button>`).join('')}</div>`)}</div>
+    <div class="coll-body"><div class="tiny muted" style="margin:-4px 0 12px">Use ${icon('loop').replace('<svg', '<svg style="width:12px;height:12px;vertical-align:-2px"')} on any exercise to swap it in the program from this week on.</div>${sessions}</div></section>`;
 }
 
 /* ---------------- DIET ---------------- */
@@ -88,45 +93,82 @@ function viewDiet() {
       <tr><td>Maintenance — rest / training</td><td class="num">${fmt(tR.maint)} / ${fmt(tT.maint)} kcal</td><td class="muted">BMR × ${st.activity} activity, + ${st.sessionKcal} kcal on lifting days</td></tr>
       <tr><td>Deficit</td><td class="num">${fmt(tT.deficit)} kcal/day</td><td class="muted">${tT.maintMode ? 'Goal reached — eating at maintenance (change in Settings)' : st.rate + ' lb/week × 3,500 kcal ÷ 7'}${st.kcalAdjust ? ` · adjustment ${st.kcalAdjust > 0 ? '+' : ''}${st.kcalAdjust} kcal` : ''}</td></tr>
     </tbody></table></div>
-    <div class="row wrap" style="margin-top:14px"><span class="small sub" style="font-weight:600">Loss rate</span><div class="seg">${[1, 1.25, 1.5].map(r => `<button class="${st.rate === r ? 'on' : ''}" data-act="set-rate" data-v="${r}">${r} lb/wk</button>`).join('')}</div><a class="btn sm ghost" href="#/settings">${[1, 1.25, 1.5].includes(st.rate) ? 'Custom rate' : 'Custom: ' + fmt(st.rate, 2) + ' lb/wk'} ${icon('right')}</a>
-      <span class="small muted">Targets and every portion on the calendar update from your latest weigh-in.</span></div></div>`;
+    <div class="small muted" style="margin-top:14px">Targets and every portion on the calendar update from your latest weigh-in.</div></div></div>`;
   const portion = (d, lbl) => { if (!d) return ''; const x = A.days[d]; return `<div class="card" style="box-shadow:none;background:var(--surface-2)"><div class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.08em">${lbl} · ${fmtDate(d)}</div>
       <div class="row" style="margin-top:8px;gap:18px"><div><div class="tiny muted">Protein sources</div><div style="font-size:24px;font-weight:700" class="num">×${x.pF.toFixed(2)}</div></div><div><div class="tiny muted">Carb & fat sources</div><div style="font-size:24px;font-weight:700" class="num">×${x.cF.toFixed(2)}</div></div><div><div class="tiny muted">Day total</div><div style="font-size:24px;font-weight:700" class="num">${fmt(x.totals.k)}</div></div></div>
       <a class="btn sm" style="margin-top:10px" href="#/day/${d}">See scaled recipes ${icon('right')}</a></div>`; };
   const portions = `<div class="card"><div class="card-h"><h2>Serving-size suggestions</h2></div>
-    <div class="small sub" style="margin:-6px 0 12px">Every recipe below is written as a standard 1× serving. Each day, protein ingredients (chicken, eggs, yogurt…) are scaled to land your protein target, then carb & fat ingredients (rice, potatoes, oats, oils…) are scaled to land calories. Training days get more carbs.</div>
+    <div class="small sub" style="margin:-6px 0 12px">Every recipe is written as a standard 1× serving. Each day, protein ingredients (chicken, eggs, yogurt…) are scaled to land your protein target, then carb & fat ingredients (rice, potatoes, oats, oils…) are scaled to land calories. Training days get more carbs.</div>
     <div class="grid g2" style="gap:12px">${portion(nextT, 'Next training day')}${portion(nextR, 'Next rest day')}</div>
     ${trend ? `<div class="note ${trend.delta ? 'warn' : 'acc'}" style="margin-top:12px">${icon('trend')}<span>${esc(trend.advice)} ${trend.delta ? `<button class="btn sm" data-act="apply-trend" data-delta="${trend.delta}">Apply ${trend.delta > 0 ? '+' : ''}${trend.delta} kcal</button>` : ''}</span></div>` : `<div class="note" style="margin-top:12px">${icon('info')}<span>After ~1–2 weeks of weigh-ins, the app compares your real loss rate to the ${st.rate} lb/wk target and suggests a calorie adjustment.</span></div>`}
     <div class="note" style="margin-top:8px">${icon('target')}<span>At ${st.rate} lb/wk you’ll be around <b>${fmt(pj.endW, 0)} lb</b> ${pj.cyc === 1 ? 'on Day 90' : 'at the end of cycle ' + pj.cyc} and reach ${st.goalWeight} lb around <b>${fmtDate(pj.goalDate, { month: 'long', year: 'numeric' })}</b>. Holding your lean mass, ${st.goalBF}% BF ≈ <b>${fmt(pj.wAtGoalBF, 0)} lb</b>.</span></div></div>`;
-  const cats = ['all', 'fav', 'breakfast', 'lunch', 'dinner', 'snack'];
-  const rs = sortRecipes(RECIPES.filter(r => (UI.dietFilter === 'all' || (UI.dietFilter === 'fav' ? isFav(r.id) : r.cat === UI.dietFilter)) && recipeAllowed(r)));
-  const cards = rs.map(r => { const m = RPS(r.id); const g = RECIPE_GRAD[r.cat]; const tot = m.p * 4 + m.c * 4 + m.f * 9;
-    return `<div class="card recipe ${isFav(r.id) ? 'is-fav' : ''}" data-act="recipe" data-rid="${r.id}"><div class="art" style="--g1:${g[0]};--g2:${g[1]}">${favBtnHTML(r.id, 'on-art')}<span class="yb pill" style="background:rgba(0,0,0,.45);color:#fff">${r.yield > 1 ? `Makes ${r.yield}` : '1 serving'}${r.storage === 'freezer' ? ' · ❄ freezes' : ''}</span>${esc(r.emoji)}</div>
-      <div class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.08em">${r.cat}</div><h3>${esc(r.name)}</h3>
-      <div class="mac"><span><b>${fmt(m.k)}</b> kcal</span><span style="color:var(--prot)"><b style="color:inherit">${fmt(m.p)}</b>P</span><span style="color:var(--carb)"><b style="color:inherit">${fmt(m.c)}</b>C</span><span style="color:var(--fat)"><b style="color:inherit">${fmt(m.f)}</b>F</span></div>
-      <div class="stack"><i style="width:${m.p * 4 / tot * 100}%;background:var(--prot)"></i><i style="width:${m.c * 4 / tot * 100}%;background:var(--carb)"></i><i style="width:${m.f * 9 / tot * 100}%;background:var(--fat)"></i></div>
-      <div class="row wrap" style="gap:5px">${r.tags.map(t => `<span class="pill" style="font-size:10.5px">${esc(t)}</span>`).join('')}</div></div>`; }).join('');
   return `<div class="page-head"><div class="t"><h1>Diet plan</h1><p>A ${st.rate} lb/week cut with ${fmt(st.proteinPerLb, 2)} g protein per lb. Meals are popular high-protein meal-prep staples; multi-serving recipes are scheduled as leftovers so nothing goes to waste.</p></div>${syncBtnHTML()}</div>
     ${bfEstimateNote()}${targets}<div style="height:16px"></div>${portions}<div style="height:16px"></div>
-    <div class="row wrap" style="margin-bottom:10px"><h2 style="flex:1">Meal library <span class="muted small" style="font-weight:500">· ${RECIPES.filter(r => recipeAllowed(r)).length} recipes · macros per standard serving</span></h2><a class="btn sm" href="#/foods">${icon('plus')}Add or edit recipes</a></div>
-    <div class="row wrap" style="margin-bottom:12px"><div class="filters">${cats.map(c => `<button class="${UI.dietFilter === c ? 'on' : ''}" data-act="diet-filter" data-v="${c}">${recFilterLabel(c)}</button>`).join('')}</div>${recipeSortHTML()}</div>
-    <div class="grid g4">${cards || `<div class="muted small">${UI.dietFilter === 'fav' ? 'No favorites yet — tap the ☆ on any recipe.' : 'No recipes match.'}</div>`}</div>
-    <div class="note" style="margin-top:16px">${icon('info')}<span>Recipes that use a food group you’ve turned off are hidden — change that in <a href="#/foods">Foods & recipes → Food preferences</a>. Leftover rule: fridge meals are scheduled within 4 days of cooking; freezer-friendly meals (❄) can be spread out.</span></div>`;
+    <div style="height:16px"></div>
+    <div class="grid g2">${lossRateCardHTML()}${bodyGoalsCardHTML()}<div style="grid-column:1/-1">${nutritionCardHTML()}</div></div>
+    <div class="note" style="margin-top:12px">${icon('info')}<span>These are the same settings as on the Settings page — changing them here updates your targets and every portion on the calendar. Browse, favorite and edit recipes in <a href="#/foods">Foods &amp; recipes</a>.</span></div>`;
+}
+/* ---------- recipe details: popup, full page and print ---------- */
+function recipeParts(rid) {
+  const r = RECIPE[rid]; if (!r) return null; const m = RPS(rid);
+  const rows = div => r.ing.map(([id, a]) => ({ id, name: ING[id].n, t: amountText(id, a / div) }));
+  const list = rs => rs.map(x => `<span>${esc(x.name)}</span><span class="q">${x.t.main}${x.t.sub ? `<small>${x.t.sub}</small>` : ''}</span>`).join('');
+  const roles = { P: 'protein', C: 'carb', F: 'fat', V: 'fixed' };
+  return { r, m, per: rows(r.yield), batch: rows(1), list,
+    meta: `${r.cat} · ${r.yield > 1 ? 'makes ' + r.yield : '1 serving'} · ${r.storage === 'freezer' ? 'freezer-friendly' : r.storage === 'fridge' ? 'keeps 4 days' : 'eat fresh'}${r.time ? ' · ' + r.time + ' min' : ''}`,
+    tags: r.tags.map(t => `<span class="pill">${esc(t)}</span>`).join(''),
+    macros: [['kcal', m.k, 'var(--kcal)'], ['Protein', m.p, 'var(--prot)'], ['Carbs', m.c, 'var(--carb)'], ['Fat', m.f, 'var(--fat)']].map(([l, v, c]) => `<div class="card" style="box-shadow:none;background:var(--surface-2);padding:12px"><div class="tiny muted">${l}${l !== 'kcal' ? ' (g)' : ''}</div><div style="font-size:22px;font-weight:700;border-left:3px solid ${c};padding-left:8px;margin-top:4px" class="num">${fmt(v)}</div></div>`).join(''),
+    steps: r.steps.length ? `<ol class="rec-steps">${r.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : '<div class="tiny muted">No steps yet — add them with Edit recipe.</div>',
+    scaling: `<div class="note" style="margin-top:10px">${icon('info')}<span>Portion scaling: ${r.fixed ? 'fixed portion (not scaled).' : r.ing.map(([id]) => `${ING[id].n.split(',')[0]} → ${roles[ING[id].r]}`).join(' · ')}</span></div>`,
+    blocked: recipeAllowed(r) ? '' : `<span class="pill warn-pill">Blocked · ${esc(blockedBy(r).join(', '))}</span>` };
 }
 function recipeModal(rid) {
-  const r = RECIPE[rid]; const m = RPS(rid);
-  const per = r.ing.map(([id, a]) => { const t = amountText(id, a / r.yield); return `<span>${esc(ING[id].n)}</span><span class="q">${t.main}${t.sub ? `<small>${t.sub}</small>` : ''}</span>`; }).join('');
-  const batch = r.ing.map(([id, a]) => { const t = amountText(id, a); return `<span>${esc(ING[id].n)}</span><span class="q">${t.main}${t.sub ? `<small>${t.sub}</small>` : ''}</span>`; }).join('');
-  const roles = { P: 'protein', C: 'carb', F: 'fat', V: 'fixed' };
-  modal(`<div class="row" style="align-items:flex-start"><div style="font-size:44px">${esc(r.emoji)}</div><div style="flex:1"><div class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.08em">${r.cat} · ${r.yield > 1 ? 'makes ' + r.yield : '1 serving'} · ${r.storage === 'freezer' ? 'freezer-friendly' : r.storage === 'fridge' ? 'keeps 4 days' : 'eat fresh'}${r.time ? ' · ' + r.time + ' min' : ''}</div><h2 style="font-size:22px">${esc(r.name)}</h2>
-    <div class="row wrap" style="margin-top:6px">${r.tags.map(t => `<span class="pill">${esc(t)}</span>`).join('')}</div></div>${favBtnHTML(rid, 'in-modal')}<button class="btn icon ghost" data-act="close-modal">${icon('x')}</button></div>
-    <div class="grid g4" style="gap:10px;margin:16px 0">${[['kcal', m.k, 'var(--kcal)'], ['Protein', m.p, 'var(--prot)'], ['Carbs', m.c, 'var(--carb)'], ['Fat', m.f, 'var(--fat)']].map(([l, v, c]) => `<div class="card" style="box-shadow:none;background:var(--surface-2);padding:12px"><div class="tiny muted">${l}${l !== 'kcal' ? ' (g)' : ''}</div><div style="font-size:22px;font-weight:700;border-left:3px solid ${c};padding-left:8px;margin-top:4px" class="num">${fmt(v)}</div></div>`).join('')}</div>
-    <div class="grid g2"><div><h3>Per standard serving</h3><div class="ing-list">${per}</div></div>${r.yield > 1 ? `<div><h3>Full batch (${r.yield} servings)</h3><div class="ing-list">${batch}</div></div>` : ''}</div>
-    <h3 style="margin-top:16px">Method</h3><ol style="padding-left:20px;color:var(--text-2)">${r.steps.map(s => `<li style="margin:4px 0">${esc(s)}</li>`).join('')}</ol>
-    ${linksBlockHTML(r)}
-    <div class="note" style="margin-top:10px">${icon('info')}<span>Portion scaling: ${r.fixed ? 'fixed portion (not scaled).' : r.ing.map(([id]) => `${ING[id].n.split(',')[0]} → ${roles[ING[id].r]}`).join(' · ')}</span></div>
-    <div class="row wrap" style="justify-content:flex-end;margin-top:14px;gap:6px">${recipeAllowed(r) ? '' : `<span class="pill warn-pill" style="margin-right:auto">Blocked · ${esc(blockedBy(r).join(', '))}</span>`}
+  const x = recipeParts(rid); if (!x) return; const r = x.r;
+  modal(`<div class="row" style="align-items:flex-start"><div style="font-size:44px">${esc(r.emoji)}</div><div style="flex:1;min-width:0"><div class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.08em">${x.meta}</div><h2 style="font-size:22px">${esc(r.name)}</h2>
+    <div class="row wrap" style="margin-top:6px">${x.tags}</div></div>${favBtnHTML(rid, 'in-modal')}
+    <button class="btn icon ghost" data-act="recipe-print" data-rid="${rid}" title="Print this recipe" aria-label="Print this recipe">${icon('print')}</button>
+    <button class="btn icon ghost" data-act="recipe-expand" data-rid="${rid}" title="Open as a full page" aria-label="Open as a full page">${icon('expand')}</button>
+    <button class="btn icon ghost" data-act="close-modal" title="Close" aria-label="Close">${icon('x')}</button></div>
+    <div class="grid g4" style="gap:10px;margin:16px 0">${x.macros}</div>
+    <div class="grid g2"><div><h3>Per standard serving</h3><div class="ing-list">${x.list(x.per)}</div></div>${r.yield > 1 ? `<div><h3>Full batch (${r.yield} servings)</h3><div class="ing-list">${x.list(x.batch)}</div></div>` : ''}</div>
+    <h3 style="margin-top:16px">Method</h3>${x.steps}
+    ${linksBlockHTML(r)}${x.scaling}
+    <div class="row wrap" style="justify-content:flex-end;margin-top:14px;gap:6px">${x.blocked ? `<span style="margin-right:auto">${x.blocked}</span>` : ''}
       <button class="btn" data-act="recipe-dup" data-rid="${rid}">Duplicate</button><button class="btn primary" data-act="recipe-edit" data-rid="${rid}">${icon('edit')}Edit recipe</button></div>`);
+}
+let REC_FROM = '';                        // where "Back" goes from the full-page recipe
+function viewRecipe(rid) {
+  const x = recipeParts(rid);
+  if (!x) return `<div class="page-head"><div class="t"><h1>Recipe not found</h1><p>It may have been deleted. <a href="#/foods">Back to Foods &amp; recipes</a></p></div></div>`;
+  const r = x.r;
+  return `<div class="page-head rec-head"><div class="t"><a class="rec-back" href="${esc(REC_FROM || '#/foods')}">${icon('left')}Back</a>
+      <div class="tiny muted rec-kicker">${x.meta}</div><h1><span class="rec-emo">${esc(r.emoji)}</span>${esc(r.name)}</h1>${x.tags ? `<div class="row wrap" style="margin-top:8px">${x.tags}</div>` : ''}</div>
+    <div class="row wrap">${x.blocked}${favBtnHTML(rid)}<button class="btn" data-act="recipe-print" data-rid="${rid}">${icon('print')}Print</button><button class="btn" data-act="recipe-dup" data-rid="${rid}">Duplicate</button><button class="btn primary" data-act="recipe-edit" data-rid="${rid}">${icon('edit')}Edit recipe</button></div></div>
+    <div class="grid g4" style="gap:10px;margin-bottom:16px">${x.macros}</div>
+    <div class="grid ${r.yield > 1 ? 'g2' : ''}" style="margin-bottom:16px"><div class="card"><div class="card-h"><h2>Per standard serving</h2></div><div class="ing-list">${x.list(x.per)}</div></div>
+      ${r.yield > 1 ? `<div class="card"><div class="card-h"><h2>Full batch</h2><span class="pill">${r.yield} servings</span></div><div class="ing-list">${x.list(x.batch)}</div></div>` : ''}</div>
+    <div class="card" style="margin-bottom:16px"><div class="card-h"><h2>Method</h2></div>${x.steps}</div>
+    <div class="card">${linksBlockHTML(r).replace('<h3 style="margin-top:16px">', '<h3 style="margin-top:0">')}${x.scaling}</div>`;
+}
+function recipePrintHTML(rid) {
+  const x = recipeParts(rid); const r = x.r; const m = x.m;
+  const table = rs => `<table>${rs.map(y => `<tr><td>${esc(y.name)}</td><td class="q">${y.t.main}${y.t.sub ? ` <small>${y.t.sub}</small>` : ''}</td></tr>`).join('')}</table>`;
+  const links = (r.links || []).filter(l => l && l.url);
+  return `<article class="pr">
+    <div class="pr-meta">${esc(x.meta)}</div><h1><span>${esc(r.emoji)}</span> ${esc(r.name)}</h1>
+    <div class="pr-mac">Per serving: <b>${fmt(m.k)}</b> kcal · <b>${fmt(m.p)} g</b> protein · <b>${fmt(m.c)} g</b> carbs · <b>${fmt(m.f)} g</b> fat</div>
+    <div class="pr-cols"><section><h2>Per serving</h2>${table(x.per)}</section>${r.yield > 1 ? `<section><h2>Full batch · ${r.yield} servings</h2>${table(x.batch)}</section>` : ''}</div>
+    ${r.steps.length ? `<section class="pr-steps"><h2>Method</h2><ol>${r.steps.map(y => `<li>${esc(y)}</li>`).join('')}</ol></section>` : ''}
+    ${links.length ? `<section class="pr-links"><h2>Source</h2>${links.map(l => `<div>${esc(l.title || l.site || '')}${l.title ? ' — ' : ''}${esc(l.url)}</div>`).join('')}</section>` : ''}
+    <footer>${esc(appTitle())} · printed ${esc(fmtDate(todayISO(), { month: 'short', day: 'numeric', year: 'numeric' }))} · amounts are one standard serving; your daily portions are sized to your targets in the app.</footer></article>`;
+}
+function printRecipe(rid) {
+  if (!RECIPE[rid]) return;
+  let el = $('#print-area'); if (!el) { el = document.createElement('div'); el.id = 'print-area'; document.body.appendChild(el); }
+  el.innerHTML = recipePrintHTML(rid); document.body.classList.add('printing');
+  const done = () => { document.body.classList.remove('printing'); const a = $('#print-area'); if (a) a.remove(); window.removeEventListener('afterprint', done); };
+  window.addEventListener('afterprint', done);
+  setTimeout(() => { window.print(); setTimeout(() => { if (!window.matchMedia || !matchMedia('print').matches) done(); }, 500); }, 50);
 }
 
 /* ---------------- GROCERY & PREP ---------------- */
@@ -144,11 +186,18 @@ function viewGrocery() {
   }));
   const carried = []; wd.forEach(d => A.days[d].meals.forEach(m => { const b = A.batches.info[d + '|' + m.slot]; if (b && b.role === 'leftover' && b.batch.cook < wd[0]) carried.push({ d, m, b }); }));
   const got = syncActive() ? ((SY.data.grocery || {})[wd[0]] || {}) : ((S.grocery = S.grocery || {})['w' + wk] || {});
-  const aisles = {}; Object.entries(totals).forEach(([id, a]) => { const ai = ING[id].a; (aisles[ai] = aisles[ai] || []).push([id, a]); });
-  const order = AISLES;
-  const list = order.filter(a => aisles[a]).map(a => `<div class="gro-aisle"><h3>${a}</h3>${aisles[a].sort((x, y) => ING[x[0]].n.localeCompare(ING[y[0]].n)).map(([id, amt]) => { const g = groceryText(id, amt);
-    const pi = packInfo(id); const npk = Math.ceil(amt / pi.P - 1e-9); const pkTxt = pi.w >= .3 && pi.P > 1 ? `<small class="pk" title="Typical package: ${fmt(pi.P)} ${ING[id].u ? ING[id].u + 's' : ING[id].ml ? 'ml' : 'g'} — edit it on the food">≈ ${npk} pack${npk === 1 ? '' : 's'}</small>` : '';
-    return `<label class="gro-item ${got[id] ? 'got' : ''}"><input type="checkbox" data-input="gro" data-id="${id}" ${got[id] ? 'checked' : ''}><span>${esc(g.name)}</span><span class="q">${g.qty}${g.sub ? `<small>${g.sub}</small>` : ''}${pkTxt}</span></label>`; }).join('')}</div>`).join('');
+  const GL = groceryRows(A, wd, totals);
+  const unitOf = id => ING[id].u ? ING[id].u + 's' : ING[id].ml ? 'ml' : 'g';
+  const aisles = {}; GL.rows.forEach(r => { const ai = ING[r.id].a; (aisles[ai] = aisles[ai] || []).push(r); });
+  const order = AISLES.concat(Object.keys(aisles).filter(a => !AISLES.includes(a)));
+  // everything stays on the list; what the pantry covers starts ticked with a pantry note, so a pantry that's behind can't hide an item
+  const list = order.filter(a => aisles[a]).map(a => `<div class="gro-aisle"><h3>${a}</h3>${aisles[a].sort((x, y) => ING[x.id].n.localeCompare(ING[y.id].n)).map(r => { const { id, total, have } = r; const g = groceryText(id, total);
+    const pi = packInfo(id); const npk = Math.ceil(total / pi.P - 1e-9); const pkTxt = pi.w >= .3 && pi.P > 1 ? `<small class="pk" title="Typical package: ${fmt(pi.P)} ${unitOf(id)} — edit it on the food">≈ ${npk} pack${npk === 1 ? '' : 's'}</small>` : '';
+    const st = groRowState(r, got);
+    const panTxt = st.covered ? `<small class="pan-have full" title="Your pantry has enough — untick it if you still need to buy it">${icon('box')}In your pantry${have > total * 1.01 ? ` · ${esc(pantryQtyText(id, have))}` : ''}</small>` : have > 0 ? `<small class="pan-have" title="Your pantry has some of this">${icon('box')}${esc(pantryQtyText(id, have))} at home</small>` : '';
+    return `<label class="gro-item ${st.checked ? 'got' : ''} ${st.covered ? 'pan' : ''}"><input type="checkbox" data-input="gro" data-id="${id}" ${st.covered ? 'data-pan="1"' : ''} ${st.checked ? 'checked' : ''}><span>${esc(g.name)}${st.covered ? `<span class="gro-pan-ic" title="In your pantry">${icon('box')}</span>` : ''}</span><span class="q">${g.qty}${g.sub ? `<small>${g.sub}</small>` : ''}${pkTxt}${panTxt}</span></label>`; }).join('')}</div>`).join('');
+  const T = groTools(GL.rows, got); const nAll = GL.rows.length;
+  GRO_ROWS = { rows: GL.rows, week: wd[0], wk };
   const cookRows = cooks.sort((a, b) => a.d < b.d ? -1 : 1).map(({ d, m, b }) => { const dd = parseISO(d); const prep = addDays(d, -1);
     return `<div class="prep-row"><div class="d"><span>${DOW[dd.getDay()]}</span><b>${dd.getDate()}</b></div><div style="flex:1;min-width:0"><div class="row"><span style="font-size:20px">${esc(m.r.emoji)}</span><b>${esc(m.r.name)}</b><span class="bd cook">COOK ×${b.batch.size}</span>${b.batch.partnerServ ? `<span class="bd shr" data-tip="${b.batch.size - b.batch.partnerServ} for you · ${b.batch.partnerServ} for ${esc(syncName())}">${icon('users')}${b.batch.partnerServ}</span>` : ''}</div>
       <div class="small sub" style="margin-top:3px">Eat: ${b.batch.members.map(o => fmtDate(o.date, { weekday: 'short' }) + ' ' + SLOT_LABEL[o.slot].toLowerCase()).join(' · ')}${m.r.storage === 'freezer' ? ' · freeze extras' : ''}</div>
@@ -157,7 +206,7 @@ function viewGrocery() {
   const nW = Math.ceil(dates.length / 7);
   const opts = Array.from({ length: nW }, (_, i) => `<option value="${i + 1}" ${wk === i + 1 ? 'selected' : ''}>Week ${i + 1} · ${fmtDate(dates[i * 7], { month: 'short', day: 'numeric' })} – ${fmtDate(dates[Math.min(dates.length - 1, i * 7 + 6)], { month: 'short', day: 'numeric' })}${phaseForWeek(i + 1).cycle > 1 ? ' · cycle ' + phaseForWeek(i + 1).cycle : ''}</option>`).join('');
   return `<div class="page-head"><div class="t"><h1>Grocery & meal prep</h1><p>Quantities are summed from the exact scaled portions on your calendar — including leftovers — for the selected week.</p></div>
-      <div class="row">${syncBtnHTML()}<select class="inp" data-input="gro-week">${opts}</select><button class="btn" data-act="copy-list">${icon('list')}Copy list</button><button class="btn" data-act="print">Print</button></div></div>
+      <div class="row wrap">${syncBtnHTML()}<select class="inp" data-input="gro-week">${opts}</select><button class="btn" data-act="copy-list">${icon('list')}Copy list</button><button class="btn" data-act="print">Print</button></div></div>
     ${syncGroceryNote(wd, A)}
     ${moneySaverHTML(wd)}<div style="height:16px"></div>
     <div class="g-half">
@@ -165,7 +214,9 @@ function viewGrocery() {
         ${carried.length ? `<div class="note" style="margin-top:12px">${icon('loop')}<span>Carried over from last week (already cooked): ${[...new Set(carried.map(c => c.m.r.name))].map(esc).join(', ')}.</span></div>` : ''}</div>
         <div style="height:16px"></div><div class="card"><div class="card-h"><h2>Cook-fresh meals</h2></div>
         <div class="row wrap" style="gap:6px">${Object.entries(singleSummary).map(([id, n]) => `<span class="pill">${esc(RECIPE[id].emoji)} ${esc(RECIPE[id].name)}${n > 1 ? ' ×' + n : ''}</span>`).join('') || '<span class="muted small">None</span>'}</div></div></div>
-      <div class="card"><div class="card-h"><h2>Shopping list</h2><span class="muted small">${Object.keys(totals).length} items · tap to check off</span></div>${list || '<div class="muted">Nothing planned this week.</div>'}
+      <div class="card"><div class="card-h"><h2>Shopping list</h2><span class="muted small">${nAll} item${nAll === 1 ? '' : 's'} · tap to check off</span></div>
+        ${nAll ? `<div class="row wrap gro-tools"><button class="btn sm" data-act="gro-all" data-v="1" ${T.checked === nAll ? 'disabled' : ''}>${icon('check')}Check all</button><button class="btn sm" data-act="gro-all" data-v="0" ${T.checked ? '' : 'disabled'}>${icon('x')}Uncheck all</button><button class="btn sm primary" data-act="gro-pantry" ${T.add ? '' : 'disabled'} title="Put the items you ticked in the pantry and clear their ticks">${icon('box')}Add checked to pantry${T.add ? ` (${T.add})` : ''}</button></div>` : ''}
+        ${GL.note}${list || '<div class="muted">Nothing planned this week.</div>'}
         <div class="tiny muted" style="margin-top:10px">Rice & quinoa are listed uncooked (~⅓ of cooked weight). Seasonings, garlic, lemon/lime and cooking spray aren’t listed.</div></div></div>`;
 }
 
@@ -186,8 +237,9 @@ function moneySaverHTML(wd) {
     ? (good ? `Sharing ingredients saves about <b>${Math.max(0, dPk)} fresh package${dPk === 1 ? '' : 's'}</b>${dIt > 0 ? ` and <b>${dIt} item${dIt === 1 ? '' : 's'}</b>` : ''} this week${dLb > 0.2 ? `, and less fresh food left sitting in opened packages` : ''}.` : `This week already lines up well — the plain rotation wouldn’t need fewer packages.`)
     : (dPk < 0 || dIt < 0 ? `Turning ingredient sharing on would save about <b>${Math.max(0, -dPk)} fresh package${-dPk === 1 ? '' : 's'}</b>${-dIt > 0 ? ` and <b>${-dIt} item${-dIt === 1 ? '' : 's'}</b>` : ''} this week.` : `Ingredient sharing is off.`);
   const chips = actual.shared.filter(x => packInfo(x.id).w >= .3).slice(0, 10).map(x => `<span class="pill share-chip" data-tip="${esc(x.recipes.map(r => RECIPE[r] ? RECIPE[r].name : r).join(' · '))}">${esc(ING[x.id].n.split(',')[0])} <b>×${x.n}</b></span>`).join('');
-  return `<div class="card money"><div class="card-h"><h2>${icon('target')}Money saver</h2>
-      <label class="share-tog" title="Plan meals so recipes in the same week share ingredients"><span class="small">Share ingredients between recipes</span>${`<input type="checkbox" data-input="share" ${on ? 'checked' : ''}>`}<i class="switch ${on ? 'on' : ''}" aria-hidden="true"><i></i></i></label></div>
+  const sum = on ? (dPk > 0 ? `−${dPk} package${dPk === 1 ? '' : 's'} this week` : 'on') : 'off';
+  return `<div class="card money ${collCls('money')}" data-coll="money"><div class="card-h">${collHead('money', `${icon('target')}Money saver`, `<span class="pill coll-sum">${sum}</span>`)}
+      <label class="share-tog" title="Plan meals so recipes in the same week share ingredients"><span class="small">Share ingredients between recipes</span>${`<input type="checkbox" data-input="share" ${on ? 'checked' : ''}>`}<i class="switch ${on ? 'on' : ''}" aria-hidden="true"><i></i></i></label></div><div class="coll-body">
     <div class="grid g4" style="gap:10px">
       <div class="ms-stat"><span class="tiny muted">Items to buy</span><b class="num">${actual.items}</b><span class="tiny ${dIt > 0 ? 'good' : 'muted'}">${on ? (dIt > 0 ? `−${dIt} vs plain rotation` : 'same as plain rotation') : (dIt < 0 ? `${-dIt} fewer with sharing` : '')}</span></div>
       <div class="ms-stat"><span class="tiny muted">Fresh packages</span><b class="num">${actual.packs}</b><span class="tiny ${dPk > 0 ? 'good' : 'muted'}">${on ? (dPk > 0 ? `−${dPk} vs plain rotation` : 'same as plain rotation') : (dPk < 0 ? `${-dPk} fewer with sharing` : '')}</span></div>
@@ -202,7 +254,7 @@ function moneySaverHTML(wd) {
         <li><b>R</b> — what’s left in packages you’re already buying that week</li>
         <li><b>P</b> — the typical package size (edit it on any food)</li>
         <li><b>w</b> — how fast it spoils: fresh meat, fish, greens ≈ 1 · eggs, peppers ≈ 0.5 · frozen ≈ 0.3 · rice, pasta, canned ≈ 0.05 · spices and oils 0</li></ul>
-      <p>A recipe that finishes the half-bag of spinach you already need scores high; one that needs a new pack of something perishable scores low. No recipe waits more than two turns, so variety and your ★ favorites stay the same — only the order within the week changes. Meals you placed by hand are never moved. Numbers here use standard servings; the list below uses your scaled portions.</p></details></div>`;
+      <p>A recipe that finishes the half-bag of spinach you already need scores high; one that needs a new pack of something perishable scores low. No recipe waits more than two turns, so variety and your ★ favorites stay the same — only the order within the week changes. Meals you placed by hand are never moved. Numbers here use standard servings; the list below uses your scaled portions.</p></details></div></div>`;
 }
 
 /* ---------------- PROGRESS ---------------- */
@@ -266,34 +318,47 @@ function rateInfoHTML(rate) {
   return `<div class="grid g3" style="gap:10px"><div><div class="tiny muted">Daily deficit</div><b class="num" style="font-size:18px">−${fmt(deficit)} kcal</b></div><div><div class="tiny muted">Training / rest day</div><b class="num" style="font-size:18px">${fmt(tT.kcal)} / ${fmt(tR.kcal)}</b></div><div><div class="tiny muted">Reach ${st.goalWeight} lb</div><b style="font-size:18px">${fmtDate(when, { month: 'short', year: 'numeric' })}</b></div></div>
     <div class="tiny muted" style="margin-top:6px">${fmt(pct, 2)}% of body weight per week · portions on the calendar resize automatically.</div>${flag}`;
 }
-function viewSettings() {
-  const st = S.settings;
-  const f = (lbl, name, val, attrs = '', hint = '') => `<div class="field"><label>${lbl}</label><input class="inp" name="${name}" value="${esc(val)}" ${attrs}>${hint ? `<span class="tiny muted">${hint}</span>` : ''}</div>`;
-  return `<div class="page-head"><div class="t"><h1>Settings</h1><p>${AUTH.mode === 'server' ? 'Everything is saved to your account. Export a backup now and then.' : 'Everything is saved in this browser. Export a backup now and then.'}</p></div></div>
-    <div class="grid g2">
-      <div class="card"><div class="card-h"><h2>Training days</h2><span class="pill acc" id="td-count">${st.trainDays.length} day${st.trainDays.length === 1 ? '' : 's'} / week</span></div>
-        <div class="row wrap td-pick">${[1, 2, 3, 4, 5, 6, 0].map(i => `<label class="td ${st.trainDays.includes(i) ? 'on' : ''}"><input type="checkbox" data-input="td" value="${i}" ${st.trainDays.includes(i) ? 'checked' : ''}><span>${DOW[i]}</span></label>`).join('')}</div>
+/* settings cards shared by Settings and the Diet plan */
+const setField = (lbl, name, val, attrs = '', hint = '') => `<div class="field"><label>${lbl}</label><input class="inp" name="${name}" value="${esc(val)}" ${attrs}>${hint ? `<span class="tiny muted">${hint}</span>` : ''}</div>`;
+function trainingDaysCardHTML(coll) { const st = S.settings; const f = setField;
+  const pill = `<span class="pill acc" id="td-count">${st.trainDays.length} day${st.trainDays.length === 1 ? '' : 's'} / week</span>`;
+  const body = `<div class="row wrap td-pick">${[1, 2, 3, 4, 5, 6, 0].map(i => `<label class="td ${st.trainDays.includes(i) ? 'on' : ''}"><input type="checkbox" data-input="td" value="${i}" ${st.trainDays.includes(i) ? 'checked' : ''}><span>${DOW[i]}</span></label>`).join('')}</div>
         <div class="note" style="margin-top:12px">${icon('dumbbell')}<span>Pick as many days as you like — the workout plan updates instantly from today forward. Sessions rotate <b>Push → Pull → Legs</b> (push and pull never share a day), so each muscle is trained about <b>${fmt(st.trainDays.length / 3, 1)}×</b> per week${st.trainDays.length < 3 ? '' : ''}. ${st.trainDays.length >= 6 ? 'Six or more days gives a classic twice-a-week PPL.' : st.trainDays.length <= 2 ? 'With 1–2 days, the rotation spreads across weeks.' : ''}</span></div>
         <form data-form="plan" class="row wrap" style="gap:10px;margin-top:14px;align-items:flex-end">
           ${f('Start date (Day 1)', 'startDate', st.startDate, 'type="date" required')}
           <button class="btn" type="submit">Rebuild from new start date</button></form>
-        <div class="tiny muted" style="margin-top:8px">After the 90-day launch the plan keeps going in 13-week cycles (Build → Intensify → Volume → Deload & Test).</div></div>
-      <div class="card"><div class="card-h"><h2>Target loss rate</h2><span class="pill" id="rate-pill">${fmt(st.rate, 2)} lb / week</span></div>
+        <div class="tiny muted" style="margin-top:8px">After the 90-day launch the plan keeps going in 13-week cycles (Build → Intensify → Volume → Deload & Test).</div>`;
+  return coll ? `<div class="card ${collCls('days')}" data-coll="days"><div class="card-h">${collHead('days', 'Training days', pill)}</div><div class="coll-body">${body}</div></div>`
+    : `<div class="card"><div class="card-h"><h2>Training days</h2>${pill}</div>${body}</div>`; }
+function lossRateCardHTML() { const st = S.settings; const f = setField;
+  return `<div class="card"><div class="card-h"><h2>Target loss rate</h2><span class="pill" id="rate-pill">${fmt(st.rate, 2)} lb / week</span></div>
         <input type="range" min="0.25" max="2" step="0.05" value="${st.rate}" data-input="rate" style="margin:6px 0 4px">
         <div class="row" style="justify-content:space-between" ><span class="tiny muted">0.25</span><span class="tiny muted">1.0</span><span class="tiny muted">2.0 lb/wk</span></div>
-        <div id="rate-info" style="margin-top:10px">${rateInfoHTML(st.rate)}</div></div>
-      <div class="card"><div class="card-h"><h2>Body & goals</h2></div><form data-form="body" class="grid g2" style="gap:12px">
+        <div id="rate-info" style="margin-top:10px">${rateInfoHTML(st.rate)}</div></div>`; }
+function bodyGoalsCardHTML() { const st = S.settings; const f = setField;
+  return `<div class="card"><div class="card-h"><h2>Body & goals</h2></div><form data-form="body" class="grid g2" style="gap:12px">
         ${f('Starting weight (lb)', 'startWeight', st.startWeight, 'type="number" step="0.1"')}${f('Starting body fat %', 'startBF', st.startBF, 'type="number" step="0.1"')}
         ${f('Goal weight (lb)', 'goalWeight', st.goalWeight, 'type="number" step="0.1"')}${f('Goal body fat %', 'goalBF', st.goalBF, 'type="number" step="0.1"')}
-        <div><button class="btn primary" type="submit">Save</button></div></form></div>
-      <div class="card"><div class="card-h"><h2>Nutrition model</h2></div><form data-form="nut" class="grid g2" style="gap:12px">
+        <div><button class="btn primary" type="submit">Save</button></div></form></div>`; }
+function nutritionCardHTML() { const st = S.settings; const f = setField;
+  return `<div class="card"><div class="card-h"><h2>Nutrition model</h2></div><form data-form="nut" class="grid g2" style="gap:12px">
         <div class="field"><label>Protein: <b id="prot-v">${st.proteinPerLb}</b> g per lb</label><input type="range" name="proteinPerLb" min="0.5" max="1" step="0.05" value="${st.proteinPerLb}" oninput="document.getElementById('prot-v').textContent=this.value"></div>
         <div class="field"><label>Daily activity (outside the gym)</label><select class="inp" name="activity">${[[1.3, 'Sedentary — desk, <5k steps'], [1.4, 'Light — desk + 5–8k steps'], [1.5, 'Moderate — 8–12k steps'], [1.6, 'Active — on your feet / 12k+']].map(([v, l]) => `<option value="${v}" ${+st.activity === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
         ${f('Extra kcal on lifting days', 'sessionKcal', st.sessionKcal, 'type="number" step="10"')}
         ${f('Manual calorie adjustment', 'kcalAdjust', st.kcalAdjust, 'type="number" step="25"', 'Applied to every day. The trend coach can set this for you.')}
         ${f('Calorie floor', 'minKcal', st.minKcal, 'type="number" step="50"')}
         <div class="field" style="grid-column:1/-1"><label>When you reach your goal weight or body-fat %</label><select class="inp" name="atGoal"><option value="maintain" ${st.atGoal === 'maintain' ? 'selected' : ''}>Switch to maintenance calories automatically</option><option value="continue" ${st.atGoal === 'continue' ? 'selected' : ''}>Keep the deficit going</option></select></div>
-        <div><button class="btn primary" type="submit">Save</button></div></form></div>
+        <div><button class="btn primary" type="submit">Save</button></div></form></div>`; }
+function viewSettings() {
+  const st = S.settings;
+  const f = (lbl, name, val, attrs = '', hint = '') => `<div class="field"><label>${lbl}</label><input class="inp" name="${name}" value="${esc(val)}" ${attrs}>${hint ? `<span class="tiny muted">${hint}</span>` : ''}</div>`;
+  return `<div class="page-head"><div class="t"><h1>Settings</h1><p>${AUTH.mode === 'server' ? 'Everything is saved to your account. Export a backup now and then.' : 'Everything is saved in this browser. Export a backup now and then.'}</p></div></div>
+    <div class="grid g2">
+      ${trainingDaysCardHTML()}
+      ${lossRateCardHTML()}
+      ${bodyGoalsCardHTML()}
+      ${nutritionCardHTML()}
+      ${gymSettingsHTML()}
       <div class="card"><div class="card-h"><h2>Appearance & data</h2></div>
         <div class="field"><label>Theme</label><div class="seg">${['dark', 'light', 'system'].map(t => `<button class="${st.theme === t ? 'on' : ''}" data-act="theme" data-v="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></div>
         <label class="set-tog" style="margin-top:12px"><span><b class="small">Background photos</b><span class="tiny muted">${st.bgPhotos !== false ? 'A fitness photo behind each page.' : 'Off — plain background. Pages load faster and text is easier to read.'}</span></span><input type="checkbox" data-input="bg-photos" ${st.bgPhotos !== false ? 'checked' : ''}><i class="switch ${st.bgPhotos !== false ? 'on' : ''}" aria-hidden="true"><i></i></i></label>
@@ -304,6 +369,7 @@ function viewSettings() {
     <div style="height:16px"></div>
     <div class="card"><div class="card-h"><h2>Money-saving meal planning</h2><label class="share-tog"><span class="small">Share ingredients between recipes</span><input type="checkbox" data-input="share" ${st.shareIngredients !== false ? 'checked' : ''}><i class="switch ${st.shareIngredients !== false ? 'on' : ''}" aria-hidden="true"><i></i></i></label></div>
       <div class="small sub">When on, the planner orders each week’s meals so recipes reuse the same fresh ingredients — fewer packages to buy and less food going bad. Variety and favorites are unchanged. See the formula and this week’s savings on <a href="#/grocery">Grocery & prep</a>. Package sizes can be edited on any food.</div></div>
+    ${apiCardHTML()}
     <div style="height:16px"></div>
     <div class="card"><div class="card-h"><h2>Food preferences</h2><a class="btn sm" href="#/foods">Manage foods & recipes ${icon('right')}</a></div>${foodPrefsHTML()}</div>
     <div class="tiny muted" style="margin-top:14px;text-align:center">FORGE 90 ${APP_VERSION} · <a href="${SOURCE_URL}/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0</a> · <a href="${SOURCE_URL}" target="_blank" rel="noopener">Source code</a></div>
@@ -311,7 +377,7 @@ function viewSettings() {
 }
 
 /* ---------------- router ---------------- */
-const NAV = [['', 'Dashboard', 'grid'], ['calendar', 'Calendar', 'cal'], ['workouts', 'Workout plan', 'dumbbell'], ['diet', 'Diet plan', 'food'], ['foods', 'Foods & recipes', 'book'], ['grocery', 'Grocery & prep', 'cart'], ['progress', 'Progress', 'trend'], ['settings', 'Settings', 'sliders']];
+const NAV = [['', 'Dashboard', 'grid'], ['calendar', 'Calendar', 'cal'], ['workouts', 'Workout plan', 'dumbbell'], ['diet', 'Diet plan', 'food'], ['foods', 'Foods & recipes', 'book'], ['grocery', 'Grocery & prep', 'cart'], ['pantry', 'Pantry', 'box'], ['progress', 'Progress', 'trend'], ['settings', 'Settings', 'sliders']];
 function shell() {
   document.body.innerHTML = `<div id="bg" aria-hidden="true"><div class="bg-layer"></div><div class="bg-layer"></div></div><div class="app"><aside class="side"><div class="brand"><a class="brand-link" href="#/" title="FORGE 90 — Dashboard">${LOGO}<b class="wm">FORGE<em>90</em></b></a><button class="side-toggle" data-act="nav-toggle" id="side-toggle"></button></div>
     <nav class="nav">${navItems().map(([k, l, i]) => `<a href="#/${k}" data-nav="${k}" title="${l}">${icon(i)}<span>${l}</span></a>`).join('')}</nav><div class="side-foot" id="side-foot"></div></aside>
@@ -333,9 +399,9 @@ function render() {
   const h = location.hash.replace(/^#\/?/, ''); const [page, arg] = h.split('/');
   document.body.classList.toggle('compact', !!UI.navCollapsed);
   if (page === 'day' && arg) ensurePlanThrough(arg);
-  const sec = ({ '': 'dashboard', calendar: 'calendar', day: 'day', workouts: 'workouts', diet: 'diet', foods: 'foods', grocery: 'grocery', progress: 'progress', settings: 'settings', account: 'settings', admin: 'settings' })[page || ''] || 'dashboard';
+  const sec = ({ '': 'dashboard', calendar: 'calendar', day: 'day', workouts: 'workouts', diet: 'diet', foods: 'foods', recipe: 'foods', grocery: 'grocery', pantry: 'grocery', progress: 'progress', settings: 'settings', account: 'settings', admin: 'settings' })[page || ''] || 'dashboard';
   document.body.dataset.sec = sec; applyBackground(sec);
-  $$('.nav a').forEach(a => a.classList.toggle('on', a.dataset.nav === (page === 'day' ? 'calendar' : (page || ''))));
+  $$('.nav a').forEach(a => a.classList.toggle('on', a.dataset.nav === (page === 'day' ? 'calendar' : page === 'recipe' ? 'foods' : (page || ''))));
   const sy = window.scrollY; const same = render._last === h; render._last = h;
   if (page !== 'calendar') UI._calCompact = null;
   let html;
@@ -345,18 +411,21 @@ function render() {
     case 'workouts': html = viewWorkouts(); break;
     case 'diet': html = viewDiet(); break;
     case 'grocery': html = viewGrocery(); break;
+    case 'pantry': html = viewPantry(); break;
     case 'progress': html = viewProgress(); break;
     case 'settings': html = viewSettings(); break;
     case 'foods': html = viewFoods(); break;
+    case 'recipe': html = viewRecipe(decodeURIComponent(arg || '')); break;
     case 'account': html = viewAccount(); break;
     case 'admin': html = viewAdmin(); break;
     default: html = viewDashboard();
   }
-  $('#view').innerHTML = html; sideFoot(); hideTip(); fpAfter();
+  $('#view').innerHTML = html; sideFoot(); hideTip(); fpAfter(); pantryNavBadge();
   if (page === 'progress') progressCharts();
   window.scrollTo(0, same ? sy : 0);
-  document.title = appTitle() + ' · ' + ((navItems().concat([['account', 'Account']]).find(n => n[0] === page) || [, page === 'day' ? 'Day' : 'Dashboard'])[1]);
-  if (page === 'account') accountAfter(); if (page === 'admin') adminAfter();
+  document.title = appTitle() + ' · ' + (page === 'recipe' ? ((RECIPE[decodeURIComponent(arg || '')] || {}).name || 'Recipe') : (navItems().concat([['account', 'Account']]).find(n => n[0] === page) || [, page === 'day' ? 'Day' : 'Dashboard'])[1]);
+  if (page === 'account') accountAfter(); if (page === 'admin') adminAfter(); if (page === 'settings') settingsAfter();
+  if (UI._scrollTo) { const el = document.getElementById(UI._scrollTo); UI._scrollTo = null; if (el) el.scrollIntoView({ block: 'start' }); }
 }
 function applyTheme() { const t = (S && S.settings.theme) || UI.lastTheme || 'dark'; document.documentElement.dataset.theme = t; if (UI.lastTheme !== t) { UI.lastTheme = t; saveUI(); } }
 
@@ -374,6 +443,8 @@ const ACT = {
   'diet-filter': el => { UI.dietFilter = el.dataset.v; saveUI(); render(); },
   'plan-phase': el => { UI.planPhase = el.dataset.v; saveUI(); render(); },
   recipe: el => recipeModal(el.dataset.rid),
+  'recipe-print': el => printRecipe(el.dataset.rid),
+  'recipe-expand': el => { const h = location.hash; REC_FROM = /^#\/recipe\//.test(h) ? REC_FROM : (h || '#/'); closeModal(); location.hash = '#/recipe/' + el.dataset.rid; },
   'toggle-done': el => { const d = el.dataset.date; if (S.done[d]) delete S.done[d]; else S.done[d] = true; saveState(); render(); toast(S.done[d] ? 'Workout marked complete 💪' : 'Marked not complete'); },
   'set-rate': el => { S.settings.rate = +el.dataset.v; saveState(); render(); toast(`Loss rate set to ${el.dataset.v} lb/week — portions updated`); },
   'apply-trend': el => { S.settings.kcalAdjust = (+S.settings.kcalAdjust || 0) + (+el.dataset.delta); saveState(); render(); toast(`Calories adjusted ${+el.dataset.delta > 0 ? '+' : ''}${el.dataset.delta} kcal/day`); },
@@ -419,9 +490,7 @@ document.addEventListener('change', e => {
   else if (inp === 'share') { pushUndo('ingredient sharing'); S.settings.shareIngredients = el.checked; const from = nextPlanWeekStart(); replanMeals(from); saveState(); render();
     toast(`Ingredient sharing ${el.checked ? 'on' : 'off'} — meals from ${fmtDate(from)} on re-planned (hand-picked meals kept)`, true); }
   else if (inp === 'gro-week') { UI.groWeek = +el.value; saveUI(); render(); }
-  else if (inp === 'gro' && syncActive()) { const wk0 = planDates()[(UI.groWeek - 1) * 7]; const g = SY.data.grocery = SY.data.grocery || {}; const w = g[wk0] = g[wk0] || {}; if (el.checked) w[el.dataset.id] = 1; else delete w[el.dataset.id]; el.closest('.gro-item').classList.toggle('got', el.checked);
-    api('PUT', '/api/sync/grocery', { week: wk0, id: el.dataset.id, got: el.checked }).then(r => { SY.rev = r.rev; }).catch(e => toast(e.message)); }
-  else if (inp === 'gro') { const k = 'w' + UI.groWeek; S.grocery = S.grocery || {}; S.grocery[k] = S.grocery[k] || {}; if (el.checked) S.grocery[k][el.dataset.id] = true; else delete S.grocery[k][el.dataset.id]; saveState(); el.closest('.gro-item').classList.toggle('got', el.checked); }
+  else if (inp === 'gro') groTick(el);
   else if (inp === 'pr-ex') { UI.prEx = el.value; saveUI(); render(); }
   else if (inp === 'rate') { S.settings.rate = +el.value; saveState(); render(); toast(`Target loss rate ${fmt(+el.value, 2)} lb/week — calories and portions updated`); }
   else if (inp === 'td') {
@@ -444,6 +513,7 @@ document.addEventListener('change', e => {
 document.addEventListener('input', e => {
   if (e.target.dataset.input === 'rate') { const v = +e.target.value; const pill = $('#rate-pill'); if (pill) pill.textContent = fmt(v, 2) + ' lb / week'; const prev = S.settings.rate; S.settings.rate = v; const ri = $('#rate-info'); if (ri) ri.innerHTML = rateInfoHTML(v); S.settings.rate = prev; }
   if (e.target.dataset.input === 'bg-dim') document.documentElement.style.setProperty('--dim', 1 - e.target.value);
+  if (e.target.dataset.input === 'recq') { UI.recQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('[data-input="recq"]'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) { /* search inputs */ } } return; }
   if (e.target.dataset.input === 'foodq') { UI.foodQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('[data-input="foodq"]'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (e.target.dataset.input === 'libq') { UI.libQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('[data-input="libq"]'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } } });
 document.addEventListener('submit', e => {

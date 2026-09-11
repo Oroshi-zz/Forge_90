@@ -485,6 +485,326 @@ const SLOTS = {
 };
 
 /* ============================================================
+   EXTRA EXERCISES — research-backed alternatives, switched off by default.
+   Switch any of them on in the Exercise library and it joins the rotation for its slot.
+   RX(slot, why, …same arguments as E)
+   ============================================================ */
+const EXTRA_EX = [];
+function RX(slot, why, id, name, group, equip, primary, secondary, compound, steps, cues, mistake, opts) {
+  E(id, name, group, equip, primary, secondary, compound, steps, cues, mistake);
+  Object.assign(EX[id], { extra: true, slot, why }, opts || {}); EXTRA_EX.push(id);
+}
+/* ---- chest ---- */
+RX('chest_press', 'A 30–45° incline shifts more of the work to the upper chest, and the fixed bar path lets you push close to failure without a spotter.',
+  'smith_incline_press', 'Smith Machine Incline Press', 'Chest', 'Smith machine + adjustable bench', ['chest'], ['frontDelt', 'triceps'], true,
+  ['Set the bench to 30–45° so the bar lines up with your upper chest.', 'Grip slightly wider than shoulders, pin your shoulder blades back and down.',
+   'Unrack and lower the bar under control to your upper chest.', 'Press up until your arms are almost straight.'],
+  ['Elbows about 45–60° from your torso', 'Touch the same spot every rep'], 'Setting the bench so the bar lands on your neck or lower chest.');
+RX('chest_press', 'Machines guide the path so you can take sets close to failure safely, which is what drives growth; the incline biases the upper chest.',
+  'machine_incline_press', 'Machine Incline Chest Press', 'Chest', 'Incline press machine', ['chest'], ['frontDelt', 'triceps'], true,
+  ['Set the seat so the handles start level with your upper chest.', 'Sit tall with your shoulder blades against the pad.',
+   'Press up and forward until your arms are nearly straight.', 'Lower slowly until you feel a stretch across the chest.'],
+  ['Chest up, shoulders down', 'Control the last few inches of the descent'], 'Shrugging the shoulders up toward your ears as you press.');
+RX('chest_press', 'Push-ups built as much chest and triceps as bench pressing at matched effort (Kikuchi & Nakazato, 2017); raising the hands lets the chest stretch past the floor.',
+  'deficit_pushup', 'Deficit Push-Up', 'Chest', 'Push-up handles or plates', ['chest'], ['frontDelt', 'triceps', 'abs'], true,
+  ['Place handles or plates shoulder-width apart and set up in a plank.', 'Brace your abs and glutes so your body is one straight line.',
+   'Lower until your chest dips below your hands.', 'Push back up to straight arms. Add a weight vest or plate on your back once sets pass 20 reps.'],
+  ['Elbows about 45° from your torso', 'Ribs down, no sagging hips'], 'Cutting the range short — the deep part is the point of the deficit.', { bw: true });
+RX('chest_press', 'Leaning forward on dips loads the lower chest through one of the deepest stretches of any chest exercise.',
+  'chest_dip', 'Chest-Leaning Dip', 'Chest', 'Dip bars (or assisted dip machine)', ['chest'], ['triceps', 'frontDelt'], true,
+  ['Grip the bars and support yourself on straight arms.', 'Lean your torso forward about 30° and let your elbows flare slightly.',
+   'Lower until your shoulders are just below your elbows, or until you feel a strong chest stretch.', 'Press back up without fully locking out.'],
+  ['Stay leaned forward the whole set', 'Shoulders down, away from your ears'], 'Dropping too deep with the shoulders rolling forward — stop where the stretch is strong but comfortable.', { bw: true });
+RX('chest_fly', 'Flies load the chest hardest when it is stretched, and training at long muscle lengths tends to build more muscle.',
+  'incline_db_fly', 'Incline Dumbbell Fly', 'Chest', 'Dumbbells + adjustable bench', ['chest'], ['frontDelt'], false,
+  ['Set the bench to about 30° and lie back with the dumbbells over your chest, palms facing.', 'Keep a soft bend in your elbows.',
+   'Open your arms in a wide arc until you feel a deep chest stretch.', 'Hug the dumbbells back together over your upper chest.'],
+  ['Move at the shoulder, not the elbow', 'Slow on the way down'], 'Bending the elbows more and more until it turns into a press.');
+RX('chest_fly', 'Cables keep tension on the chest through the whole arc; one arm at a time lets the hand cross the midline for a stronger squeeze.',
+  'single_arm_cable_fly', 'Single-Arm Cable Fly', 'Chest', 'Single cable + D-handle', ['chest'], ['frontDelt'], false,
+  ['Set a cable at shoulder height and stand side-on with the handle in your far hand.', 'Step forward so the arm is stretched back with a soft elbow.',
+   'Sweep the handle across your body until your hand passes the middle of your chest.', 'Return slowly to the stretch.'],
+  ['Brace with the free hand on your hip', 'Keep the chest facing forward'], 'Rotating the torso to move the weight.');
+/* ---- back ---- */
+RX('back_row', 'Chest support takes the lower back out of the lift so the lats and upper back can be trained close to failure.',
+  'cs_tbar_row', 'Chest-Supported T-Bar Row', 'Back', 'Chest-supported T-bar row machine', ['lats', 'upperBack'], ['rearDelt', 'biceps'], true,
+  ['Set the pad so your chest is supported and your arms hang straight to the handles.', 'Grip the handles and brace your chest into the pad.',
+   'Row the handles toward your lower ribs, driving the elbows back.', 'Lower until your shoulder blades spread apart.'],
+  ['Chest stays on the pad', 'Pull with the elbows'], 'Lifting the chest off the pad to heave the weight up.');
+RX('back_row', 'Lying face-down on a bench removes momentum and lower-back strain, so every rep is strict upper-back and lat work.',
+  'seal_row', 'Dumbbell Seal Row', 'Back', 'Dumbbells + flat bench on blocks (or incline bench)', ['lats', 'upperBack'], ['rearDelt', 'biceps'], true,
+  ['Lie face-down on a raised bench with a dumbbell in each hand hanging straight down.', 'Brace your chest against the bench.',
+   'Row both dumbbells toward your hips.', 'Lower all the way until your arms are straight and your shoulder blades spread.'],
+  ['Elbows travel back, not out', 'Full stretch at the bottom'], 'Raising the head and chest off the bench.');
+RX('back_row', 'The staggered landmine stance lets you row heavy through a long range with a big lat stretch at the bottom.',
+  'meadows_row', 'Meadows Row', 'Back', 'Landmine + barbell', ['lats', 'upperBack'], ['rearDelt', 'biceps', 'forearms'], true,
+  ['Stand side-on to the end of a landmine bar in a split stance, front forearm resting on your knee.', 'Grip the end of the bar overhand with the far hand.',
+   'Row the bar up toward your hip, elbow driving back.', 'Lower until you feel a full stretch through the lat.'],
+  ['Hips stay square', 'Pull toward the back pocket'], 'Twisting the torso open at the top of each rep.');
+RX('back_vertical', 'The pull-up is a classic vertical pull with high lat involvement; add load once you can do 12 or more clean reps.',
+  'pullup', 'Pull-Up', 'Back', 'Pull-up bar', ['lats'], ['biceps', 'upperBack', 'forearms'], true,
+  ['Hang from the bar with hands slightly wider than your shoulders.', 'Pull your shoulder blades down, then pull your chest toward the bar.',
+   'Pull until your chin clears the bar.', 'Lower all the way to a dead hang under control.'],
+  ['Lead with the chest', 'No kipping'], 'Half reps that stop well short of a full hang.', { bw: true });
+RX('back_vertical', 'Separate handles let each side pull through its own full range, which helps even out a weaker side.',
+  'iso_lat_pulldown', 'Iso-Lateral Machine Pulldown', 'Back', 'Plate-loaded pulldown machine', ['lats'], ['biceps', 'upperBack'], true,
+  ['Set the thigh pad snug and reach up to the handles.', 'Start with your arms fully stretched overhead.',
+   'Pull the handles down and slightly back toward your upper ribs.', 'Return slowly to a full stretch.'],
+  ['Elbows down to your sides', 'Chest up'], 'Leaning far back and turning it into a row.');
+RX('back_iso', 'A pullover machine trains the lats through a big overhead stretch without the biceps ending the set first.',
+  'machine_pullover', 'Machine Pullover', 'Back', 'Pullover machine', ['lats'], ['chest', 'triceps'], false,
+  ['Set the seat so your shoulders line up with the machine’s pivot.', 'Place your elbows or hands on the pads with your arms overhead.',
+   'Drive the pads down in an arc until they reach your torso.', 'Let them rise back overhead until the lats are fully stretched.'],
+  ['Move from the shoulder', 'Squeeze the lats at the bottom'], 'Starting from a short range and never reaching the stretch.');
+/* ---- shoulders ---- */
+RX('side_delt', 'Leaning away puts the side delt under load at the bottom of the raise, where a standard raise has almost none.',
+  'lean_away_lateral', 'Lean-Away Dumbbell Lateral Raise', 'Shoulders', 'Dumbbell + upright post', ['sideDelt'], ['traps'], false,
+  ['Hold a post with one hand and lean away until your body is at about 15–20°.', 'Hold a dumbbell in the free hand in front of your thigh.',
+   'Raise the dumbbell out to the side until it is level with your shoulder.', 'Lower slowly all the way down.'],
+  ['Lead with the elbow', 'Pinky slightly up'], 'Swinging the torso back toward the post to lift the weight.');
+RX('side_delt', 'Raising in the scapular plane, about 30° in front of the body, is comfortable for the shoulder and the cables keep tension on the whole way.',
+  'cable_y_raise', 'Cable Y-Raise', 'Shoulders', 'Dual cable station (low)', ['sideDelt'], ['frontDelt', 'traps'], false,
+  ['Set both cables low and cross them, holding the opposite handle in each hand.', 'Stand in the middle with a slight hinge.',
+   'Raise your arms up and out into a Y shape until they are just above shoulder height.', 'Lower slowly until your hands cross again.'],
+  ['Thumbs up, arms slightly forward', 'Shoulders down'], 'Shrugging the traps to finish the rep.');
+RX('side_delt', 'Lying side-on on an incline bench loads the side delt most when it is stretched, a position standing raises skip.',
+  'lying_incline_lateral', 'Lying Incline Lateral Raise', 'Shoulders', 'Dumbbell + incline bench', ['sideDelt'], [], false,
+  ['Set the bench to about 30–45° and lie on your side against it.', 'Hold a light dumbbell in the top hand, arm hanging across your body.',
+   'Raise the dumbbell in an arc until your arm points about straight up.', 'Lower slowly across the body.'],
+  ['Slight elbow bend', 'Go light — it is harder than it looks'], 'Rolling the torso forward off the bench.');
+RX('delt_press', 'The fixed bar path makes it safe to push shoulder presses close to failure, and the seated setup keeps the lower back out of it.',
+  'smith_shoulder_press', 'Seated Smith Machine Shoulder Press', 'Shoulders', 'Smith machine + upright bench', ['frontDelt'], ['sideDelt', 'triceps'], true,
+  ['Put an upright bench in the Smith machine so the bar passes just in front of your face.', 'Grip just outside shoulder width.',
+   'Lower the bar to about chin level.', 'Press until your arms are nearly straight.'],
+  ['Forearms vertical at the bottom', 'Back against the pad'], 'Arching the lower back off the pad to finish reps.');
+RX('delt_press', 'The arcing path of a landmine press is kind to shoulders that dislike strict overhead pressing.',
+  'landmine_press', 'Half-Kneeling Landmine Press', 'Shoulders', 'Landmine + barbell', ['frontDelt'], ['chest', 'triceps', 'abs'], true,
+  ['Kneel on one knee facing the end of a landmine bar; hold the end at your shoulder on the same side as the down knee.', 'Brace your abs and glutes.',
+   'Press the bar up and forward until your arm is straight.', 'Lower under control back to the shoulder.'],
+  ['Ribs down', 'Reach through at the top'], 'Leaning back to turn it into an incline press.');
+/* ---- rear delts ---- */
+RX('rear_delt', 'Crossed cables keep the rear delts loaded at the stretched, arms-crossed position.',
+  'cable_rear_delt_fly', 'Cable Rear Delt Fly (Crossover)', 'Shoulders', 'Dual cable station', ['rearDelt'], ['upperBack'], false,
+  ['Set both cables at shoulder height and hold the left cable in your right hand and the right in your left.', 'Step back so your arms are crossed in front of you.',
+   'Pull your arms apart and back until they are in line with your body.', 'Return slowly until your arms cross again.'],
+  ['Arms nearly straight', 'Think “out”, not “back”'], 'Squeezing the shoulder blades together so the traps take over.');
+RX('rear_delt', 'Rowing with the elbows flared to 90° shifts the work from the lats to the rear delts and upper back.',
+  'rear_delt_row', 'Wide-Grip Rear Delt Row', 'Shoulders', 'Chest-supported row machine or cable', ['rearDelt'], ['upperBack', 'traps'], true,
+  ['Take a wide overhand grip on a chest-supported row.', 'Lift your elbows out to the sides so your upper arms are level with your shoulders.',
+   'Row the handles toward your upper chest, keeping the elbows high.', 'Return until your arms are straight.'],
+  ['Elbows stay level with the shoulders', 'Light weight, full squeeze'], 'Dropping the elbows so it becomes a normal row.');
+RX('rear_delt', 'Needs only dumbbells; hinging to about parallel makes the rear delts, not the traps, do the lifting.',
+  'bent_db_rear_fly', 'Bent-Over Dumbbell Rear Delt Fly', 'Shoulders', 'Dumbbells', ['rearDelt'], ['upperBack'], false,
+  ['Hinge forward until your torso is nearly parallel to the floor, dumbbells hanging below your chest.', 'Keep a soft bend in the elbows.',
+   'Raise the dumbbells out to the sides until your arms are level with your back.', 'Lower slowly.'],
+  ['Pinkies lead', 'Neck neutral'], 'Standing up as the set gets hard.');
+RX('rear_delt', 'One arm at a time lets you reach across the body for a longer stretch on each rear delt.',
+  'single_arm_rear_delt_cable', 'Single-Arm Cable Rear Delt Raise', 'Shoulders', 'Single cable + D-handle', ['rearDelt'], ['upperBack'], false,
+  ['Set a cable at shoulder height and hold the handle with the far hand so your arm crosses your chest.', 'Stand side-on with a soft elbow.',
+   'Sweep the arm out and back until it is in line with your shoulders.', 'Return across the body under control.'],
+  ['Keep the torso still', 'Lead with the back of the hand'], 'Rotating the whole body to move the weight.');
+RX('rear_delt', 'Light, high-rep work for the rear delts and upper back that is easy to recover from and good for shoulder health.',
+  'band_pull_apart', 'Band Pull-Apart', 'Shoulders', 'Resistance band', ['rearDelt'], ['upperBack', 'traps'], false,
+  ['Hold a band at shoulder height with straight arms, hands shoulder-width apart.', 'Stand tall with your ribs down.',
+   'Pull the band apart until it touches your chest.', 'Return slowly to the start.'],
+  ['Straight arms', 'Slow return'], 'Arching the lower back to finish the rep.', { bw: true });
+/* ---- biceps ---- */
+RX('biceps_a', 'The cable keeps tension on the biceps at the bottom of the curl, where dumbbells go slack.',
+  'cable_bar_curl', 'Cable Bar Curl', 'Biceps', 'Cable + straight or EZ bar (low)', ['biceps'], ['forearms'], false,
+  ['Set the cable low and grip the bar shoulder-width, palms up.', 'Stand a step back so the cable pulls slightly forward.',
+   'Curl the bar up without moving your elbows forward.', 'Lower until your arms are fully straight.'],
+  ['Elbows pinned at your sides', 'Full stretch at the bottom'], 'Leaning back to swing the weight up.');
+RX('biceps_b', 'With the arms raised, the biceps works hardest near full contraction — a useful contrast to stretch-focused curls.',
+  'high_cable_curl', 'High Cable Curl (Double Arm)', 'Biceps', 'Dual cable station (high)', ['biceps'], [], false,
+  ['Set both cables at shoulder height and stand in the middle holding a handle in each hand, arms out to the sides.', 'Keep your upper arms level with the floor.',
+   'Curl the handles toward your ears.', 'Straighten your arms slowly.'],
+  ['Upper arms stay still', 'Squeeze at the top'], 'Letting the elbows drop as you curl.');
+RX('biceps_b', 'On the preacher pad the curl is hardest at the bottom, where the biceps is stretched; training at long muscle lengths is linked to more growth.',
+  'machine_preacher_curl', 'Machine Preacher Curl', 'Biceps', 'Preacher curl machine', ['biceps'], ['forearms'], false,
+  ['Set the seat so your armpits sit on the top of the pad.', 'Grip the handles with your arms nearly straight.',
+   'Curl up until your forearms are almost vertical.', 'Lower slowly all the way to straight arms.'],
+  ['Triceps stay on the pad', 'Control the bottom'], 'Stopping short of straight arms at the bottom.');
+RX('biceps_b', 'Bracing the upper arm on your thigh removes momentum, so the biceps does all the work.',
+  'concentration_curl', 'Seated Concentration Curl', 'Biceps', 'Dumbbell + bench', ['biceps'], [], false,
+  ['Sit on a bench, lean forward and brace the back of your upper arm against your inner thigh.', 'Let the dumbbell hang with your arm straight.',
+   'Curl the dumbbell toward your shoulder.', 'Lower slowly to a straight arm.'],
+  ['Wrist straight', 'Lift with the biceps, not the shoulder'], 'Using the thigh to bounce the arm up.');
+RX('biceps_b', 'An overhand grip shifts work to the brachialis and brachioradialis, which add thickness to the upper arm and forearm.',
+  'reverse_ez_curl', 'Reverse-Grip EZ-Bar Curl', 'Biceps', 'EZ curl bar', ['biceps', 'forearms'], [], false,
+  ['Hold an EZ bar with an overhand grip, hands shoulder-width.', 'Stand tall with elbows at your sides.',
+   'Curl the bar up until your forearms are vertical.', 'Lower under control.'],
+  ['Knuckles up', 'Wrists straight'], 'Letting the wrists bend back as the bar rises.');
+/* ---- triceps ---- */
+RX('triceps_a', 'Overhead extensions built noticeably more triceps than pushdowns in a 12-week study (Maeo et al., 2023) because the long head is stretched.',
+  'katana_ext', 'Cross-Body Cable Extension (Katana)', 'Triceps', 'Single cable + D-handle (low)', ['triceps'], [], false,
+  ['Set a cable low and hold the handle in one hand so it runs up behind your opposite shoulder.', 'Start with the elbow bent and the hand near the opposite shoulder blade.',
+   'Extend the arm up and across until it is straight.', 'Lower slowly back behind the shoulder.'],
+  ['Elbow points up and slightly out', 'Full stretch behind the head'], 'Letting the elbow drift down so the shoulder does the work.');
+RX('triceps_a', 'Lying on an incline puts the long head of the triceps in a deeper stretch than a flat skull crusher.',
+  'incline_skullcrusher', 'Incline EZ-Bar Skull Crusher', 'Triceps', 'EZ bar + incline bench', ['triceps'], [], false,
+  ['Set a bench to about 30° and lie back holding an EZ bar over your head with straight arms.', 'Let your arms tilt slightly back toward your head.',
+   'Bend your elbows and lower the bar behind your head.', 'Extend back up to straight arms.'],
+  ['Elbows narrow', 'Upper arms stay still'], 'Flaring the elbows wide as the weight gets heavy.');
+RX('triceps_b', 'A heavy compound press for the triceps; the Smith track makes it safe to push hard without a spotter.',
+  'smith_close_grip_bench', 'Smith Machine Close-Grip Bench Press', 'Triceps', 'Smith machine + flat bench', ['triceps'], ['chest', 'frontDelt'], true,
+  ['Lie under the bar with hands about shoulder-width apart.', 'Tuck your elbows close to your sides.',
+   'Lower the bar to your lower chest.', 'Press up to straight arms.'],
+  ['Elbows tucked', 'Wrists over elbows'], 'A grip so narrow that the wrists bend and hurt.');
+RX('triceps_b', 'A dip machine loads all three triceps heads heavily with the shoulders supported and stable.',
+  'machine_dip', 'Seated Dip Machine', 'Triceps', 'Seated dip machine', ['triceps'], ['chest', 'frontDelt'], true,
+  ['Set the seat so the handles sit just below your shoulders.', 'Sit tall and grip the handles.',
+   'Press the handles down until your arms are straight.', 'Let them rise slowly until your elbows are bent past 90°.'],
+  ['Shoulders down', 'Elbows back, not out'], 'Letting the shoulders roll forward at the top of the range.');
+RX('triceps_b', 'One arm at a time evens out a weaker side and lets you finish the pushdown behind the hip.',
+  'single_arm_pushdown', 'Single-Arm Cable Pushdown', 'Triceps', 'Single cable + D-handle (high)', ['triceps'], [], false,
+  ['Set a cable high and hold the handle with one hand, palm down or neutral.', 'Pin the elbow at your side.',
+   'Push the handle down until your arm is straight and slightly behind your hip.', 'Return until the elbow is bent about 90°.'],
+  ['Elbow stays pinned', 'Stand tall'], 'Leaning over the handle to use body weight.');
+/* ---- quads ---- */
+RX('quad_main', 'Keeps the torso upright and lets the knees travel well forward, loading the quads through a deep range.',
+  'pendulum_squat', 'Pendulum Squat', 'Quads', 'Pendulum squat machine', ['quads'], ['glutes', 'adductors'], true,
+  ['Set your shoulders under the pads and feet mid-platform, shoulder-width.', 'Release the safety and brace.',
+   'Squat down as deep as you can while your heels stay down.', 'Drive back up without locking the knees hard.'],
+  ['Knees track over the toes', 'Control the bottom'], 'Cutting depth short once the weight gets heavy.');
+RX('quad_main', 'Loads the legs without loading the spine, so the quads can be trained hard with little lower-back fatigue.',
+  'belt_squat', 'Belt Squat', 'Quads', 'Belt squat machine (or loading pin + belt)', ['quads'], ['glutes', 'adductors'], true,
+  ['Attach the belt around your hips and stand on the platform, feet shoulder-width.', 'Hold the handles lightly for balance.',
+   'Squat straight down until your thighs are at least parallel.', 'Stand back up by driving through the whole foot.'],
+  ['Chest tall', 'Knees out over the toes'], 'Leaning forward and turning it into a hinge.');
+RX('quad_iso', 'Trains the quads — including the rectus femoris — in a stretched position with the hips extended.',
+  'sissy_squat', 'Assisted Sissy Squat', 'Quads', 'Sissy squat bench or a post to hold', ['quads'], [], false,
+  ['Hold a post or use a sissy squat bench with your heels secured.', 'Keep your hips and torso in a straight line.',
+   'Lean back as your knees travel forward and down.', 'Come back up by straightening the knees, hips staying extended.'],
+  ['Hips stay forward', 'Go only as deep as you can control'], 'Bending at the hips, which turns it into a regular squat.', { bw: true });
+RX('quad_iso', 'Loads the quads at long lengths using only body weight; build the range gradually.',
+  'reverse_nordic', 'Reverse Nordic', 'Quads', 'Mat (anchor under a bench optional)', ['quads'], [], false,
+  ['Kneel on a pad with your body upright, feet tucked under something if you like.', 'Keep a straight line from knees to shoulders.',
+   'Lean back slowly as far as you can control.', 'Pull yourself back up with the quads.'],
+  ['Squeeze the glutes', 'Small range first'], 'Arching the lower back to fake the range.', { bw: true });
+RX('quad_uni', 'Raising the front foot increases hip and knee range; deeper squatting built more glute and adductor muscle than half squats (Kubo et al., 2019).',
+  'ffe_split_squat', 'Front-Foot-Elevated Split Squat', 'Quads', 'Dumbbells + low step or plate', ['quads', 'glutes'], ['adductors'], true,
+  ['Stand in a long split stance with your front foot on a 2–4 in step.', 'Hold dumbbells at your sides.',
+   'Lower until your back knee nearly touches the floor.', 'Drive up through the front foot.'],
+  ['Front knee travels forward', 'Torso upright'], 'A stance so short that the front heel lifts.');
+RX('quad_uni', 'A long stride works the quads and glutes one leg at a time, fixing side-to-side differences.',
+  'db_walking_lunge', 'Dumbbell Walking Lunge', 'Quads', 'Dumbbells + open floor', ['quads', 'glutes'], ['adductors', 'hamstrings'], true,
+  ['Hold dumbbells at your sides and stand tall.', 'Take a long step forward.',
+   'Lower until your back knee nearly touches the floor.', 'Push through the front foot and step straight into the next rep.'],
+  ['Long steps', 'Upright torso'], 'Short, choppy steps that turn it into a knee-only movement.');
+/* ---- hamstrings ---- */
+RX('ham_curl', 'One of the best-supported exercises for hamstring strength and for cutting the risk of hamstring strains.',
+  'nordic_curl', 'Nordic Hamstring Curl', 'Hamstrings', 'Anchor for the heels (partner, pad or machine)', ['hamstrings'], ['glutes', 'calves'], false,
+  ['Kneel with your heels anchored and your body upright.', 'Keep a straight line from knees to shoulders.',
+   'Lower forward as slowly as you can, resisting with the hamstrings.', 'Catch yourself with your hands and push back up to the start.'],
+  ['Hips stay extended', 'Fight the descent'], 'Bending at the hips to shorten the lever.', { bw: true });
+RX('ham_curl', 'Seated leg curls grew the hamstrings more than lying curls because the hip is bent and the muscle stretched (Maeo et al., 2021).',
+  'single_leg_seated_curl', 'Single-Leg Seated Leg Curl', 'Hamstrings', 'Seated leg curl machine', ['hamstrings'], ['calves'], false,
+  ['Set the machine as for a normal seated curl, then work one leg at a time.', 'Lean your torso slightly forward to increase the stretch.',
+   'Curl the pad down and back as far as you can.', 'Return slowly to a straight knee.'],
+  ['Lean forward a little', 'Full stretch every rep'], 'Lifting the hips off the seat.');
+RX('ham_hinge', 'Loads the hamstrings at long lengths through the hip and is easy to progress in small steps.',
+  'barbell_rdl', 'Barbell Romanian Deadlift', 'Hamstrings', 'Barbell', ['hamstrings', 'glutes'], ['lowerBack', 'forearms'], true,
+  ['Stand holding a barbell at your hips, feet hip-width.', 'Soften your knees and push your hips back.',
+   'Slide the bar down your thighs until you feel a strong hamstring stretch.', 'Drive your hips forward to stand up.'],
+  ['Bar stays against your legs', 'Flat back'], 'Rounding the lower back to reach the floor.');
+RX('ham_hinge', 'A deep hip hinge on a fixed bar path, giving a big hamstring stretch with less balance demand.',
+  'smith_good_morning', 'Smith Machine Good Morning', 'Hamstrings', 'Smith machine', ['hamstrings', 'glutes'], ['lowerBack'], true,
+  ['Set the bar on your upper back as for a squat.', 'Soften your knees.',
+   'Push your hips back and lower your chest toward parallel.', 'Drive the hips forward to stand up.'],
+  ['Brace hard', 'Hips back, not down'], 'Squatting down instead of hinging.');
+RX('ham_hinge', 'A one-leg hinge trains the hamstrings and glutes with lighter loads and builds balance.',
+  'single_leg_rdl', 'Single-Leg Dumbbell RDL', 'Hamstrings', 'Dumbbell(s)', ['hamstrings', 'glutes'], ['lowerBack', 'adductors'], true,
+  ['Stand on one leg holding a dumbbell in the opposite hand.', 'Soften the standing knee.',
+   'Hinge forward as the free leg reaches back, until you feel a hamstring stretch.', 'Return to standing.'],
+  ['Hips level', 'Reach back with the heel'], 'Opening the hips toward the ceiling.');
+/* ---- glutes ---- */
+RX('glute', 'Shifts most of the load onto one leg while staying stable; hip thrusts built as much glute muscle as squats (Plotkin et al., 2023).',
+  'b_stance_hip_thrust', 'B-Stance Hip Thrust', 'Glutes', 'Barbell or dumbbell + bench', ['glutes'], ['hamstrings'], true,
+  ['Set up as for a hip thrust, then move one foot forward so only its heel touches the floor.', 'Most of the weight goes through the back (working) leg.',
+   'Drive your hips up until your body is level from knees to shoulders.', 'Lower under control.'],
+  ['Chin tucked', 'Pause at the top'], 'Pushing through the front foot and turning it into a two-leg thrust.');
+RX('glute', 'Hip abduction targets the upper glutes (medius and minimus), which squats and thrusts train less.',
+  'cable_hip_abduction', 'Standing Cable Hip Abduction', 'Glutes', 'Cable + ankle strap', ['glutes'], [], false,
+  ['Attach an ankle strap and stand side-on to a low cable, strap on the far leg.', 'Hold the machine for balance.',
+   'Sweep the leg out to the side as far as you can without leaning.', 'Return slowly past the standing leg.'],
+  ['Toes forward', 'Torso upright'], 'Leaning the torso the other way to lift the leg higher.');
+RX('glute', 'Isolates hip extension so the glutes work without the quads or lower back limiting the set.',
+  'machine_glute_kickback', 'Machine Glute Kickback', 'Glutes', 'Glute kickback machine', ['glutes'], ['hamstrings'], false,
+  ['Set up on the machine with your chest on the pad and one foot on the platform.', 'Brace your abs.',
+   'Push the platform back and up until your hip is fully extended.', 'Return slowly until the hip is bent.'],
+  ['Squeeze the glute at the top', 'No lower-back arch'], 'Arching the lower back to push the platform further.');
+RX('glute', 'Standing on a plate increases hip flexion; deeper ranges built more glute muscle than shallow ones (Kubo et al., 2019).',
+  'deficit_reverse_lunge', 'Deficit Reverse Lunge', 'Glutes', 'Dumbbells + low step or plate', ['glutes', 'quads'], ['adductors', 'hamstrings'], true,
+  ['Stand on a 2–4 in step holding dumbbells.', 'Step one foot back off the step.',
+   'Lower until your back knee nearly touches the floor, leaning slightly forward.', 'Drive through the front heel to return.'],
+  ['Slight forward lean', 'Push through the heel'], 'Staying bolt upright so the quads do all the work.');
+RX('glute', 'Rounding the upper back and turning the feet out shifts a back extension onto the glutes.',
+  'glute_back_extension', '45° Back Extension (Glute Bias)', 'Glutes', '45° hyperextension bench', ['glutes'], ['hamstrings', 'lowerBack'], false,
+  ['Set the pad just below your hip crease; turn your feet out slightly.', 'Round your upper back and tuck your chin.',
+   'Lower your torso down.', 'Raise up by squeezing the glutes until your body is straight — no further.'],
+  ['Push the hips into the pad', 'Stop at straight'], 'Over-extending the lower back at the top.');
+/* ---- calves ---- */
+RX('calves', 'Calves grew more when trained in the stretched part of the range (Kassiano et al., 2023), so pause at the bottom.',
+  'smith_calf_raise', 'Smith Machine Calf Raise', 'Calves', 'Smith machine + step or plate', ['calves'], [], false,
+  ['Stand with the balls of your feet on a step under the bar, bar on your upper back.', 'Keep your knees straight but not locked.',
+   'Lower your heels as far as you can and pause for a second.', 'Rise onto your toes as high as you can.'],
+  ['Pause in the stretch', 'Full height at the top'], 'Bouncing out of the bottom.');
+RX('calves', 'One leg at a time on a step gives a full stretch with almost no equipment.',
+  'single_leg_calf_raise', 'Single-Leg Dumbbell Calf Raise', 'Calves', 'Dumbbell + step', ['calves'], [], false,
+  ['Stand on one foot on a step holding a dumbbell on the same side; hold something with the other hand.', 'Let the heel drop below the step.',
+   'Pause in the stretch, then rise as high as you can.', 'Lower slowly.'],
+  ['Slow down, pause, drive up', 'Straight knee'], 'Rushing reps with a half range.');
+RX('calves', 'With the hips bent, the calf is loaded through a long stretch, which favours growth.',
+  'donkey_calf_raise', 'Donkey Calf Raise', 'Calves', 'Donkey calf machine (or Smith + bench)', ['calves'], [], false,
+  ['Set up bent forward at the hips with the pad on your lower back, balls of your feet on the platform.', 'Keep your knees nearly straight.',
+   'Lower your heels into a deep stretch and pause.', 'Rise onto your toes as high as you can.'],
+  ['Hips stay bent', 'Pause at the bottom'], 'Bending the knees to bounce the weight.');
+RX('calves', 'A heavy, stable standing calf raise on a machine most gyms already have.',
+  'hack_calf_raise', 'Hack Squat Calf Raise', 'Calves', 'Hack squat machine', ['calves'], [], false,
+  ['Face into the hack squat with the balls of your feet on the bottom edge of the platform.', 'Keep your knees slightly bent and locked in place.',
+   'Lower your heels as far as they go and pause.', 'Push up onto your toes.'],
+  ['Knees still', 'Full stretch'], 'Letting the knees bend and straighten to move the weight.');
+RX('calves', 'Bent knees shift the work to the soleus, the larger of the two calf muscles.',
+  'seated_db_calf_raise', 'Seated Dumbbell Calf Raise', 'Calves', 'Dumbbells + bench + step', ['calves'], [], false,
+  ['Sit with the balls of your feet on a step and dumbbells resting on your knees.', 'Let your heels drop as low as they go.',
+   'Pause, then rise onto your toes as high as you can.', 'Lower slowly.'],
+  ['Slow and full range', 'Pause at the bottom'], 'Using a range of a couple of inches.');
+/* ---- core ---- */
+RX('core', 'Anti-rotation work trains the obliques and deep core to resist twisting without any spinal flexion.',
+  'pallof_press', 'Pallof Press', 'Core', 'Cable + D-handle (chest height)', ['obliques', 'abs'], [], false,
+  ['Stand side-on to a cable at chest height, holding the handle at your chest with both hands.', 'Step away until the cable pulls.',
+   'Press the handle straight out in front of you and hold for 2 seconds.', 'Bring it back to your chest.'],
+  ['Hips and shoulders square', 'Breathe out as you press'], 'Letting the cable rotate your torso.');
+RX('core', 'A low-load anti-extension drill that teaches bracing and is easy on the lower back.',
+  'dead_bug', 'Dead Bug', 'Core', 'Mat', ['abs'], ['obliques'], false,
+  ['Lie on your back with arms straight up and hips and knees at 90°.', 'Press your lower back into the floor.',
+   'Slowly lower one arm and the opposite leg toward the floor.', 'Return and switch sides.'],
+  ['Lower back stays down', 'Slow and controlled'], 'Letting the lower back arch off the floor.', { bw: true });
+RX('core', 'A harder step up from knee raises; straight legs load the abs and hip flexors more.',
+  'hanging_leg_raise', 'Hanging Leg Raise', 'Core', 'Pull-up bar or captain’s chair', ['abs'], ['obliques'], false,
+  ['Hang from a bar or support yourself in a captain’s chair.', 'Brace and keep your legs straight.',
+   'Raise your legs until they are at least parallel to the floor, curling the pelvis up.', 'Lower slowly without swinging.'],
+  ['Curl the pelvis', 'No swinging'], 'Swinging the legs up with momentum.', { bw: true });
+RX('core', 'Loaded spinal flexion through a long range that can be progressed with a plate like any other lift.',
+  'weighted_decline_situp', 'Weighted Decline Sit-Up', 'Core', 'Decline bench + plate', ['abs'], ['obliques'], false,
+  ['Hook your feet on a decline bench and hold a plate on your chest.', 'Lower back until your torso is just short of the bench.',
+   'Curl up, rounding your spine, until you are upright.', 'Lower slowly.'],
+  ['Curl, don’t hinge', 'Control the way down'], 'Yanking up with the hip flexors and a flat back.', { bw: true });
+RX('core', 'Trains rotation through the obliques with a load you can adjust in small steps.',
+  'cable_woodchop', 'Cable Woodchop', 'Core', 'Cable + D-handle or rope', ['obliques'], ['abs'], false,
+  ['Set a cable high and stand side-on, holding the handle with both hands.', 'Feet wide, knees soft.',
+   'Pull the handle down and across your body to the opposite hip, rotating through the torso.', 'Return under control.'],
+  ['Rotate from the ribs', 'Arms stay long'], 'Pulling with the arms instead of rotating.');
+RX('core', 'An ab machine is easy to load progressively, so the abs can be trained in rep ranges like any other muscle.',
+  'machine_crunch', 'Machine Crunch', 'Core', 'Ab crunch machine', ['abs'], ['obliques'], false,
+  ['Set the seat so the pads sit on your chest or shoulders.', 'Hold the handles and brace.',
+   'Crunch forward, curling your ribs toward your hips.', 'Return slowly until the abs are stretched.'],
+  ['Round the spine', 'Exhale as you crunch'], 'Pulling with the arms to move the stack.');
+// switched-on extras join the rotation for their slot
+EXTRA_EX.forEach(id => { const s = SLOTS[EX[id].slot]; if (s && !s.vars.includes(id)) s.vars.push(id); });
+
+
+/* ============================================================
    SESSION TEMPLATES
    row: [slot, type(S=strength,H=hypertrophy,T=test), sets, reps, restSec, variationOffset, note]
    ============================================================ */

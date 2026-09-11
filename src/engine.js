@@ -45,13 +45,16 @@ function defaultSettings() {
 let S = null;
 function freshState() {
   return { v: 5, onboarded: false, profile: null, settings: defaultSettings(), plan: {}, planEnd: null, weights: [], logs: {}, done: {}, created: todayISO(), customExercises: {},
-    foodPrefs: Object.assign({}, DEFAULT_FOOD_PREFS), favRecipes: {}, exOff: {}, customFoods: {}, foodOverrides: {}, customRecipes: {}, recipeOverrides: {}, recipeOff: {}, bgCustom: {}, grocery: {} };
+    foodPrefs: Object.assign({}, DEFAULT_FOOD_PREFS), favRecipes: {}, exOff: {}, customFoods: {}, foodOverrides: {}, customRecipes: {}, recipeOverrides: {}, recipeOff: {}, bgCustom: {}, grocery: {}, importMap: {}, favFoods: {}, pantry: [], gymCards: [] };
 }
 function migrateState() {
   const f = freshState();
-  ['weights', 'logs', 'done', 'customExercises', 'foodPrefs', 'favRecipes', 'exOff', 'customFoods', 'foodOverrides', 'customRecipes', 'recipeOverrides', 'recipeOff', 'bgCustom', 'grocery'].forEach(k => { if (!S[k]) S[k] = f[k]; });
+  ['weights', 'logs', 'done', 'customExercises', 'foodPrefs', 'favRecipes', 'exOff', 'customFoods', 'foodOverrides', 'customRecipes', 'recipeOverrides', 'recipeOff', 'bgCustom', 'grocery', 'importMap', 'favFoods', 'pantry', 'gymCards'].forEach(k => { if (!S[k]) S[k] = f[k]; });
   S.settings = Object.assign(defaultSettings(), S.settings);
-  if (S.onboarded === undefined) S.onboarded = true;          // plans made before the first-run questionnaire existed
+  if (S.onboarded === undefined) S.onboarded = true;
+  // research-backed extra exercises start switched off — applied once per exercise, so a user's own choice sticks
+  S.exDefaults = S.exDefaults || {}; S.exOff = S.exOff || {};
+  EXTRA_EX.forEach(id => { if (S.exDefaults[id]) return; S.exDefaults[id] = 1; const per = S.exOff[id] = S.exOff[id] || []; if (!per.some(([, t]) => !t)) per.push(['0000-01-01', null]); });          // plans made before the first-run questionnaire existed
   if (!S.v || S.v < 2) { S.planEnd = S.planEnd || addDays(S.settings.startDate, LAUNCH_DAYS - 1); S.v = 2; }
   if (S.v < 4) migratePrefsV4();
 }
@@ -86,9 +89,11 @@ function loadState(from) {
 function saveState() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) { /* cache only when signed in; storage may be full */ } invalidate(); if (typeof onStateSaved === 'function') onStateSaved(); }
 
 /* ---------- food catalog (built-in + overrides + custom) ---------- */
+let SHARED_FOODS = {};        // products everyone on the server can use (barcode scans), loaded from /api/foods/shared
 function rebuildCatalog() {
   Object.keys(ING).forEach(k => delete ING[k]);
   Object.entries(BASE_ING).forEach(([id, g]) => { const o = (S.foodOverrides || {})[id]; ING[id] = Object.assign({ id, sub: BASE_SUB[id] || 'sauces', base: true }, g, o || {}, { edited: !!o }); });
+  Object.entries(SHARED_FOODS || {}).forEach(([id, g]) => { if (ING[id] || !g) return; ING[id] = Object.assign({ sub: 'sauces', a: 'Pantry' }, g, { id, shared: true, sub: SUB_CAT[g.sub] ? g.sub : 'sauces', a: AISLES.includes(g.a) ? g.a : 'Pantry', r: g.r || suggestRole(g.k, g.p, g.c, g.f) }); });
   Object.entries(S.customFoods || {}).forEach(([id, g]) => { ING[id] = Object.assign({ sub: 'sauces', a: 'Pantry', r: 'V' }, g, { id, custom: true }); });
   RECIPES.length = 0;
   BASE_RECIPES.forEach(r => { const o = (S.recipeOverrides || {})[r.id]; const x = Object.assign({}, r, o || {}, { id: r.id, base: true, edited: !!o }); x.links = ((o && o.links) || r.links || []).map(l => Object.assign({}, l)); RECIPES.push(x); });
@@ -346,12 +351,17 @@ function exGroupOf(e) { if (!e) return null; if (e.group === 'Shoulders' && (e.p
 function exOffOn(id, date) { const p = (S.exOff || {})[id]; return !!p && p.some(([f, t]) => date >= f && (!t || date < t)); }
 function exOffNow(id) { const p = (S.exOff || {})[id]; return !!p && p.some(([, t]) => !t); }
 function planWeekStart(wk) { return addDays(S.settings.startDate, ((wk || 1) - 1) * 7); }
+/* program swaps: S.slotSwap[slot] = [[fromId, toId, fromWeekStart, untilWeekStart|null], …] — "use Y where the rotation has X" */
+function slotSwapsOn(slot, wStart) { return ((S.slotSwap || {})[slot] || []).filter(([a, b, f, t]) => EX[b] && wStart >= f && (!t || wStart < t)); }
 function slotVars(slot, wk) {
   const base = SLOTS[slot].vars; const cx = CUSTOM_SLOT[slot];
   const wStart = planWeekStart(wk), wEnd = addDays(wStart, 6);
-  const all = cx && cx.length ? base.concat(cx.filter(e => !e.since || e.since <= wEnd).map(e => e.id)) : base;
+  let all = cx && cx.length ? base.concat(cx.filter(e => !e.since || e.since <= wEnd).map(e => e.id)) : base;
+  const pinned = new Set();
+  const sw = S.slotSwap ? slotSwapsOn(slot, wStart) : [];
+  if (sw.length) { all = all.slice(); sw.forEach(([a, b]) => { const i = all.indexOf(a); if (i >= 0) { all[i] = b; pinned.add(b); } }); all = all.filter((id, i) => all.indexOf(id) === i); }
   if (!S.exOff || !Object.keys(S.exOff).length) return all;
-  const on = all.filter(id => !exOffOn(id, wStart));
+  const on = all.filter(id => pinned.has(id) || !exOffOn(id, wStart));
   if (on.length) return on;
   // every variation for this slot is switched off → borrow switched-on exercises from the same muscle group,
   // preferring ones that train the same muscles (keeps push and pull sessions separate)
@@ -396,13 +406,15 @@ function substitutePlan(fromDate) {
 function sessionRows(inst) {
   if (!inst) return [];
   const t = TEMPLATES[inst.t]; const wk = inst.wk || 1; const wip = weekInPhase(wk);
-  const used = new Set();
+  const used = new Set(); const daySw = inst.sw || {}; const wStart = planWeekStart(wk);
   return t.rows.map(([slot, type, sets, reps, rest, off, note], i) => {
     const vars = slotVars(slot, wk); let vi = ((wk - 1 + (off || 0)) % vars.length + vars.length) % vars.length;
     for (let k = 0; k < vars.length && used.has(vars[vi]); k++) vi = (vi + 1) % vars.length;   // don't repeat an exercise within a session
-    used.add(vars[vi]); const ex = EX[vars[vi]];
+    used.add(vars[vi]); const planned = EX[vars[vi]];
+    const ex = daySw[i] && EX[daySw[i]] ? EX[daySw[i]] : planned;   // swapped for this day only
+    const prog = S.slotSwap ? slotSwapsOn(slot, wStart).find(x => x[1] === planned.id) : null;
     const rir = type === 'T' ? 'Top set @ 1 RIR' : (t.phase === 4 ? '3–4' : RIR[type][wip - 1]);
-    return { i, slot, ex, type, sets, reps, rest, note: note || '', rir, vi, nv: vars.length };
+    return { i, slot, ex, planned, daySwap: ex !== planned, progSwap: prog ? prog[0] : null, type, sets, reps, rest, note: note || '', rir, vi, nv: vars.length };
   });
 }
 function sessionSetCount(inst) { return sessionRows(inst).reduce((a, r) => a + r.sets, 0); }
@@ -477,11 +489,14 @@ function computeDay(date) {
     const role = roleOf(m.r, id);
     lines.push({ mi, id, base: amt / m.r.yield, role, unit: !!ING[id].u && (role === 'P' || role === 'C' || role === 'F') });
   }));
+  // quick-added extras (a scanned snack, a bar…) count as fixed food, so the planned portions make room for them
+  const extras = (entry.x || []).map((x, i) => x && ING[x.id] && +x.amt > 0 ? { i, id: x.id, amt: +x.amt, slot: MEAL_SLOTS.includes(x.slot) ? x.slot : 'snack1', m: ingMacros(x.id, +x.amt) } : null).filter(Boolean);
+  const exM = extras.reduce((a, x) => addM(a, x.m), zeroM());
   const factor = (role, pF, cF) => role === 'P' ? pF : (role === 'C' || role === 'F') ? cF : 1;
   const roundUnit = (base, a) => { const step = base % 1 ? 0.5 : 1; return Math.max(step, Math.round(a / step) * step); };
   // solve protein factor (pF) and carb/fat factor (cF); pass 2 locks count-based items (eggs, tortillas…) to whole units
   function solve(unitAmt) {
-    const sum = { P: zeroM(), CF: zeroM(), V: zeroM(), X: zeroM() };
+    const sum = { P: zeroM(), CF: zeroM(), V: zeroM(), X: addM(zeroM(), exM) };
     lines.forEach((l, i) => {
       if (unitAmt && l.unit) { addM(sum.X, ingMacros(l.id, unitAmt[i])); return; }
       addM(sum[l.role === 'P' ? 'P' : l.role === 'X' ? 'X' : l.role === 'V' ? 'V' : 'CF'], ingMacros(l.id, l.base));
@@ -509,7 +524,22 @@ function computeDay(date) {
     addM(totals, m);
     return { slot, r, items, m };
   });
-  return { date, isTrain, entry, stats: st, tg, pF, cF, meals: outMeals, totals };
+  addM(totals, exM);
+  return { date, isTrain, entry, stats: st, tg, pF, cF, meals: outMeals, extras, totals };
+}
+
+/* What a day's meals use, by food. mine: only this user's portions (pantry use-up); otherwise what the
+   shopping list covers (batches cooked that day, single meals, the sync partner's portions of shared meals). */
+function dayUse(A, d, mine, extras = mine) {
+  const out = {}; const add = (id, a) => { if (a > 0) out[id] = (out[id] || 0) + a; }; const day = A.days[d]; if (!day) return out;
+  day.meals.forEach(m => {
+    const b = A.batches.info[d + '|' + m.slot];
+    if (b && b.role === 'leftover') return;
+    if (b && b.role === 'cook') { const share = mine && b.batch.partnerServ ? (b.batch.size - b.batch.partnerServ) / b.batch.size : 1; Object.entries(b.batch.amounts).forEach(([id, a]) => add(id, a * share)); return; }
+    m.items.forEach(it => add(it.id, it.amt)); if (!mine && m.partner) m.partner.items.forEach(([id, a]) => add(id, a));
+  });
+  if (extras) (day.extras || []).forEach(x => add(x.id, x.amt));
+  return out;
 }
 
 /* Leftovers: group occurrences of multi-serving recipes into batches.

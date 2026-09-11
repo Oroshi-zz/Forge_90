@@ -178,12 +178,14 @@ function linkChipsHTML(r) { const ls = (r.links || []).filter(l => l && l.url); 
 function viewFoods() {
   const tab = UI.foodsTab || 'recipes';
   const head = `<div class="page-head"><div class="t"><h1>Foods & recipes</h1><p>Edit the macros of any food, add your own foods and recipes, and choose which food groups the plan can use.</p></div>
-    <div class="row wrap"><button class="btn primary" data-act="recipe-new">${icon('plus')}New recipe</button><button class="btn" data-act="food-new">${icon('plus')}Add food</button></div></div>
+    <div class="row wrap">${scanBtnHTML('today')}${AUTH.mode === 'server' ? `<button class="btn" data-act="imp-open">${icon('download')}Import recipe</button>` : ''}<button class="btn primary" data-act="recipe-new">${icon('plus')}New recipe</button><button class="btn" data-act="food-new">${icon('plus')}Add food</button></div></div>
     <div class="seg" style="margin-bottom:16px">${[['recipes', 'Recipes'], ['foods', 'Foods & macros'], ['prefs', 'Food preferences']].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-act="foods-tab" data-v="${k}">${l}</button>`).join('')}</div>`;
   if (tab === 'prefs') return head + `<div class="card"><div class="card-h"><h2>Food preferences</h2></div>${foodPrefsHTML()}</div>`;
   if (tab === 'foods') return head + foodsTableHTML();
   const f = UI.recFilter || 'all';
-  const rs = sortRecipes(RECIPES.filter(r => f === 'all' || (f === 'fav' ? isFav(r.id) : r.cat === f)));
+  const words = String(UI.recQ || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const hay = r => [r.name, r.cat, (r.tags || []).join(' '), r.ing.map(([id]) => ING[id] ? ING[id].n : '').join(' ')].join(' ').toLowerCase();
+  const rs = sortRecipes(RECIPES.filter(r => (f === 'all' || (f === 'fav' ? isFav(r.id) : r.cat === f)) && (!words.length || words.every(w => hay(r).includes(w)))));
   const cards = rs.map(r => { const m = RPS(r.id); const ok = recipeAllowed(r); const bl = blockedBy(r); const g = RECIPE_GRAD[r.cat];
     const badges = [r.custom ? '<span class="pill acc">Custom</span>' : '', r.edited ? '<span class="pill">Edited</span>' : '', S.recipeOff[r.id] ? '<span class="pill">Turned off</span>' : '', bl.length ? `<span class="pill warn-pill" data-tip="Blocked by food preferences: ${esc(bl.join(', '))}">Blocked · ${esc(bl[0])}${bl.length > 1 ? ' +' + (bl.length - 1) : ''}</span>` : ''].join('');
     return `<div class="card recipe-row clickable ${ok ? '' : 'dim'} ${isFav(r.id) ? 'is-fav' : ''}" data-act="recipe" data-rid="${r.id}" title="Show recipe details"><div class="art sm" style="--g1:${g[0]};--g2:${g[1]}">${esc(r.emoji || '🍽️')}</div>
@@ -195,21 +197,24 @@ function viewFoods() {
         ${r.custom ? `<button class="btn sm ghost danger" data-act="recipe-del" data-rid="${r.id}">${icon('trash')}</button>` : ''}
         ${r.edited ? `<button class="btn sm ghost" data-act="recipe-reset" data-rid="${r.id}">Reset</button>` : ''}
         ${sw(!S.recipeOff[r.id], 'recipe-off', r.id)}</div></div>`; }).join('');
-  return head + `<div class="row wrap" style="margin-bottom:12px"><div class="filters">${['all', 'fav', 'breakfast', 'lunch', 'dinner', 'snack'].map(c => `<button class="${f === c ? 'on' : ''}" data-act="rec-filter" data-v="${c}">${recFilterLabel(c)}</button>`).join('')}</div>${recipeSortHTML()}</div>
+  return head + `<div class="row wrap rec-bar" style="margin-bottom:12px"><div class="rec-search">${icon('search')}<input class="inp" type="search" placeholder="Search recipes, ingredients or tags…" data-input="recq" value="${esc(UI.recQ || '')}" aria-label="Search recipes" autocomplete="off"></div><div class="filters">${['all', 'fav', 'breakfast', 'lunch', 'dinner', 'snack'].map(c => `<button class="${f === c ? 'on' : ''}" data-act="rec-filter" data-v="${c}">${recFilterLabel(c)}</button>`).join('')}</div>${recipeSortHTML()}</div>
     <div class="tiny muted" style="margin:-4px 0 12px">★ Favorites show up about twice as often in the meal plan. Switch a recipe off to keep it out of the plan. Blocked recipes contain a food you’ve unchecked.</div>
-    <div class="grid g2" style="gap:10px">${cards || `<div class="muted small">${f === 'fav' ? 'No favorites yet — tap the ☆ on any recipe.' : 'No recipes match.'}</div>`}</div>`;
+    ${words.length ? `<div class="small muted" style="margin:-4px 0 10px">${rs.length} recipe${rs.length === 1 ? '' : 's'} match “${esc(UI.recQ.trim())}” <button class="btn sm ghost" data-act="recq-clear">${icon('x')}Clear</button></div>` : ''}
+    <div class="grid g2" style="gap:10px">${cards || `<div class="muted small">${f === 'fav' && !words.length ? 'No favorites yet — tap the ☆ on any recipe.' : 'No recipes match.'}</div>`}</div>`;
 }
 function foodsTableHTML() {
   const q = (UI.foodQ || '').toLowerCase(); const cf = UI.foodCat || 'all';
-  const foods = Object.values(ING).filter(g => (cf === 'all' || SUB_CAT[g.sub] === cf) && (!q || g.n.toLowerCase().includes(q)));
+  const words = q.split(/\s+/).filter(Boolean); const hay = g => (g.n + ' ' + (g.brand || '') + ' ' + (g.gtin || '')).toLowerCase();
+  const foods = Object.values(ING).filter(g => (cf === 'all' || (cf === 'fav' ? isFavFood(g.id) : cf === 'shared' ? g.shared : SUB_CAT[g.sub] === cf)) && words.every(w => hay(g).includes(w)));
+  const addOk = inPlan(todayISO());
   const roleName = { P: 'Protein', C: 'Carb', F: 'Fat', V: 'Fixed' };
   const rows = FOOD_CATS.map(c => { const fs = foods.filter(g => SUB_CAT[g.sub] === c.id).sort((a, b) => a.n.localeCompare(b.n)); if (!fs.length) return '';
     return `<tr class="grp"><td colspan="9">${c.icon} ${esc(c.name)}</td></tr>` + fs.map(g => { const used = RECIPES.filter(r => r.ing.some(([id]) => id === g.id)).length;
-      return `<tr class="${foodAllowed(g.id) ? '' : 'dim'}"><td><b>${esc(g.n)}</b> ${g.custom ? '<span class="pill acc">Custom</span>' : ''}${g.edited ? '<span class="pill">Edited</span>' : ''}<div class="tiny muted">${esc(SUB_LABEL[g.sub] || g.sub)} · in ${used} recipe${used === 1 ? '' : 's'}</div></td>
+      return `<tr class="${foodAllowed(g.id) ? '' : 'dim'}"><td><b>${esc(g.n)}</b> ${g.custom ? '<span class="pill acc">Custom</span>' : ''}${g.shared ? `<span class="pill acc" title="On the shared food list${g.byName ? ' — added by ' + esc(g.byName) : ''}">${icon('scan')}Scanned</span>` : ''}${g.edited ? '<span class="pill">Edited</span>' : ''}<div class="tiny muted">${g.brand ? esc(g.brand) + ' · ' : ''}${esc(SUB_LABEL[g.sub] || g.sub)} · in ${used} recipe${used === 1 ? '' : 's'}</div></td>
         <td class="muted small">${g.u ? `per ${esc(g.u)} (${g.g || '?'} g)` : g.ml ? 'per 100 ml' : 'per 100 g'}</td><td class="num"><b>${fmt(g.k)}</b></td><td class="num" style="color:var(--prot)">${fmt(g.p, 1)}</td><td class="num" style="color:var(--carb)">${fmt(g.c, 1)}</td><td class="num" style="color:var(--fat)">${fmt(g.f, 1)}</td>
-        <td><span class="pill">${roleName[g.r] || g.r}</span></td><td style="text-align:right"><button class="btn sm" data-act="food-edit" data-id="${g.id}">Edit</button></td></tr>`; }).join(''); }).join('');
-  return `<div class="card"><div class="row wrap" style="margin-bottom:12px"><input class="inp" style="max-width:260px" placeholder="Search foods…" data-input="foodq" value="${esc(UI.foodQ || '')}">
-      <select class="inp" style="max-width:220px" data-input="foodcat"><option value="all">All categories</option>${FOOD_CATS.map(c => `<option value="${c.id}" ${cf === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+        <td><span class="pill">${roleName[g.r] || g.r}</span></td><td style="text-align:right"><div class="food-acts">${favFoodBtnHTML(g.id)}${addOk ? `<button class="btn sm ghost" data-act="qa-food" data-id="${g.id}" title="Add to today">${icon('plus')}Today</button>` : ''}<button class="btn sm" data-act="food-edit" data-id="${g.id}">${g.shared && !(AUTH.user && (g.by === AUTH.user.id || isAdmin())) ? 'View' : 'Edit'}</button></div></td></tr>`; }).join(''); }).join('');
+  return `<div class="card"><div class="row wrap" style="margin-bottom:12px"><input class="inp" type="search" style="max-width:260px" placeholder="Search foods, brands or barcodes…" data-input="foodq" value="${esc(UI.foodQ || '')}">
+      <select class="inp" style="max-width:220px" data-input="foodcat"><option value="all">All categories</option><option value="fav" ${cf === 'fav' ? 'selected' : ''}>★ Favorite foods</option>${AUTH.mode === 'server' ? `<option value="shared" ${cf === 'shared' ? 'selected' : ''}>Scanned products</option>` : ''}${FOOD_CATS.map(c => `<option value="${c.id}" ${cf === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
       <span class="tiny muted">${foods.length} foods · macros are per 100 g unless noted. “Scaling” is how portions flex each day.</span></div>
     <div class="scroll-x"><table class="tbl foods"><thead><tr><th>Food</th><th>Basis</th><th>kcal</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Scaling</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="9" class="muted">No foods match.</td></tr>'}</tbody></table></div></div>`;
 }
@@ -299,10 +304,11 @@ function recipeEditor(rid, dup) {
     links: r ? (r.links || []).map(l => ({ title: l.title || '', url: l.url || '', site: l.site || '' })) : [] };
   renderRecipeEditor();
 }
-function foodSelect(sel, i) {
+function foodSelect(sel, i, sugg) {
   const bySub = {}; Object.values(ING).forEach(g => (bySub[g.sub] = bySub[g.sub] || []).push(g));
-  return `<select class="inp" data-re="ing-id" data-i="${i}">${FOOD_CATS.map(c => c.subs.map(([sid, l]) => { const fs = (bySub[sid] || []).sort((a, b) => a.n.localeCompare(b.n));
-    return fs.length ? `<optgroup label="${esc(c.icon + ' ' + c.name + ' · ' + l)}">${fs.map(g => `<option value="${g.id}" ${sel === g.id ? 'selected' : ''}>${esc(g.n)}${foodAllowed(g.id) ? '' : ' (off)'}</option>`).join('')}</optgroup>` : ''; }).join('')).join('')}</select>`;
+  const sg = (sugg || []).filter(id => ING[id]); const inSg = sg.includes(sel);
+  return `<select class="inp" data-re="ing-id" data-i="${i}">${ING[sel] ? '' : `<option value="" selected disabled>Choose a food…</option>`}${sg.length ? `<optgroup label="Best matches">${sg.map(id => `<option value="${id}" ${sel === id ? 'selected' : ''}>${esc(ING[id].n)}${foodAllowed(id) ? '' : ' (off)'}</option>`).join('')}</optgroup>` : ''}${FOOD_CATS.map(c => c.subs.map(([sid, l]) => { const fs = (bySub[sid] || []).sort((a, b) => a.n.localeCompare(b.n));
+    return fs.length ? `<optgroup label="${esc(c.icon + ' ' + c.name + ' · ' + l)}">${fs.map(g => `<option value="${g.id}" ${sel === g.id && !inSg ? 'selected' : ''}>${esc(g.n)}${foodAllowed(g.id) ? '' : ' (off)'}</option>`).join('')}</optgroup>` : ''; }).join('')).join('')}</select>`;
 }
 /* food-only emoji dropdown */
 function emojiPickerHTML(cur) {
@@ -334,23 +340,25 @@ function cleanLinks(list) {
   return { links: out, bad };
 }
 function refreshTagChips() { const el = $('#re-tag-chips'); if (el) el.innerHTML = tagChipsHTML(); }
+const reAmtNote = y => `amounts for the whole recipe${+y >= 1 ? ` (all ${+y} serving${+y > 1 ? 's' : ''})` : ''}`;
 function renderRecipeEditor() {
-  const e = RE;
-  modal(`<div class="row"><h2 style="flex:1">${e.id ? 'Edit recipe' : 'New recipe'}</h2><button class="btn icon ghost" data-act="close-modal">${icon('x')}</button></div>
+  const e = RE; const im = e.imp; const prevScroll = $('#modal .modal.re-modal') ? $('#modal .modal.re-modal').scrollTop : 0;
+  modal(`<div class="row"><h2 style="flex:1">${e.id ? 'Edit recipe' : im ? 'Review imported recipe' : 'New recipe'}</h2><button class="btn icon ghost" data-act="close-modal">${icon('x')}</button></div>
+    ${im ? impBannerHTML() : ''}
     ${e.base ? `<div class="note" style="margin:10px 0">${icon('info')}<span>Editing a built-in recipe saves your version; you can reset it later.</span></div>` : ''}
     <div class="grid" style="grid-template-columns:86px 1fr;gap:12px;margin-top:12px">
       <div class="field emo-field"><label>Emoji</label>${emojiPickerHTML(e.emoji)}</div>
       <div class="field"><label>Name</label><input class="inp" data-re="name" value="${esc(e.name)}" placeholder="e.g. Chicken pesto pasta"></div></div>
     <div class="grid g4" style="gap:12px;margin-top:12px">
-      <div class="field"><label>Meal</label><select class="inp" data-re="cat">${['breakfast', 'lunch', 'dinner', 'snack'].map(c => `<option ${e.cat === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
-      <div class="field"><label>Servings it makes</label><input class="inp" type="number" min="1" max="12" data-re="yield" value="${e.yield}"></div>
+      <div class="field ${im && !e.cat ? 'imp-need' : ''}"><label>Meal</label><select class="inp" data-re="cat">${e.cat ? '' : '<option value="" selected disabled>Choose…</option>'}${['breakfast', 'lunch', 'dinner', 'snack'].map(c => `<option ${e.cat === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+      <div class="field ${im && (!(+e.yield >= 1) || +e.yield > 12) ? 'imp-need' : ''}"><label>Servings it makes</label><input class="inp" type="number" min="1" max="12" data-re="yield" value="${e.yield}" ${im ? 'placeholder="?"' : ''}></div>
       <div class="field"><label>Storage</label><select class="inp" data-re="storage">${[['fresh', 'Eat fresh'], ['fridge', 'Fridge (4 days)'], ['freezer', 'Freezes well']].map(([v, l]) => `<option value="${v}" ${e.storage === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="field"><label>Prep (min)</label><input class="inp" type="number" min="0" data-re="time" value="${e.time}"></div>
       <div class="field" style="grid-column:1/-1"><label>Tags (comma-separated)</label><input class="inp" data-re="tags" value="${esc(e.tags)}" placeholder="Type a new tag, or pick from the list below">
         <div class="tag-pick"><span class="tiny muted">Tags already in use — click to add or remove</span><div class="tag-chips" id="re-tag-chips">${tagChipsHTML()}</div></div></div></div>
-    <h3 style="margin:16px 0 8px">Ingredients <span class="tiny muted" style="font-weight:500">— amounts for the whole recipe (all ${e.yield} serving${e.yield > 1 ? 's' : ''})</span></h3>
-    <div id="re-ings">${e.ing.map(([id, a], i) => { const g = ING[id];
-      return `<div class="re-row">${foodSelect(id, i)}<input class="inp num" type="number" step="0.5" min="0" data-re="ing-amt" data-i="${i}" value="${a}" style="width:90px"><span class="tiny muted" style="width:54px">${g ? (g.u ? g.u + 's' : g.ml ? 'ml' : 'g') : ''}</span><span class="tiny num re-m" data-i="${i}"></span><button class="btn icon ghost" data-act="re-rm" data-i="${i}">${icon('x')}</button></div>`; }).join('')}</div>
+    <h3 style="margin:16px 0 8px">Ingredients <span class="tiny muted" style="font-weight:500">— ${reAmtNote(e.yield)}</span></h3>
+    <div id="re-ings">${e.ing.map((r, i) => { const [id, a, m] = r; const g = ING[id]; const st = m ? impRowState(r) : null;
+      return `<div class="re-item"><div class="re-row ${st ? IMP_ST[st][1] : ''}" data-row="${i}">${foodSelect(id, i, m && m.sugg)}<input class="inp num" type="number" step="0.5" min="0" data-re="ing-amt" data-i="${i}" value="${a}" style="width:90px" ${m ? 'placeholder="?"' : ''}><span class="tiny muted" style="width:54px">${g ? (g.u ? g.u + 's' : g.ml ? 'ml' : 'g') : ''}</span><span class="tiny num re-m" data-i="${i}"></span><button class="btn icon ghost" data-act="re-rm" data-i="${i}" title="Remove this ingredient">${icon('x')}</button></div>${m ? impSrcHTML(r, i) : ''}</div>`; }).join('') || (im ? '<div class="tiny muted">No ingredients yet.</div>' : '')}</div>
     <div class="row" style="margin-top:6px"><button class="btn sm" data-act="re-add">${icon('plus')}Add ingredient</button><button class="btn sm ghost" data-act="food-new-inline">${icon('plus')}New food</button></div>
     <div class="card re-preview" id="re-preview" style="margin-top:12px"></div>
     <div class="field" style="margin-top:12px"><label>Steps (one per line)</label><textarea class="inp" data-re="steps" rows="4" style="height:auto;padding:8px 11px">${esc(e.steps)}</textarea></div>
@@ -359,8 +367,9 @@ function renderRecipeEditor() {
     <button class="btn sm" data-act="re-link-add" style="margin-top:6px">${icon('plus')}Add link</button>
     <div class="row wrap" style="margin-top:10px;gap:16px"><label class="small"><input type="checkbox" data-re="fixed" ${e.fixed ? 'checked' : ''}> Fixed portion (don’t resize daily)</label>
       <label class="small"><input type="checkbox" data-re="rotate" ${e.rotate ? 'checked' : ''}> Include in the auto-plan for future weeks</label></div>
-    <div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" data-act="close-modal">Cancel</button><button class="btn primary" data-act="re-save">Save recipe</button></div>`);
+    <div class="row" style="justify-content:flex-end;margin-top:14px">${im && im.q ? `<button class="btn" data-act="re-skip" style="margin-right:auto" title="Don’t import this one and go to the next">Skip</button>` : ''}<button class="btn" data-act="close-modal">${im && im.q ? 'Stop importing' : 'Cancel'}</button><button class="btn primary" data-act="re-save">${im ? (im.q && im.q.i < im.q.n ? 'Save & next' : 'Save recipe') : 'Save recipe'}</button></div>`, 're-modal');
   updateRecipePreview();
+  if (prevScroll) { const md = $('#modal .modal.re-modal'); if (md) md.scrollTop = prevScroll; }
 }
 function updateRecipePreview() {
   const e = RE; const el = $('#re-preview'); if (!el) return;
@@ -370,18 +379,22 @@ function updateRecipePreview() {
   el.innerHTML = `<div class="row wrap" style="gap:18px"><div><div class="tiny muted">Per serving</div><div style="font-size:22px;font-weight:700" class="num">${fmt(ps.k)} kcal</div></div>
     <div class="num"><span style="color:var(--prot)"><b>${fmt(ps.p)}</b>g protein</span> · <span style="color:var(--carb)"><b>${fmt(ps.c)}</b>g carbs</span> · <span style="color:var(--fat)"><b>${fmt(ps.f)}</b>g fat</span></div>
     <div class="tiny muted">${ps.k ? Math.round(ps.p * 4 / ps.k * 100) : 0}% of calories from protein</div></div>
+    ${e.imp && e.imp.nut && e.imp.nut.k ? (() => { const n = e.imp.nut; const off = ps.k && n.k ? Math.abs(ps.k - n.k) / n.k : 0;
+      return `<div class="tiny ${off > .25 ? '' : 'muted'}" style="margin-top:6px">The source lists <b>${fmt(n.k)} kcal</b>${n.p ? ` and <b>${fmt(n.p)} g protein</b>` : ''} per serving${off > .25 && e.ing.every(r => ING[r[0]] && +r[1] > 0) ? ` — yours is ${fmt(off * 100)}% ${ps.k > n.k ? 'higher' : 'lower'}, so check the amounts and servings.` : '.'}</div>`; })() : ''}
     ${blocked.length ? `<div class="note warn" style="margin-top:8px">${icon('info')}<span>Uses foods you’ve turned off (${esc(blocked.join(', '))}) — it won’t be scheduled until they’re back on.</span></div>` : ''}`;
 }
 function saveRecipe() {
   const e = RE; const name = e.name.trim();
-  if (!name) { toast('Give the recipe a name'); return; }
+  if (!name) { toast('Give the recipe a name'); const n = $('#modal [data-re="name"]'); if (n) n.focus(); return; }
+  if (e.imp && !impValidate()) return;
   const ing = e.ing.filter(([id, a]) => ING[id] && +a > 0).map(([id, a]) => [id, +a]);
   if (!ing.length) { toast('Add at least one ingredient'); return; }
   const cl = cleanLinks(e.links);
   const rec = { links: cl.links, name, emoji: e.emoji || '🍽️', cat: e.cat, yield: Math.max(1, Math.round(+e.yield || 1)), storage: e.storage, time: +e.time || 0,
     tags: (() => { const known = usedTags().map(([t]) => t); const out = []; e.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(t => { t = known.find(k => k.toLowerCase() === t.toLowerCase()) || t; if (!out.some(o => o.toLowerCase() === t.toLowerCase())) out.push(t); }); return out; })(), fixed: !!e.fixed, rotate: !!e.rotate, ing, steps: e.steps.split('\n').map(s => s.trim()).filter(Boolean) };
   if (e.id && e.base) S.recipeOverrides[e.id] = rec;
-  else { const id = e.id || 'cr_' + Date.now().toString(36); S.customRecipes[id] = Object.assign(rec, { id }); }
+  else { const id = e.id || 'cr_' + Date.now().toString(36) + (e.imp ? Math.random().toString(36).slice(2, 5) : ''); S.customRecipes[id] = Object.assign(rec, { id }); }
+  if (e.imp) { impRemember(); rebuildCatalog(); saveState(); if (IMPQ) { IMPQ.done++; toast(`${name} imported`); impNext(); return; } closeModal(); render(); toast(`${name} imported — find it in Foods & recipes and the calendar library`); return; }
   rebuildCatalog(); saveState(); closeModal(); render(); toast(`${name} saved — find it in the calendar library${cl.bad ? ` · skipped ${cl.bad} link${cl.bad > 1 ? 's' : ''} that ${cl.bad > 1 ? 'aren’t web addresses' : 'isn’t a web address'}` : ''}`);
 }
 function replaceRecipeEverywhere(rid) {
@@ -400,16 +413,18 @@ document.addEventListener('input', e => {
   if (!t.dataset || !t.dataset.re || !RE) return;
   const k = t.dataset.re, i = +t.dataset.i;
   if (k === 'link-title' || k === 'link-url') { RE.links[i][k === 'link-title' ? 'title' : 'url'] = t.value; return; }
-  if (k === 'ing-amt') RE.ing[i][1] = t.value;
+  if (k === 'ing-amt') { RE.ing[i][1] = t.value; const m = RE.ing[i][2]; if (m) { m.userAmt = true; if (m.st === 'amt' && +t.value > 0) m.st = 'ok'; } }
   else if (k === 'fixed' || k === 'rotate') RE[k] = t.checked;
   else if (k !== 'ing-id') RE[k] = t.value;
   if (k === 'tags') refreshTagChips();
-  if (k === 'yield') { const h = $('#modal h3 .tiny'); if (h) h.textContent = `— amounts for the whole recipe (all ${RE.yield} serving${RE.yield > 1 ? 's' : ''})`; }
-  updateRecipePreview();
+  if (k === 'yield') { const h = $('#modal h3 .tiny'); if (h) h.textContent = '— ' + reAmtNote(RE.yield); }
+  updateRecipePreview(); if (RE.imp) impRefresh();
 });
 document.addEventListener('change', e => {
   const t = e.target; if (!t.dataset) return;
-  if (t.dataset.re === 'ing-id' && RE) { RE.ing[+t.dataset.i][0] = t.value; const g = ING[t.value]; if (g && g.u && +RE.ing[+t.dataset.i][1] > 20) RE.ing[+t.dataset.i][1] = 1; renderRecipeEditor(); }
+  if (t.dataset.re === 'ing-id' && RE) { const i = +t.dataset.i; RE.ing[i][0] = t.value; const g = ING[t.value];
+    if (RE.ing[i][2]) impFoodChanged(i); else if (g && g.u && +RE.ing[i][1] > 20) RE.ing[i][1] = 1; renderRecipeEditor(); }
+  if (t.dataset.re === 'cat' && RE && RE.imp) { RE.cat = t.value; impRefresh(); }
   if (t.dataset.re === 'fixed' || t.dataset.re === 'rotate') { if (RE) RE[t.dataset.re] = t.checked; }
   if (t.dataset.input === 'fe-basis') { const u = $('#modal .fe-unit'); if (u) u.classList.toggle('hidden', t.value !== 'u'); const pu = $('#fe-pk-unit'); if (pu) pu.textContent = (t.value === 'u' ? 'items' : t.value === 'ml' ? 'ml' : 'g') + ' per package'; }
   if (t.closest && t.closest('#modal form[data-form="food"]')) feDefHints();
