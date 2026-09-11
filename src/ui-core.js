@@ -7,6 +7,9 @@ const SOURCE_URL = 'https://github.com/Oroshi-zz/Forge_90';
    charts, toast/modal, undo, router
    ============================================================ */
 const $ = (s, el = document) => el.querySelector(s);
+// phones get the bottom-tab layout (views-l); the sidebar layout starts at 861 px
+const PHONE_MQ = window.matchMedia ? window.matchMedia('(max-width: 860px)') : null;
+const isPhone = () => !!(PHONE_MQ && PHONE_MQ.matches);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = (n, d = 0) => (n == null || isNaN(n)) ? '—' : Number(n).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -167,9 +170,13 @@ function showTip(el, html) {
   t.style.left = x + 'px'; t.style.top = y + 'px';
 }
 function hideTip() { tipEl().classList.remove('on'); tipTarget = null; }
+// touch screens have no hover: a tap only opens the exercise form tips (on what was actually tapped), and the next tap closes it
+let tipPtr = 'mouse', tipTap = null;
+document.addEventListener('pointerdown', e => { tipPtr = e.pointerType || 'mouse'; tipTap = e.target; if (tipPtr !== 'mouse' && tipTarget && !(e.target.closest && e.target.closest('#tip'))) hideTip(); }, true);
 document.addEventListener('mouseover', e => {
   if (document.body.classList.contains('dragging')) return;
   const el = e.target.closest('[data-tip-ex],[data-tip-wo],[data-tip-meal],[data-tip-tpl],[data-tip]');
+  if (tipPtr !== 'mouse' && el && (!el.dataset.tipEx || !tipTap || !el.contains(tipTap))) return;
   if (!el) { if (tipTarget) hideTip(); return; }
   if (el === tipTarget) return; tipTarget = el;
   let html = '';
@@ -210,7 +217,7 @@ function lineChart(el, cfg) {
   const yF = cfg.unit != null ? (v => fmt(v, dec) + cfg.unit) : (cfg.yFmt || (v => fmt(v, dec)));
   let s = `<svg viewBox="0 0 ${W} ${H}" height="${H}">`;
   ticks.forEach(t => { s += `<line class="grid-l" x1="${m.l}" x2="${W - m.r}" y1="${Y(t)}" y2="${Y(t)}"/><text class="ax" x="${m.l - 8}" y="${Y(t) + 4}" text-anchor="end">${yF(t)}</text>`; });
-  const nX = Math.min(6, span + 1); for (let i = 0; i < nX; i++) { const d = addDays(x0, Math.round(span * i / Math.max(1, nX - 1))); s += `<text class="ax" x="${X(d)}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === nX - 1 ? 'end' : 'middle'}">${fmtDate(d, { month: 'short', day: 'numeric' })}</text>`; }
+  const nX = Math.max(2, Math.min(6, span + 1, Math.floor((W - m.l - m.r) / 58) + 1)); for (let i = 0; i < nX; i++) { const d = addDays(x0, Math.round(span * i / Math.max(1, nX - 1))); s += `<text class="ax" x="${X(d)}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === nX - 1 ? 'end' : 'middle'}">${fmtDate(d, { month: 'short', day: 'numeric' })}</text>`; }
   (cfg.refs || []).forEach(r => { if (r.v < yMin || r.v > yMax) return; s += `<line x1="${m.l}" x2="${W - m.r}" y1="${Y(r.v)}" y2="${Y(r.v)}" stroke="${r.color || 'var(--muted)'}" stroke-width="1.5" opacity=".8"/><text class="ax" x="${W - m.r}" y="${Y(r.v) - 6}" text-anchor="end" style="fill:var(--text-2);font-weight:600">${esc(r.label)}</text>`; });
   cfg.series.forEach(se => {
     const pts = se.pts.slice().sort((a, b) => a.d < b.d ? -1 : 1);
@@ -218,11 +225,12 @@ function lineChart(el, cfg) {
     if (se.line !== false && pts.length > 1) s += `<path d="${pts.map((p, i) => (i ? 'L' : 'M') + X(p.d) + ' ' + Y(p.v)).join(' ')}" fill="none" stroke="${se.color}" stroke-width="${se.width || 2}" stroke-linejoin="round" stroke-linecap="round" opacity="${se.muted ? .55 : 1}"/>`;
     if (se.dots) pts.forEach(p => { s += `<circle cx="${X(p.d)}" cy="${Y(p.v)}" r="${p.pr ? 5.5 : (se.r || 4)}" fill="${p.pr ? '#f59e0b' : se.color}" stroke="var(--solid)" stroke-width="2" opacity="${se.muted ? .6 : 1}"/>`; });
   });
-  s += `<line class="xh" x1="0" x2="0" y1="${m.t}" y2="${H - m.b}" stroke="var(--line-2)" stroke-width="1" visibility="hidden"/><g class="hl"></g><rect class="hit" x="${m.l}" y="${m.t}" width="${W - m.l - m.r}" height="${H - m.t - m.b}" fill="transparent"/></svg><div class="tt hidden"></div>`;
+  s += `<line class="xh" x1="0" x2="0" y1="${m.t}" y2="${H - m.b}" stroke="var(--line-2)" stroke-width="1" visibility="hidden"/><g class="hl"></g><rect class="hit" x="0" y="0" width="${W}" height="${H}" fill="transparent"/></svg><div class="tt hidden"></div>`;
   el.innerHTML = s;
   const svg = $('svg', el), tt = $('.tt', el), xh = $('.xh', el), hl = $('.hl', el);
   const dates = [...new Set(all.map(p => p.d))].sort();
-  $('.hit', el).addEventListener('mousemove', ev => {
+  const hit = $('.hit', el); let touchTT = false;
+  const move = ev => {
     const r = svg.getBoundingClientRect(); const px = (ev.clientX - r.left) * (W / r.width);
     let best = dates[0], bd = 1e9; dates.forEach(d => { const dd = Math.abs(X(d) - px); if (dd < bd) { bd = dd; best = d; } });
     xh.setAttribute('x1', X(best)); xh.setAttribute('x2', X(best)); xh.setAttribute('visibility', 'visible');
@@ -234,8 +242,17 @@ function lineChart(el, cfg) {
     tt.innerHTML = `<div class="tiny muted" style="margin-bottom:4px">${fmtDate(best, { weekday: 'short', month: 'short', day: 'numeric' })}</div>${rows}`;
     tt.classList.remove('hidden'); const sx = r.width / W;
     tt.style.left = Math.min(r.width - 70, Math.max(70, X(best) * sx)) + 'px'; tt.style.top = (topY * sx - 10) + 'px';
-  });
-  $('.hit', el).addEventListener('mouseleave', () => { tt.classList.add('hidden'); xh.setAttribute('visibility', 'hidden'); hl.innerHTML = ''; });
+  };
+  const hide = () => { tt.classList.add('hidden'); xh.setAttribute('visibility', 'hidden'); hl.innerHTML = ''; };
+  // mouse: hover; finger: touch and drag sideways (vertical swipes still scroll the page); keyboard: arrow keys
+  hit.addEventListener('pointermove', ev => { if (ev.pointerType === 'mouse' || ev.buttons) move(ev); });
+  hit.addEventListener('pointerdown', ev => { touchTT = ev.pointerType !== 'mouse'; move(ev); });
+  hit.addEventListener('pointerleave', ev => { if (ev.pointerType === 'mouse') hide(); });
+  if (!lineChart._doc) { lineChart._doc = true; document.addEventListener('pointerdown', ev => { $$('.chart .tt:not(.hidden)').forEach(t => { const c = t.closest('.chart'); if (c && !c.contains(ev.target) && c._hide) c._hide(); }); }); }
+  el._hide = hide; el.tabIndex = 0; el.setAttribute('role', 'img'); el.setAttribute('aria-label', (cfg.label || cfg.series.map(x => x.label).join(', ')) + ' chart. Use the left and right arrow keys to read values.');
+  el.onkeydown = ev => { if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return; ev.preventDefault(); const cur = el._ki == null ? (ev.key === 'ArrowLeft' ? dates.length : -1) : el._ki; el._ki = Math.max(0, Math.min(dates.length - 1, cur + (ev.key === 'ArrowLeft' ? -1 : 1)));
+    const r = svg.getBoundingClientRect(); move({ clientX: r.left + X(dates[el._ki]) * r.width / W }); };
+  el.onblur = () => { el._ki = null; hide(); };
 }
 function ringSVG(frac, color, size = 132, stroke = 12) {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r, f = Math.max(0, Math.min(1, frac));
@@ -260,7 +277,7 @@ function toast(msg, undoable) {
 function modal(html, cls = '') {
   closeModal();
   const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.id = 'modal';
-  bg.innerHTML = `<div class="modal ${cls}">${html}</div>`;
+  bg.innerHTML = `<div class="modal ${cls}">${isPhone() ? '<div class="sh-hdl" role="button" tabindex="-1" aria-label="Close"><i></i></div>' : ''}${html}</div>`;
   bg.addEventListener('mousedown', e => { if (e.target === bg) closeModal(); });
   document.body.appendChild(bg); hideTip();
 }

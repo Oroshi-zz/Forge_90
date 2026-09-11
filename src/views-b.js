@@ -172,11 +172,12 @@ function printRecipe(rid) {
 }
 
 /* ---------------- GROCERY & PREP ---------------- */
-function viewGrocery() {
+// everything the shopping list and the prep schedule need for the selected week (Grocery page, and on phones the List and Prep tabs)
+function groceryWeek() {
   const A = computeAll(); const dates = planDates();
   const cur = inPlan(todayISO()) ? planWeek(todayISO()) : 1;
   if (!UI.groWeek) UI.groWeek = cur;
-  const wk = UI.groWeek; const wd = dates.slice((wk - 1) * 7, wk * 7);
+  const wk = Math.min(UI.groWeek, Math.ceil(dates.length / 7)); const wd = dates.slice((wk - 1) * 7, wk * 7);
   const totals = {}; const cooks = []; const singles = [];
   wd.forEach(d => A.days[d].meals.forEach(m => {
     const b = A.batches.info[d + '|' + m.slot];
@@ -187,6 +188,26 @@ function viewGrocery() {
   const carried = []; wd.forEach(d => A.days[d].meals.forEach(m => { const b = A.batches.info[d + '|' + m.slot]; if (b && b.role === 'leftover' && b.batch.cook < wd[0]) carried.push({ d, m, b }); }));
   const got = syncActive() ? ((SY.data.grocery || {})[wd[0]] || {}) : ((S.grocery = S.grocery || {})['w' + wk] || {});
   const GL = groceryRows(A, wd, totals);
+  GRO_ROWS = { rows: GL.rows, week: wd[0], wk };
+  const nW = Math.ceil(dates.length / 7);
+  const opts = Array.from({ length: nW }, (_, i) => `<option value="${i + 1}" ${wk === i + 1 ? 'selected' : ''}>Week ${i + 1} · ${fmtDate(dates[i * 7], { month: 'short', day: 'numeric' })} – ${fmtDate(dates[Math.min(dates.length - 1, i * 7 + 6)], { month: 'short', day: 'numeric' })}${phaseForWeek(i + 1).cycle > 1 ? ' · cycle ' + phaseForWeek(i + 1).cycle : ''}</option>`).join('');
+  return { A, dates, wk, wd, totals, cooks, singles, carried, got, GL, opts };
+}
+function prepScheduleHTML(G) {
+  const { cooks, singles, carried } = G;
+  const cookRows = cooks.slice().sort((a, b) => a.d < b.d ? -1 : 1).map(({ d, m, b }) => { const dd = parseISO(d); const prep = addDays(d, -1);
+    return `<div class="prep-row"><div class="d"><span>${DOW[dd.getDay()]}</span><b>${dd.getDate()}</b></div><div style="flex:1;min-width:0"><div class="row"><span style="font-size:20px">${esc(m.r.emoji)}</span><b>${esc(m.r.name)}</b><span class="bd cook">COOK ×${b.batch.size}</span>${b.batch.partnerServ ? `<span class="bd shr" data-tip="${b.batch.size - b.batch.partnerServ} for you · ${b.batch.partnerServ} for ${esc(syncName())}">${icon('users')}${b.batch.partnerServ}</span>` : ''}</div>
+      <div class="small sub" style="margin-top:3px">Eat: ${b.batch.members.map(o => fmtDate(o.date, { weekday: 'short' }) + ' ' + SLOT_LABEL[o.slot].toLowerCase()).join(' · ')}${m.r.storage === 'freezer' ? ' · freeze extras' : ''}</div>
+      <div class="tiny muted">Prep ${fmtDate(prep, { weekday: 'long' })} evening or ${fmtDate(d, { weekday: 'long' })} morning · ~${m.r.time} min${b.batch.size < m.r.yield ? ` · recipe scaled to ${Math.round(b.batch.scale * 100)}%` : ''}</div></div></div>`; }).join('') || '<div class="muted small">No batch cooking this week.</div>';
+  const singleSummary = {}; singles.forEach(({ m }) => singleSummary[m.r.id] = (singleSummary[m.r.id] || 0) + 1);
+  return `<div class="card"><div class="card-h"><h2>Batch-cook schedule</h2></div>${cookRows}
+        ${carried.length ? `<div class="note" style="margin-top:12px">${icon('loop')}<span>Carried over from last week (already cooked): ${[...new Set(carried.map(c => c.m.r.name))].map(esc).join(', ')}.</span></div>` : ''}</div>
+        <div style="height:16px"></div><div class="card"><div class="card-h"><h2>Cook-fresh meals</h2></div>
+        <div class="row wrap" style="gap:6px">${Object.entries(singleSummary).map(([id, n]) => `<span class="pill">${esc(RECIPE[id].emoji)} ${esc(RECIPE[id].name)}${n > 1 ? ' ×' + n : ''}</span>`).join('') || '<span class="muted small">None</span>'}</div></div>`;
+}
+function viewGrocery() {
+  const G = groceryWeek(); if (isPhone()) return groceryPhoneHTML(G);
+  const { A, dates, wk, wd, totals, got, GL, opts } = G;
   const unitOf = id => ING[id].u ? ING[id].u + 's' : ING[id].ml ? 'ml' : 'g';
   const aisles = {}; GL.rows.forEach(r => { const ai = ING[r.id].a; (aisles[ai] = aisles[ai] || []).push(r); });
   const order = AISLES.concat(Object.keys(aisles).filter(a => !AISLES.includes(a)));
@@ -197,23 +218,12 @@ function viewGrocery() {
     const panTxt = st.covered ? `<small class="pan-have full" title="Your pantry has enough — untick it if you still need to buy it">${icon('box')}In your pantry${have > total * 1.01 ? ` · ${esc(pantryQtyText(id, have))}` : ''}</small>` : have > 0 ? `<small class="pan-have" title="Your pantry has some of this">${icon('box')}${esc(pantryQtyText(id, have))} at home</small>` : '';
     return `<label class="gro-item ${st.checked ? 'got' : ''} ${st.covered ? 'pan' : ''}"><input type="checkbox" data-input="gro" data-id="${id}" ${st.covered ? 'data-pan="1"' : ''} ${st.checked ? 'checked' : ''}><span>${esc(g.name)}${st.covered ? `<span class="gro-pan-ic" title="In your pantry">${icon('box')}</span>` : ''}</span><span class="q">${g.qty}${g.sub ? `<small>${g.sub}</small>` : ''}${pkTxt}${panTxt}</span></label>`; }).join('')}</div>`).join('');
   const T = groTools(GL.rows, got); const nAll = GL.rows.length;
-  GRO_ROWS = { rows: GL.rows, week: wd[0], wk };
-  const cookRows = cooks.sort((a, b) => a.d < b.d ? -1 : 1).map(({ d, m, b }) => { const dd = parseISO(d); const prep = addDays(d, -1);
-    return `<div class="prep-row"><div class="d"><span>${DOW[dd.getDay()]}</span><b>${dd.getDate()}</b></div><div style="flex:1;min-width:0"><div class="row"><span style="font-size:20px">${esc(m.r.emoji)}</span><b>${esc(m.r.name)}</b><span class="bd cook">COOK ×${b.batch.size}</span>${b.batch.partnerServ ? `<span class="bd shr" data-tip="${b.batch.size - b.batch.partnerServ} for you · ${b.batch.partnerServ} for ${esc(syncName())}">${icon('users')}${b.batch.partnerServ}</span>` : ''}</div>
-      <div class="small sub" style="margin-top:3px">Eat: ${b.batch.members.map(o => fmtDate(o.date, { weekday: 'short' }) + ' ' + SLOT_LABEL[o.slot].toLowerCase()).join(' · ')}${m.r.storage === 'freezer' ? ' · freeze extras' : ''}</div>
-      <div class="tiny muted">Prep ${fmtDate(prep, { weekday: 'long' })} evening or ${fmtDate(d, { weekday: 'long' })} morning · ~${m.r.time} min${b.batch.size < m.r.yield ? ` · recipe scaled to ${Math.round(b.batch.scale * 100)}%` : ''}</div></div></div>`; }).join('') || '<div class="muted small">No batch cooking this week.</div>';
-  const singleSummary = {}; singles.forEach(({ m }) => singleSummary[m.r.id] = (singleSummary[m.r.id] || 0) + 1);
-  const nW = Math.ceil(dates.length / 7);
-  const opts = Array.from({ length: nW }, (_, i) => `<option value="${i + 1}" ${wk === i + 1 ? 'selected' : ''}>Week ${i + 1} · ${fmtDate(dates[i * 7], { month: 'short', day: 'numeric' })} – ${fmtDate(dates[Math.min(dates.length - 1, i * 7 + 6)], { month: 'short', day: 'numeric' })}${phaseForWeek(i + 1).cycle > 1 ? ' · cycle ' + phaseForWeek(i + 1).cycle : ''}</option>`).join('');
   return `<div class="page-head"><div class="t"><h1>Grocery & meal prep</h1><p>Quantities are summed from the exact scaled portions on your calendar — including leftovers — for the selected week.</p></div>
       <div class="row wrap">${syncBtnHTML()}<select class="inp" data-input="gro-week">${opts}</select><button class="btn" data-act="copy-list">${icon('list')}Copy list</button><button class="btn" data-act="print">Print</button></div></div>
     ${syncGroceryNote(wd, A)}
     ${moneySaverHTML(wd)}<div style="height:16px"></div>
     <div class="g-half">
-      <div><div class="card"><div class="card-h"><h2>Batch-cook schedule</h2></div>${cookRows}
-        ${carried.length ? `<div class="note" style="margin-top:12px">${icon('loop')}<span>Carried over from last week (already cooked): ${[...new Set(carried.map(c => c.m.r.name))].map(esc).join(', ')}.</span></div>` : ''}</div>
-        <div style="height:16px"></div><div class="card"><div class="card-h"><h2>Cook-fresh meals</h2></div>
-        <div class="row wrap" style="gap:6px">${Object.entries(singleSummary).map(([id, n]) => `<span class="pill">${esc(RECIPE[id].emoji)} ${esc(RECIPE[id].name)}${n > 1 ? ' ×' + n : ''}</span>`).join('') || '<span class="muted small">None</span>'}</div></div></div>
+      <div>${prepScheduleHTML(G)}</div>
       <div class="card"><div class="card-h"><h2>Shopping list</h2><span class="muted small">${nAll} item${nAll === 1 ? '' : 's'} · tap to check off</span></div>
         ${nAll ? `<div class="row wrap gro-tools"><button class="btn sm" data-act="gro-all" data-v="1" ${T.checked === nAll ? 'disabled' : ''}>${icon('check')}Check all</button><button class="btn sm" data-act="gro-all" data-v="0" ${T.checked ? '' : 'disabled'}>${icon('x')}Uncheck all</button><button class="btn sm primary" data-act="gro-pantry" ${T.add ? '' : 'disabled'} title="Put the items you ticked in the pantry and clear their ticks">${icon('box')}Add checked to pantry${T.add ? ` (${T.add})` : ''}</button></div>` : ''}
         ${GL.note}${list || '<div class="muted">Nothing planned this week.</div>'}
@@ -258,54 +268,88 @@ function moneySaverHTML(wd) {
 }
 
 /* ---------------- PROGRESS ---------------- */
+function progRange() { const t = todayISO(); const all = sortedWeights(); const first = all.length ? minISO(all[0].d, S.settings.startDate) : S.settings.startDate; return UI.prRange === '14' ? { key: '14', from: addDays(t, -13), to: t, label: 'in 2 weeks' } : { key: 'all', from: first, to: null, label: 'since the start' }; }
+const minISO = (a, b) => a < b ? a : b;
+// plan line: from the first weigh-in (or the start) at the target loss rate
+function planLine() { const ws = sortedWeights(); const st = S.settings; const s0 = ws.length && ws[0].d < st.startDate ? ws[0].d : st.startDate; const w0 = ws.length && ws[0].d < st.startDate ? ws[0].w : st.startWeight; return { s0, w0, at: d => w0 - st.rate * dayDiff(s0, d) / 7 }; }
+function rateOver(from) { const ws = sortedWeights().filter(x => x.d >= from); if (ws.length < 3 || dayDiff(ws[0].d, ws[ws.length - 1].d) < 7) return null; const lr = linreg(ws.map(x => [dayDiff(from, x.d), x.w])); return lr ? -lr.m * 7 : null; }
+function consistencyHTML() {
+  const t = todayISO(); const mon = mondayOf(t); const weeks = [];
+  for (let k = 3; k >= 0; k--) { const m = addDays(mon, -7 * k); const days = Array.from({ length: 7 }, (_, i) => addDays(m, i)).filter(d => inPlan(d) && S.plan[d] && S.plan[d].w); if (days.length) weeks.push([m, days]); }
+  if (!weeks.length) return '';
+  const state = d => { const rows = sessionRows(S.plan[d].w); const did = S.done[d] || loggedSets(d, rows).done > 0; return did ? 'done' : d < t ? 'miss' : d === t ? 'today' : 'next'; };
+  const cells = weeks.map(([m, days]) => `<span class="cons-wk">${esc(fmtDate(m, { month: 'short', day: 'numeric' }))}</span><span class="cons-row">${days.map(d => { const s = state(d); const dw = DOW[parseISO(d).getDay()];
+    return `<a class="cons-c ${s}" href="#/day/${d}" aria-label="${esc(fmtDate(d, { weekday: 'long', month: 'short', day: 'numeric' }))}: ${{ done: 'done', miss: 'missed', today: 'today', next: 'coming up' }[s]}">${s === 'done' ? icon('check') : s === 'miss' ? icon('x') : ''}${dw}${s === 'today' ? ' · today' : ''}</a>`; }).join('')}</span>`).join('');
+  const past = weeks.flatMap(w => w[1]).filter(d => d <= t); const done = past.filter(d => state(d) === 'done').length; const miss = past.filter(d => state(d) === 'miss').length;
+  return `<div class="card"><div class="card-h"><h2>Consistency</h2><span class="pill ${miss ? '' : 'acc'} num">${done} of ${past.length} done${miss ? ` · ${miss} missed` : ''}</span></div><div class="cons">${cells}</div>
+    <div class="tiny muted" style="margin-top:10px">The last four weeks of planned sessions. ${icon('check')} done · ${icon('x')} missed — a session counts once you log a set or mark it complete. Tap a day to open it.</div></div>`;
+}
 function viewProgress() {
-  const ws = sortedWeights(); const st = S.settings; const cur = latestStats(); const trend = weightTrend();
+  const ws = sortedWeights(); const st = S.settings; const cur = latestStats(); const phone = isPhone(); const R = progRange();
   const logged = allLoggedExercises();
   if (!UI.prEx || !logged.includes(UI.prEx)) UI.prEx = logged[0] || null;
   const board = logged.map(ex => { const h = exerciseHistory(ex); const best = h.reduce((a, x) => x.best > a.best ? x : a, h[0]); const first = h[0];
     return { ex, h, best, first, gain: best.best - first.best }; }).sort((a, b) => EX[a.ex].group.localeCompare(EX[b.ex].group) || EX[a.ex].name.localeCompare(EX[b.ex].name));
   const hist = ws.slice().reverse().map(x => { const lbm = x.bf != null && x.bf !== '' ? x.w * (1 - x.bf / 100) : null;
-    return `<tr><td>${fmtDate(x.d, { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</td><td class="num"><b>${fmt(x.w, 1)}</b> lb</td><td class="num">${x.bf != null && x.bf !== '' ? fmt(x.bf, 1) + '%' : '<span class="muted">—</span>'}</td><td class="num">${lbm ? fmt(lbm, 1) + ' lb' : '<span class="muted">—</span>'}</td><td style="text-align:right"><button class="btn sm ghost danger" data-act="del-weight" data-d="${x.d}">${icon('trash')}</button></td></tr>`; }).join('');
-  const sel = logged.length ? `<select class="inp" data-input="pr-ex">${['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'].map(g => { const xs = logged.filter(e => EX[e].group === g); return xs.length ? `<optgroup label="${g}">${xs.map(e => `<option value="${e}" ${UI.prEx === e ? 'selected' : ''}>${esc(EX[e].name)}</option>`).join('')}</optgroup>` : ''; }).join('')}</select>` : '';
+    return `<tr><td>${fmtDate(x.d, { weekday: 'short', month: 'short', day: 'numeric', year: phone ? undefined : 'numeric' })}</td><td class="num"><b>${fmt(x.w, 1)}</b> lb</td><td class="num">${x.bf != null && x.bf !== '' ? fmt(x.bf, 1) + '%' : '<span class="muted">—</span>'}</td><td class="num">${lbm ? fmt(lbm, 1) + ' lb' : '<span class="muted">—</span>'}</td><td style="text-align:right"><button class="btn sm ghost danger" data-act="del-weight" data-d="${x.d}" aria-label="Delete the ${esc(fmtDate(x.d))} weigh-in">${icon('trash')}</button></td></tr>`; }).join('');
+  const sel = logged.length ? `<select class="inp" data-input="pr-ex" aria-label="Exercise">${['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'].map(g => { const xs = logged.filter(e => EX[e].group === g); return xs.length ? `<optgroup label="${g}">${xs.map(e => `<option value="${e}" ${UI.prEx === e ? 'selected' : ''}>${esc(EX[e].name)}</option>`).join('')}</optgroup>` : ''; }).join('')}</select>` : '';
   const sessRows = UI.prEx ? exerciseHistory(UI.prEx).slice().reverse().map(h => `<tr><td>${fmtDate(h.d)}</td><td>${h.sets.map(s => `${fmt(+s.w, 1)}×${s.r}`).join(', ')}</td><td class="num">${isBW(UI.prEx) ? h.best + ' reps' : fmt(h.best)}</td><td class="num">${fmt(h.vol)}</td><td>${h.pr ? `<span class="prb">${icon('trophy')}PR</span>` : ''}</td></tr>`).join('') : '';
   const exOpts = Object.values(EX).sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name)).map(e => `<option value="${e.id}">${e.group} — ${esc(e.name)}</option>`).join('');
-  return `<div class="page-head"><div class="t"><h1>Progress</h1><p>Body weight, body fat and strength — logged here or from each day’s workout.</p></div></div>
-    <div class="g-half">
-      <div class="card"><div class="card-h"><h2>Log a weigh-in</h2></div>${weighForm()}<div class="tiny muted" style="margin-top:8px">Weigh in first thing in the morning, after the bathroom, 3–7× a week. Body fat is optional — when it’s blank, the app estimates it by holding your last measured lean mass.</div></div>
-      <div class="card"><div class="card-h"><h2>Current</h2></div><div class="grid g4" style="gap:10px">
-        ${[['Weight', fmt(cur.w, 1), 'lb'], ['Body fat', fmt(cur.bf, 1), '%' + (cur.est ? ' est.' : '')], ['Lean mass', fmt(cur.lbm, 1), 'lb'], ['Trend', trend ? fmt(trend.rate, 2) : '—', 'lb/wk']].map(([l, v, u]) => `<div><div class="tiny muted">${l}</div><div style="font-size:22px;font-weight:700" class="num">${v}<small class="muted" style="font-size:12px;margin-left:3px">${u}</small></div></div>`).join('')}</div>
-        <div class="tiny muted" style="margin-top:10px">Start ${st.startWeight} lb · ${st.startBF}% → goal ${st.goalWeight} lb · ${st.goalBF}%</div></div></div>
+  // tiles: now, and the change over the chosen range
+  const before = R.key === 'all' ? { w: st.startWeight, bf: st.startBF, lbm: st.startWeight * (1 - st.startBF / 100) } : statsOn(addDays(R.from, -1));
+  const sign = (v, d = 1) => (v > 0 ? '+' : v < 0 ? '−' : '±') + fmt(Math.abs(v), d);
+  const rate = R.key === '14' ? rateOver(R.from) : (weightTrend() || {}).rate; const hasW = ws.length > 0;
+  const dW = cur.w - before.w, dB = cur.bf - before.bf, dL = cur.lbm - before.lbm;
+  const tile = (lbl, val, unit, delta, good) => `<div class="card stat ptile"><div class="lbl">${lbl}</div><div class="val">${val}<small>${unit}</small></div><div class="delta ${delta == null ? 'neu' : good ? 'good' : 'bad'}">${delta == null ? '&nbsp;' : delta}</div></div>`;
+  const tiles = `<div class="grid g4 ptiles">${tile('Weight', fmt(cur.w, 1), 'lb', hasW ? `${sign(dW)} lb ${R.label}` : null, dW <= 0)}${tile('Body fat', fmt(cur.bf, 1), '%' + (cur.est ? ' est.' : ''), hasW ? `${sign(dB)} pts ${R.label}` : null, dB <= 0)}
+    ${tile('Lean mass', fmt(cur.lbm, 1), 'lb', hasW ? `${sign(dL)} lb · ${dL >= -1 ? 'holding' : 'dropping'}` : null, dL >= -1)}${tile('Weekly trend', rate != null ? sign(-rate, 2) : '—', 'lb/wk', `Plan ${fmt(st.rate, 2)} lb/wk`, true).replace('delta good', 'delta neu')}</div>`;
+  // where the 7-day average sits against the plan line, and when the goal lands at this pace
+  let pace = '';
+  if (ws.length > 1) {
+    const last = ws[ws.length - 1]; const avg = movingAvg(ws).slice(-1)[0].v; const gap = planLine().at(last.d) - avg;
+    const lr = rate != null && rate > 0.05 ? rate : null; const when = lr ? addDays(last.d, Math.round(Math.max(0, cur.w - st.goalWeight) / lr * 7)) : null;
+    pace = `<div class="note ${Math.abs(gap) <= 0.3 || gap > 0 ? 'acc' : 'warn'}" style="margin-top:12px">${icon('trend')}<span>${lr ? `Losing <b>${fmt(lr, 2)} lb/week</b> (plan ${fmt(st.rate, 2)}). ` : ''}The 7-day average is ${Math.abs(gap) <= 0.3 ? '<b>on the plan line</b>' : `<b>${fmt(Math.abs(gap), 1)} lb ${gap > 0 ? 'ahead of' : 'behind'}</b> the plan`}.${when && cur.w > st.goalWeight ? ` At this pace you reach ${st.goalWeight} lb around <b>${esc(fmtDate(when, { month: 'long', year: 'numeric' }))}</b>.` : ''}</span></div>`;
+  }
+  const range = `<div class="seg prange" role="group" aria-label="Time range">${[['all', 'Since day 1'], ['14', 'Last 2 weeks']].map(([k, l]) => `<button class="${R.key === k ? 'on' : ''}" data-act="pr-range" data-v="${k}" aria-pressed="${R.key === k}">${l}</button>`).join('')}</div>`;
+  const weighCard = phone ? '' : `<div class="card"><div class="card-h"><h2>Log a weigh-in</h2></div>${weighForm()}<div class="tiny muted" style="margin-top:8px">Weigh in first thing in the morning, after the bathroom, 3–7× a week. Body fat is optional — when it’s blank, the app estimates it by holding your last measured lean mass.</div></div><div style="height:16px"></div>`;
+  return `<div class="page-head"><div class="t">${phone ? `<a class="back-lnk" href="#/you">${icon('left')}You</a>` : ''}<h1>Progress</h1><p>Body weight, body fat and strength — logged here or from each day’s workout.</p></div><div class="row wrap">${range}${phone ? `<button class="btn primary" data-act="weigh-sheet">${icon('scale')}Log weight</button>` : ''}</div></div>
+    ${weighCard}${tiles}<div style="height:16px"></div>
+    <div class="card"><div class="card-h"><h2>Body weight</h2><div class="legend"><span><i class="dt" style="background:var(--muted)"></i>Weigh-in</span><span><i style="background:var(--prot)"></i>7-day average</span><span><i style="background:var(--accent-2)"></i>Plan (${st.rate} lb/wk)</span></div></div><div class="chart" id="ch-weight"></div>${pace}</div>
     <div style="height:16px"></div>
-    <div class="card"><div class="card-h"><h2>Body weight</h2><div class="legend"><span><i class="dt" style="background:var(--muted)"></i>Daily weigh-in</span><span><i style="background:var(--prot)"></i>7-day average</span><span><i style="background:var(--accent-2)"></i>Plan (${st.rate} lb/wk)</span></div></div><div class="chart" id="ch-weight"></div></div>
-    <div style="height:16px"></div>
-    <div class="grid g2"><div class="card"><div class="card-h"><h2>Body fat %</h2></div><div class="chart" id="ch-bf"></div></div><div class="card"><div class="card-h"><h2>Lean mass</h2></div><div class="chart" id="ch-lbm"></div></div></div>
-    <div style="height:16px"></div>
-    <div class="card"><div class="card-h"><h2>Weigh-in history</h2><span class="muted small">${ws.length} entries</span></div>${ws.length ? `<div class="scroll-x" style="max-height:340px;overflow-y:auto"><table class="tbl"><thead><tr><th>Date</th><th>Weight</th><th>Body fat</th><th>Lean mass</th><th></th></tr></thead><tbody>${hist}</tbody></table></div>` : `<div class="empty-state">${icon('scale')}<div>No weigh-ins yet.</div></div>`}</div>
+    <div class="grid g2 pduo"><div class="card"><div class="card-h"><h2>Body fat %</h2></div><div class="chart" id="ch-bf"></div></div><div class="card"><div class="card-h"><h2>Lean mass</h2></div><div class="chart" id="ch-lbm"></div></div></div>
+    <div class="tiny muted" style="margin-top:8px">Body fat comes from the weigh-ins where you entered it; lean mass is weight × (1 − body fat). Holding lean mass while the scale drops is the goal of a cut.</div>
+    <div style="height:16px"></div>${consistencyHTML()}
     <div style="height:24px"></div><div class="row wrap" style="margin-bottom:12px"><h2 style="flex:1">Strength PRs</h2></div>
     <div class="g-split">
       <div class="card"><div class="card-h"><h2>Estimated 1-rep max</h2>${sel}</div>${UI.prEx ? `<div class="small sub" style="margin:-6px 0 8px"><span data-tip-ex="${UI.prEx}" class="ex-name">${esc(EX[UI.prEx].name)}</span> · best set each session (Epley: weight × (1 + reps/30)). Gold dots are PRs.</div>` : ''}<div class="chart" id="ch-pr"></div>
         ${UI.prEx ? `<div class="scroll-x" style="margin-top:12px;max-height:260px;overflow-y:auto"><table class="tbl"><thead><tr><th>Date</th><th>Sets (lb×reps)</th><th>e1RM</th><th>Volume</th><th></th></tr></thead><tbody>${sessRows}</tbody></table></div>` : ''}</div>
-      <div class="card"><div class="card-h"><h2>Quick log a set</h2></div>
+      <div class="card"><div class="card-h"><h2>PR board</h2></div>
+        ${board.length ? `<div class="scroll-x" style="max-height:420px;overflow-y:auto"><table class="tbl"><thead><tr><th>Exercise</th><th>Best set</th><th>e1RM</th><th>Since first</th></tr></thead><tbody>${board.map(b => `<tr><td><span class="ex-name" data-tip-ex="${b.ex}">${esc(EX[b.ex].name)}</span><div class="tiny muted">${EX[b.ex].group} · ${b.h.length} session${b.h.length > 1 ? 's' : ''}</div></td><td>${b.best.bestSet ? fmt(+b.best.bestSet.w, 1) + '×' + b.best.bestSet.r : ''}<div class="tiny muted">${fmtDate(b.best.d)}</div></td><td class="num"><b>${isBW(b.ex) ? b.best.best + ' reps' : fmt(b.best.best)}</b></td><td class="num ${b.gain > 0 ? '' : 'muted'}" style="${b.gain > 0 ? 'color:var(--good);font-weight:700' : ''}">${b.gain > 0 ? '+' + fmt(b.gain) : '—'}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty-state">${icon('trophy')}<div>Log sets in a workout (or below) to build your PR board.</div></div>`}
+        <hr class="sep"><h3 style="margin-bottom:8px">Quick log a set</h3>
         <form data-form="quicklog" class="grid" style="grid-template-columns:1fr 1fr;gap:8px">
           <div class="field" style="grid-column:1/-1"><label>Exercise</label><select class="inp" name="ex">${exOpts}</select></div>
           <div class="field"><label>Date</label><input class="inp" type="date" name="d" value="${todayISO()}"></div><div class="field"><label>Weight (lb)</label><input class="inp" type="number" step="2.5" name="w" required></div>
-          <div class="field"><label>Reps</label><input class="inp" type="number" name="r" min="1" required></div><div class="field" style="justify-content:flex-end"><button class="btn primary" type="submit">${icon('plus')}Add set</button></div></form>
-        <hr class="sep"><h3 style="margin-bottom:8px">PR board</h3>
-        ${board.length ? `<div class="scroll-x" style="max-height:420px;overflow-y:auto"><table class="tbl"><thead><tr><th>Exercise</th><th>Best set</th><th>e1RM</th><th>Since first</th></tr></thead><tbody>${board.map(b => `<tr><td><span class="ex-name" data-tip-ex="${b.ex}">${esc(EX[b.ex].name)}</span><div class="tiny muted">${EX[b.ex].group} · ${b.h.length} session${b.h.length > 1 ? 's' : ''}</div></td><td>${b.best.bestSet ? fmt(+b.best.bestSet.w, 1) + '×' + b.best.bestSet.r : ''}<div class="tiny muted">${fmtDate(b.best.d)}</div></td><td class="num"><b>${isBW(b.ex) ? b.best.best + ' reps' : fmt(b.best.best)}</b></td><td class="num ${b.gain > 0 ? '' : 'muted'}" style="${b.gain > 0 ? 'color:var(--good);font-weight:700' : ''}">${b.gain > 0 ? '+' + fmt(b.gain) : '—'}</td></tr>`).join('')}</tbody></table></div>` : `<div class="empty-state">${icon('trophy')}<div>Log sets on a training day (or above) to build your PR board.</div></div>`}</div></div>`;
+          <div class="field"><label>Reps</label><input class="inp" type="number" name="r" min="1" required></div><div class="field" style="justify-content:flex-end"><button class="btn primary" type="submit">${icon('plus')}Add set</button></div></form></div></div>
+    <div style="height:16px"></div>
+    <div class="card"><div class="card-h"><h2>Weigh-in history</h2><span class="muted small">${ws.length} entries</span></div>${ws.length ? `<div class="scroll-x" style="max-height:340px;overflow-y:auto"><table class="tbl"><thead><tr><th>Date</th><th>Weight</th><th>Body fat</th><th>Lean mass</th><th></th></tr></thead><tbody>${hist}</tbody></table></div>` : `<div class="empty-state">${icon('scale')}<div>No weigh-ins yet.</div></div>`}</div>`;
 }
 function progressCharts() {
-  const ws = sortedWeights(); const st = S.settings;
+  const ws = sortedWeights(); const st = S.settings; const R = progRange(); const phone = isPhone();
   const cs = getComputedStyle(document.documentElement); const col = v => cs.getPropertyValue(v).trim();
-  const planPts = []; if (ws.length) { const s0 = ws[0].d < st.startDate ? ws[0].d : st.startDate; const e0 = projection().endPlan; const s0w = ws[0].d < st.startDate ? ws[0].w : st.startWeight;
-    for (let i = 0; i <= dayDiff(s0, e0); i += 7) planPts.push({ d: addDays(s0, i), v: s0w - st.rate * i / 7 }); planPts.push({ d: e0, v: s0w - st.rate * dayDiff(s0, e0) / 7 }); }
-  lineChart($('#ch-weight'), { h: 280, empty: 'Log a weigh-in to start your chart', unit: '', refs: [{ v: st.goalWeight, label: 'Goal ' + st.goalWeight + ' lb', color: col('--good'), inRange: false }],
-    series: ws.length ? [{ label: 'Plan', color: col('--accent-2'), pts: planPts, width: 1.5, muted: true, fmt: v => fmt(v, 1) + ' lb' }, { label: 'Weigh-in', color: col('--muted'), pts: ws.map(x => ({ d: x.d, v: x.w })), line: false, dots: true, r: 3.5, fmt: v => fmt(v, 1) + ' lb' }, { label: '7-day avg', color: col('--prot'), pts: movingAvg(ws).map(x => ({ d: x.d, v: x.v })), fmt: v => fmt(v, 1) + ' lb' }] : [] });
-  const bfPts = ws.filter(x => x.bf != null && x.bf !== '').map(x => ({ d: x.d, v: +x.bf }));
-  lineChart($('#ch-bf'), { h: 220, empty: 'Add body-fat % to a weigh-in to chart it', unit: '%', refs: [{ v: st.goalBF, label: 'Goal ' + st.goalBF + '%', color: col('--good'), inRange: false }], series: bfPts.length ? [{ label: 'Body fat', color: col('--kcal'), pts: bfPts, dots: true, area: true, fmt: v => fmt(v, 1) + '%' }] : [] });
-  const lPts = ws.filter(x => x.bf != null && x.bf !== '').map(x => ({ d: x.d, v: x.w * (1 - x.bf / 100) }));
-  lineChart($('#ch-lbm'), { h: 220, empty: 'Lean mass appears when body-fat % is logged', unit: '', series: lPts.length ? [{ label: 'Lean mass', color: col('--carb'), pts: lPts, dots: true, area: true, fmt: v => fmt(v, 1) + ' lb' }] : [] });
+  const inR = x => x.d >= R.from && (!R.to || x.d <= R.to);
+  const PL = planLine(); const planPts = [];
+  if (ws.length) { if (R.key === '14') { planPts.push({ d: R.from, v: PL.at(R.from) }, { d: R.to, v: PL.at(R.to) }); }
+    else { const e0 = phone ? minISO(projection().endPlan, addDays(maxISO(todayISO(), ws[ws.length - 1].d), 14)) : projection().endPlan; for (let i = 0; i <= dayDiff(PL.s0, e0); i += 7) planPts.push({ d: addDays(PL.s0, i), v: PL.at(addDays(PL.s0, i)) }); planPts.push({ d: e0, v: PL.at(e0) }); } }
+  const wIn = ws.filter(inR); const avg = movingAvg(ws).filter(inR);
+  lineChart($('#ch-weight'), { h: phone ? 220 : 280, empty: 'Log a weigh-in to start your chart', unit: '', label: 'Body weight', xMin: R.key === '14' ? R.from : undefined, xMax: R.key === '14' ? R.to : undefined,
+    refs: [{ v: st.goalWeight, label: 'Goal ' + st.goalWeight + ' lb', color: col('--good'), inRange: false }],
+    series: wIn.length ? [{ label: 'Plan', color: col('--accent-2'), pts: planPts, width: 1.5, muted: true, fmt: v => fmt(v, 1) + ' lb' }, { label: 'Weigh-in', color: col('--muted'), pts: wIn.map(x => ({ d: x.d, v: x.w })), line: false, dots: true, r: 3.5, fmt: v => fmt(v, 1) + ' lb' }, { label: '7-day avg', color: col('--prot'), pts: avg.map(x => ({ d: x.d, v: x.v })), fmt: v => fmt(v, 1) + ' lb' }] : [] });
+  const bfPts = ws.filter(x => x.bf != null && x.bf !== '' && inR(x)).map(x => ({ d: x.d, v: +x.bf }));
+  lineChart($('#ch-bf'), { h: phone ? 170 : 220, empty: 'Add body-fat % to a weigh-in to chart it', unit: '%', label: 'Body fat', refs: [{ v: st.goalBF, label: 'Goal ' + st.goalBF + '%', color: col('--good'), inRange: false }], series: bfPts.length ? [{ label: 'Body fat', color: col('--kcal'), pts: bfPts, dots: true, area: true, fmt: v => fmt(v, 1) + '%' }] : [] });
+  const lPts = ws.filter(x => x.bf != null && x.bf !== '' && inR(x)).map(x => ({ d: x.d, v: x.w * (1 - x.bf / 100) }));
+  lineChart($('#ch-lbm'), { h: phone ? 170 : 220, empty: 'Lean mass appears when body-fat % is logged', unit: '', label: 'Lean mass', series: lPts.length ? [{ label: 'Lean mass', color: col('--carb'), pts: lPts, dots: true, area: true, fmt: v => fmt(v, 1) + ' lb' }] : [] });
   if ($('#ch-pr')) { const h = UI.prEx ? exerciseHistory(UI.prEx) : [];
-    lineChart($('#ch-pr'), { h: 240, empty: 'No strength logs yet', unit: '', series: h.length ? [{ label: isBW(UI.prEx) ? 'Best reps' : 'e1RM', color: col('--prot'), pts: h.map(x => ({ d: x.d, v: x.best, pr: x.pr, note: x.bestSet ? `${x.bestSet.w}×${x.bestSet.r}` : '' })), dots: true, fmt: v => fmt(v, 0) + (isBW(UI.prEx) ? ' reps' : ' lb') }] : [] }); }
+    lineChart($('#ch-pr'), { h: phone ? 210 : 240, empty: 'No strength logs yet', unit: '', label: 'Estimated one-rep max', series: h.length ? [{ label: isBW(UI.prEx) ? 'Best reps' : 'e1RM', color: col('--prot'), pts: h.map(x => ({ d: x.d, v: x.best, pr: x.pr, note: x.bestSet ? `${x.bestSet.w}×${x.bestSet.r}` : '' })), dots: true, fmt: v => fmt(v, 0) + (isBW(UI.prEx) ? ' reps' : ' lb') }] : [] }); }
 }
 
 /* ---------------- SETTINGS ---------------- */
@@ -349,8 +393,9 @@ function nutritionCardHTML() { const st = S.settings; const f = setField;
         ${f('Calorie floor', 'minKcal', st.minKcal, 'type="number" step="50"')}
         <div class="field" style="grid-column:1/-1"><label>When you reach your goal weight or body-fat %</label><select class="inp" name="atGoal"><option value="maintain" ${st.atGoal === 'maintain' ? 'selected' : ''}>Switch to maintenance calories automatically</option><option value="continue" ${st.atGoal === 'continue' ? 'selected' : ''}>Keep the deficit going</option></select></div>
         <div><button class="btn primary" type="submit">Save</button></div></form></div>`; }
-function viewSettings() {
+function viewSettings(group) {
   const st = S.settings;
+  if (group && SET_GROUPS[group]) return settingsGroupHTML(group);
   const f = (lbl, name, val, attrs = '', hint = '') => `<div class="field"><label>${lbl}</label><input class="inp" name="${name}" value="${esc(val)}" ${attrs}>${hint ? `<span class="tiny muted">${hint}</span>` : ''}</div>`;
   return `<div class="page-head"><div class="t"><h1>Settings</h1><p>${AUTH.mode === 'server' ? 'Everything is saved to your account. Export a backup now and then.' : 'Everything is saved in this browser. Export a backup now and then.'}</p></div></div>
     <div class="grid g2">
@@ -359,29 +404,39 @@ function viewSettings() {
       ${bodyGoalsCardHTML()}
       ${nutritionCardHTML()}
       ${gymSettingsHTML()}
-      <div class="card"><div class="card-h"><h2>Appearance & data</h2></div>
+      ${restSettingsHTML()}
+      ${appearanceCardHTML()}</div>
+    <div style="height:16px"></div>
+    ${moneyCardHTML()}
+    ${apiCardHTML()}
+    <div style="height:16px"></div>
+    ${foodPrefsCardHTML()}
+    ${settingsFootHTML()}`;
+}
+function appearanceCardHTML() {
+  const st = S.settings;
+  return `<div class="card"><div class="card-h"><h2>Appearance & data</h2></div>
         <div class="field"><label>Theme</label><div class="seg">${['dark', 'light', 'system'].map(t => `<button class="${st.theme === t ? 'on' : ''}" data-act="theme" data-v="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></div>
         <label class="set-tog" style="margin-top:12px"><span><b class="small">Background photos</b><span class="tiny muted">${st.bgPhotos !== false ? 'A fitness photo behind each page.' : 'Off — plain background. Pages load faster and text is easier to read.'}</span></span><input type="checkbox" data-input="bg-photos" ${st.bgPhotos !== false ? 'checked' : ''}><i class="switch ${st.bgPhotos !== false ? 'on' : ''}" aria-hidden="true"><i></i></i></label>
         <hr class="sep"><div class="row wrap"><button class="btn" data-act="export">${icon('download')}Export backup</button><label class="btn">${icon('upload')}Import backup<input type="file" accept="application/json" data-input="import" hidden></label>
         <button class="btn danger" data-act="reset">${icon('trash')}Reset everything</button></div>
         <div class="tiny muted" style="margin-top:10px">${AUTH.mode === 'server' ? `Your data is saved to your FORGE 90 account on the server and follows you to any device you sign in on. <a href="#/account">Account settings</a>` : 'Data lives in this browser’s local storage for this file. Opening the file in a different browser starts fresh — use Export/Import to move it. Run the FORGE 90 server to get accounts and sign-in.'}</div>
-        <div class="tiny muted" style="margin-top:10px">Background photos from Unsplash (free Unsplash License): ${Object.values(SECTION_BG).map(b => `<a href="https://unsplash.com/photos/${b.slug}" target="_blank" rel="noopener">${esc(b.who)}</a>`).join(' · ')}.</div></div></div>
-    <div style="height:16px"></div>
-    <div class="card"><div class="card-h"><h2>Money-saving meal planning</h2><label class="share-tog"><span class="small">Share ingredients between recipes</span><input type="checkbox" data-input="share" ${st.shareIngredients !== false ? 'checked' : ''}><i class="switch ${st.shareIngredients !== false ? 'on' : ''}" aria-hidden="true"><i></i></i></label></div>
-      <div class="small sub">When on, the planner orders each week’s meals so recipes reuse the same fresh ingredients — fewer packages to buy and less food going bad. Variety and favorites are unchanged. See the formula and this week’s savings on <a href="#/grocery">Grocery & prep</a>. Package sizes can be edited on any food.</div></div>
-    ${apiCardHTML()}
-    <div style="height:16px"></div>
-    <div class="card"><div class="card-h"><h2>Food preferences</h2><a class="btn sm" href="#/foods">Manage foods & recipes ${icon('right')}</a></div>${foodPrefsHTML()}</div>
-    <div class="tiny muted" style="margin-top:14px;text-align:center">FORGE 90 ${APP_VERSION} · <a href="${SOURCE_URL}/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0</a> · <a href="${SOURCE_URL}" target="_blank" rel="noopener">Source code</a></div>
-`;
+        <div class="tiny muted" style="margin-top:10px">Background photos from Unsplash (free Unsplash License): ${Object.values(SECTION_BG).map(b => `<a href="https://unsplash.com/photos/${b.slug}" target="_blank" rel="noopener">${esc(b.who)}</a>`).join(' · ')}.</div></div>`;
 }
+function moneyCardHTML() {
+  const st = S.settings;
+  return `<div class="card"><div class="card-h"><h2>Money-saving meal planning</h2><label class="share-tog"><span class="small">Share ingredients between recipes</span><input type="checkbox" data-input="share" ${st.shareIngredients !== false ? 'checked' : ''}><i class="switch ${st.shareIngredients !== false ? 'on' : ''}" aria-hidden="true"><i></i></i></label></div>
+      <div class="small sub">When on, the planner orders each week’s meals so recipes reuse the same fresh ingredients — fewer packages to buy and less food going bad. Variety and favorites are unchanged. See the formula and this week’s savings on <a href="#/grocery">Grocery & prep</a>. Package sizes can be edited on any food.</div></div>`;
+}
+function foodPrefsCardHTML() { return `<div class="card"><div class="card-h"><h2>Food preferences</h2><a class="btn sm" href="#/foods">Manage foods & recipes ${icon('right')}</a></div>${foodPrefsHTML()}</div>`; }
+function settingsFootHTML() { return `<div class="tiny muted" style="margin-top:14px;text-align:center">FORGE 90 ${APP_VERSION} · <a href="${SOURCE_URL}/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0</a> · <a href="${SOURCE_URL}" target="_blank" rel="noopener">Source code</a></div>`; }
 
 /* ---------------- router ---------------- */
 const NAV = [['', 'Dashboard', 'grid'], ['calendar', 'Calendar', 'cal'], ['workouts', 'Workout plan', 'dumbbell'], ['diet', 'Diet plan', 'food'], ['foods', 'Foods & recipes', 'book'], ['grocery', 'Grocery & prep', 'cart'], ['pantry', 'Pantry', 'box'], ['progress', 'Progress', 'trend'], ['settings', 'Settings', 'sliders']];
 function shell() {
   document.body.innerHTML = `<div id="bg" aria-hidden="true"><div class="bg-layer"></div><div class="bg-layer"></div></div><div class="app"><aside class="side"><div class="brand"><a class="brand-link" href="#/" title="FORGE 90 — Dashboard">${LOGO}<b class="wm">FORGE<em>90</em></b></a><button class="side-toggle" data-act="nav-toggle" id="side-toggle"></button></div>
     <nav class="nav">${navItems().map(([k, l, i]) => `<a href="#/${k}" data-nav="${k}" title="${l}">${icon(i)}<span>${l}</span></a>`).join('')}</nav><div class="side-foot" id="side-foot"></div></aside>
-    <main class="main" id="view"></main></div><div id="tip"></div><div id="toast"></div>`;
+    <main class="main" id="view"></main></div><nav class="tabbar" id="tabbar" aria-label="Main"></nav><div id="wo-root"></div><div id="tip"></div><div id="toast"></div>`;
 }
 function sideFoot() {
   const t = todayISO(); const i = planIndex(t); const d = Math.max(0, i + 1);
@@ -397,9 +452,16 @@ const appTitle = () => (typeof AUTH !== 'undefined' && AUTH.config && AUTH.confi
 function render() {
   if (!$('#view')) return;                                  // sign-in screen is showing
   const h = location.hash.replace(/^#\/?/, ''); const [page, arg] = h.split('/');
+  const phone = isPhone(); document.body.classList.toggle('phone', phone);
+  // phones: Plan and Kitchen remember the tab you were on; big screens have no Prep or Plan pages of their own
+  if (page === 'plan') { location.replace('#/' + (phone ? (UI.lastPlan || 'calendar') : 'calendar')); return; }
+  if (page === 'kitchen') { location.replace('#/' + (phone ? (UI.lastKit || 'grocery') : 'grocery')); return; }
+  if (page === 'prep' && !phone) { location.replace('#/grocery'); return; }
+  if (phone && hubOf(page) === 'plan' && UI.lastPlan !== page) { UI.lastPlan = page; saveUI(); }
+  if (phone && hubOf(page) === 'kitchen' && page !== 'recipe' && UI.lastKit !== page) { UI.lastKit = page; saveUI(); }
   document.body.classList.toggle('compact', !!UI.navCollapsed);
   if (page === 'day' && arg) ensurePlanThrough(arg);
-  const sec = ({ '': 'dashboard', calendar: 'calendar', day: 'day', workouts: 'workouts', diet: 'diet', foods: 'foods', recipe: 'foods', grocery: 'grocery', pantry: 'grocery', progress: 'progress', settings: 'settings', account: 'settings', admin: 'settings' })[page || ''] || 'dashboard';
+  const sec = ({ '': 'dashboard', calendar: 'calendar', day: 'day', workouts: 'workouts', diet: 'diet', foods: 'foods', recipe: 'foods', grocery: 'grocery', pantry: 'grocery', prep: 'grocery', progress: 'progress', settings: 'settings', account: 'settings', admin: 'settings', you: 'settings' })[page || ''] || 'dashboard';
   document.body.dataset.sec = sec; applyBackground(sec);
   $$('.nav a').forEach(a => a.classList.toggle('on', a.dataset.nav === (page === 'day' ? 'calendar' : page === 'recipe' ? 'foods' : (page || ''))));
   const sy = window.scrollY; const same = render._last === h; render._last = h;
@@ -407,25 +469,29 @@ function render() {
   let html;
   switch (page) {
     case 'calendar': html = viewCalendar(); break;
-    case 'day': html = viewDay(arg); break;
+    case 'day': html = phone ? viewToday(arg) : viewDay(arg); break;
     case 'workouts': html = viewWorkouts(); break;
     case 'diet': html = viewDiet(); break;
     case 'grocery': html = viewGrocery(); break;
     case 'pantry': html = viewPantry(); break;
     case 'progress': html = viewProgress(); break;
-    case 'settings': html = viewSettings(); break;
+    case 'settings': html = viewSettings(arg); break;
+    case 'you': html = viewYou(); break;
+    case 'prep': html = viewPrep(); break;
     case 'foods': html = viewFoods(); break;
     case 'recipe': html = viewRecipe(decodeURIComponent(arg || '')); break;
     case 'account': html = viewAccount(); break;
     case 'admin': html = viewAdmin(); break;
-    default: html = viewDashboard();
+    default: html = phone ? viewToday(todayISO()) : viewDashboard();
   }
-  $('#view').innerHTML = html; sideFoot(); hideTip(); fpAfter(); pantryNavBadge();
+  if (phone && hubOf(page)) html = hubSegHTML(page) + html;
+  $('#view').innerHTML = html; sideFoot(); hideTip(); fpAfter(); pantryNavBadge(); tabbarRender(page);
   if (page === 'progress') progressCharts();
   window.scrollTo(0, same ? sy : 0);
-  document.title = appTitle() + ' · ' + (page === 'recipe' ? ((RECIPE[decodeURIComponent(arg || '')] || {}).name || 'Recipe') : (navItems().concat([['account', 'Account']]).find(n => n[0] === page) || [, page === 'day' ? 'Day' : 'Dashboard'])[1]);
+  document.title = appTitle() + ' · ' + (page === 'recipe' ? ((RECIPE[decodeURIComponent(arg || '')] || {}).name || 'Recipe') : (navItems().concat([['account', 'Account'], ['you', 'You'], ['prep', 'Meal prep']]).find(n => n[0] === page) || [, page === 'day' ? 'Day' : phone ? 'Today' : 'Dashboard'])[1]);
   if (page === 'account') accountAfter(); if (page === 'admin') adminAfter(); if (page === 'settings') settingsAfter();
   if (UI._scrollTo) { const el = document.getElementById(UI._scrollTo); UI._scrollTo = null; if (el) el.scrollIntoView({ block: 'start' }); }
+  woRefresh();
 }
 function applyTheme() { const t = (S && S.settings.theme) || UI.lastTheme || 'dark'; document.documentElement.dataset.theme = t; if (UI.lastTheme !== t) { UI.lastTheme = t; saveUI(); } }
 
@@ -448,6 +514,7 @@ const ACT = {
   'toggle-done': el => { const d = el.dataset.date; if (S.done[d]) delete S.done[d]; else S.done[d] = true; saveState(); render(); toast(S.done[d] ? 'Workout marked complete 💪' : 'Marked not complete'); },
   'set-rate': el => { S.settings.rate = +el.dataset.v; saveState(); render(); toast(`Loss rate set to ${el.dataset.v} lb/week — portions updated`); },
   'apply-trend': el => { S.settings.kcalAdjust = (+S.settings.kcalAdjust || 0) + (+el.dataset.delta); saveState(); render(); toast(`Calories adjusted ${+el.dataset.delta > 0 ? '+' : ''}${el.dataset.delta} kcal/day`); },
+  'pr-range': el => { UI.prRange = el.dataset.v === '14' ? '14' : 'all'; saveUI(); render(); },
   'del-weight': el => { S.weights = S.weights.filter(x => x.d !== el.dataset.d); saveState(); render(); toast('Weigh-in deleted'); },
   theme: el => { S.settings.theme = el.dataset.v; saveState(); applyTheme(); render(); },
   'theme-toggle': () => { S.settings.theme = effTheme() === 'light' ? 'dark' : 'light'; saveState(); applyTheme(); render(); },

@@ -39,7 +39,11 @@ function defaultSettings() {
     atGoal: 'maintain',    // 'maintain' = switch to maintenance calories once goal weight or BF% is reached
     bgDim: 0.7,            // background photo dimming — fixed at 30% photo visibility
     bgPhotos: true,        // section photos behind the glass; off = plain background
-    theme: 'dark'
+    theme: 'dark',
+    restDef: 90,           // rest timer: default seconds between sets
+    restPlan: true,        // use each exercise's suggested rest (heavy sets longer), the default fills the gaps
+    restAuto: true,        // logging a set in workout mode starts the timer
+    restSound: 'beeps', restVol: 0.8, restVib: true
   };
 }
 let S = null;

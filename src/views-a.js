@@ -55,7 +55,7 @@ function viewDashboard() {
     return `<div class="row" style="padding:7px 0;border-top:1px solid var(--line)" data-tip-meal="${focus}|${m.slot}"><span style="font-size:20px;width:26px;text-align:center">${esc(m.r.emoji)}</span><div style="flex:1;min-width:0"><div class="tiny muted" style="text-transform:uppercase;letter-spacing:.08em;font-weight:700">${SLOT_LABEL[m.slot]}</div><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.r.name)} ${batchBadge(b)}${shareBadge(focus, m.slot)}</div></div><span class="num small"><b>${fmt(m.m.k)}</b> kcal · <span style="color:var(--prot)">${fmt(m.m.p)}P</span></span><button class="btn icon ghost qe-pen" data-act="qe" data-d="${focus}" data-f="meal:${m.slot}" title="Swap this meal" aria-label="Swap ${SLOT_LABEL[m.slot].toLowerCase()}">${icon('edit')}</button></div>`; }).join('');
   const kfrac = day.totals.k / day.tg.kcal;
   const todayCard = `<div class="card"><div class="card-h"><h2>${focus === today ? 'Today' : fmtDate(focus, { weekday: 'long', month: 'short', day: 'numeric' })}</h2><span class="pill ${day.isTrain ? 'acc' : ''}">${day.isTrain ? 'Training day' : 'Rest day'}</span>${syncBtnHTML('sm')}<a class="btn sm ghost" href="#/day/${focus}">Open day ${icon('right')}</a></div>
-    <div class="qe-links"><button class="btn sm" data-act="qe" data-d="${focus}" data-f="wo">${icon('dumbbell')}Edit workout</button><button class="btn sm" data-act="qe" data-d="${focus}" data-f="meals">${icon('food')}Edit meals</button>${focus === today ? scanBtnHTML('today', 'sm') + addFoodBtnHTML('', 'sm') : ''}<a class="btn sm ghost" href="#/workouts">${icon('grip')}Workout plan</a><a class="btn sm ghost" href="#/foods">${icon('book')}Recipes</a></div>
+    <div class="qe-links"><button class="btn sm" data-act="qe" data-d="${focus}" data-f="wo">${icon('dumbbell')}Edit workout</button><button class="btn sm" data-act="qe" data-d="${focus}" data-f="meals">${icon('food')}Edit meals</button>${focus === today ? scanBtnHTML('today', 'sm') + addFoodBtnHTML('', 'sm') : ''}${day.entry.w ? `<button class="btn sm primary" data-act="wo-open" data-d="${focus}" title="One exercise at a time, with the rest timer">${icon('play')}Workout mode</button>` : ''}<a class="btn sm ghost" href="#/workouts">${icon('grip')}Workout plan</a><a class="btn sm ghost" href="#/foods">${icon('book')}Recipes</a></div>
     ${wo}<hr class="sep"><div class="grid ring-row" style="grid-template-columns:auto 1fr;gap:20px;align-items:center">
       <div class="ring">${ringSVG(kfrac, 'var(--kcal)')}<div class="c"><b>${fmt(day.totals.k)}</b><span>of ${fmt(day.tg.kcal)} kcal</span></div></div>
       <div>${macroBars(day.totals, day.tg)}<div class="tiny muted" style="margin-top:6px">Portion multipliers: protein ×${day.pF.toFixed(2)} · carbs/fats ×${day.cF.toFixed(2)}</div></div></div>
@@ -156,6 +156,7 @@ function agendaHTML(dates, A) {
   return `<div class="agenda">${rows || '<div class="card empty-state">No plan days in this range.</div>'}</div>`;
 }
 function viewCalendar() {
+  if (isPhone() && !UI.phCal) { UI.phCal = 1; UI.calView = 'week'; saveUI(); }        // phones start on the week list (Month stays one tap away)
   const A = computeAll(); const st = S.settings;
   const start = st.startDate, end = planEnd();
   const t = todayISO(); const anchor = inPlan(t) ? t : (t < start ? start : end);
@@ -290,7 +291,7 @@ function viewDay(date) {
         <h2 style="margin-top:8px">${esc(t.name)}</h2><div class="sub small" style="margin-top:2px">${esc(t.focus)}</div></div>
         ${muscleMap(prim, sec).replace('class="mm"', 'class="mm" style="width:110px;height:110px;flex:none"')}</div>
       <div class="row wrap" style="margin-bottom:12px"><select class="inp" data-input="day-wo" data-date="${date}" style="max-width:280px">${opts}</select>
-        <button class="btn ${S.done[date] ? 'primary' : ''}" data-act="toggle-done" data-date="${date}">${icon('check')}${S.done[date] ? 'Completed' : 'Mark complete'}</button></div>
+        <button class="btn ${S.done[date] ? 'primary' : ''}" data-act="toggle-done" data-date="${date}">${icon('check')}${S.done[date] ? 'Completed' : 'Mark complete'}</button><button class="btn primary" data-act="wo-open" data-d="${date}" title="One exercise at a time, with the rest timer">${icon('play')}Workout mode</button></div>
       <div class="scroll-x"><table class="ex-table"><thead><tr><th>#</th><th>Exercise</th><th>Target</th><th>Log sets (lb × reps)</th></tr></thead><tbody>
       ${rows.map((r, i) => exRowHTML(date, r, i)).join('')}</tbody></table></div>
       <div class="note" style="margin-top:12px">${icon('info')}<span><b>RIR</b> = reps in reserve (how many more clean reps you could do). Strength sets <span class="type-s">S</span>: rest 2–3 min. Hypertrophy sets <span class="type-h">H</span>: rest 60–120 s. Hover any exercise for step-by-step form.</span></div></div>`;

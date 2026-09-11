@@ -4,7 +4,7 @@
 
 # FORGE 90
 
-A self-hosted training and meal-planning app. It builds a 90-day Push/Pull/Legs program that continues in 13-week cycles, plans meals portioned to each person's macros, and tracks weight, body fat and lifts. Accounts are invite-only, so it works well for a household on one server.
+FORGE 90 is a multi-user, self-hosted, weight training and meal-planning app including a built-in barcode scanner, food pantry, and recipes (supports web links and [Mealie](https://mealie.io/) imports). It builds a 90-day Push/Pull/Legs program that continues in 13-week cycles, plans meals portioned to each person's macros, and tracks weight, body fat and lifts.
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
@@ -16,14 +16,15 @@ A self-hosted training and meal-planning app. It builds a 90-day Push/Pull/Legs 
   - [Training](#training)
   - [Logging and the calendar](#logging-and-the-calendar)
   - [Nutrition](#nutrition)
+  - [Progress](#progress)
   - [Recipes and foods](#recipes-and-foods)
-  - [Importing recipes](#importing-recipes)
-  - [Barcode scanning](#barcode-scanning)
   - [Groceries](#groceries)
   - [Pantry](#pantry)
+  - [Barcode scanning](#barcode-scanning)
+  - [Importing recipes](#importing-recipes)
   - [Meal-plan sync](#meal-plan-sync)
-  - [Progress](#progress)
   - [Gym cards](#gym-cards)
+  - [Compact phone UI](#compact-phone-ui)
   - [Accounts](#accounts)
   - [Admin console](#admin-console)
 - [Installation](#installation)
@@ -33,101 +34,115 @@ A self-hosted training and meal-planning app. It builds a 90-day Push/Pull/Legs 
 - [Security](#security)
 - [License](#license)
 - [Credits](#credits)
+- [Disclaimer](#disclaimer)
 
 ## Features
 
 ### Training
 
-- The first 90 days run through four phases: Foundation (upper-body focus while adjusting to the deficit), Build, Intensify, and a deload and PR-test week. After that the plan repeats in 13-week cycles, and the calendar always has the current and next cycle scheduled.
-- Sessions rotate Push, Pull, Legs across however many training days you pick. Push and pull never land on the same day.
-- Each session mixes heavy strength sets with hypertrophy work. Targets are given in reps in reserve and change with the phase.
-- Progression uses double progression: the app tells you to add weight once every set hits the top of the rep range.
-- The exercise library has about 120 exercises across 11 muscle groups, each with form steps and cues. Around half are research-backed alternatives that start switched off, each with a note on why it's included. Exercises rotate weekly within their movement slot. You can switch exercises on or off (every muscle group keeps at least one) or add your own.
-- Any exercise can be swapped, either in a single day's session or in the program from the current week on. Earlier weeks keep what was planned.
+- The first 90 days run through four phases: Foundation (an upper-body focus while you adjust to the deficit), Build, Intensify, and a deload and PR-test week. After that the plan repeats in 13-week cycles, and the calendar always has the current and next cycle scheduled.
+- Sessions rotate Push, Pull and Legs across however many training days you pick.
+- Each session mixes heavy strength sets with hypertrophy work, using reps-in-reserve (RIR) targets.
+- The app tells you when to add weight so you're encouraged to get stronger.
+- The customizable workout programs include an exercise library with over 100 exercises across 11 major muscle groups, each with form steps and cues. Around half are research-backed alternatives, each with a note on why it's there. Exercises rotate weekly within their movement slot, and you can switch them on or off whenever you like.
 
 ![Workout plan](docs/screenshots/workout-plan.png)
 
 ### Logging and the calendar
 
-Sets are logged on the dashboard's Today card or in the day view. Weight and reps save as you type, and each exercise shows its target, PR badges and a suggestion for next time. The calendar has month and week views with drag and drop for workouts and meals, plus undo. The dashboard also has quick editors for the day's workout and meals, and **Customize** lets you rearrange its panels or hide the ones you don't use. The layout is saved to your account.
+Sets are logged on the dashboard's Today card, in the day view or in workout mode, and each exercise shows its target, any PRs and a suggestion for next time. Workout mode takes you through the session one exercise at a time, with a suggested weight and reps. The customizable built-in rest timer automatically starts after you log a set to help you keep a proper pace.
+
+The calendar has month and week views, and workouts and meals can be dragged between days. The dashboard has quick editors for the day's workout and meals, and **Customize** rearranges its panels or hides the ones you don't use.
 
 ![Calendar](docs/screenshots/calendar.png)
 
 ### Nutrition
 
-Calorie targets use Katch–McArdle BMR, an activity multiplier, extra calories on lifting days, and a deficit set by the chosen loss rate. Protein is set between 0.5 and 1 g per pound of body weight, and carbs and fat make up the rest. Every day, recipe portions are scaled so the day's meals hit protein and calories, with count-based items like eggs and tortillas rounded to whole units. A trend coach compares the 7-day weight trend to the target and can adjust calories. Once the goal is reached, calories switch to maintenance. The loss rate, body and goal numbers, and nutrition settings can be changed from the Diet plan page as well as Settings.
+Calorie targets use Katch–McArdle BMR, an activity multiplier, extra calories on lifting days, and a deficit based on your loss rate. Protein is set between 0.5 and 1 g per pound of body weight, and carbs and fat make up the rest. Every day, recipe portions are scaled so the meals hit protein and calories, with things like eggs and tortillas rounded to whole units. A trend coach compares your 7-day weight trend with the target and can adjust calories, and once you reach your goal, calories switch to maintenance.
 
 ![Diet plan](docs/screenshots/diet-plan.png)
 
+### Progress
+
+The Progress page charts body weight against a 7-day average and the plan line, along with body fat, lean mass and an estimated one-rep max for each exercise, with PRs marked. You can look at everything since day 1 or just the last two weeks, and see how much your weight, body fat and lean mass changed in that time. It also shows whether your 7-day average is ahead of or behind the plan, when you'll reach your goal weight at the current pace, and which sessions you did or missed over the last four weeks.
+
+![Progress](docs/screenshots/progress.png)
+
 ### Recipes and foods
 
-The app ships with 36 high-protein meal-prep recipes, each linked to its original source, and a database of about 650 foods. Multi-serving recipes are scheduled as leftovers. Recipes can be searched by name, ingredient or tag, favorited so they come up more often, filtered and sorted by macros, edited, duplicated or switched off, opened as a full page or printed, and you can write your own. Food preferences work as a checklist by group, subgroup and individual food. Unchecking a food removes recipes that use it and swaps it out of upcoming meals.
+FORGE 90 comes with 36 high-protein meal-prep recipes, each linked to its original source, and a database of about 650 foods. Multi-serving recipes are scheduled as leftovers. Recipes can be searched by ingredient or tag, favorites come up more often in the plan, and you can edit, switch off or print any recipe, or write your own. Food preferences are a checklist by group, subgroup and individual food. Unchecking a food removes the recipes that use it and swaps it out of upcoming meals.
 
 ![Foods and recipes](docs/screenshots/recipes.png)
 
-### Importing recipes
-
-**Import recipe** on the Foods & recipes page brings in a recipe from a web link or from a Mealie server. Link import works with any site that publishes standard recipe data, which covers most recipe sites. For Mealie, an administrator adds the Mealie address and an API token under Settings → API connections, and then everyone on the server can search it and import several recipes at once.
-
-Each ingredient is matched to a food in the database and its amount is converted to grams, milliliters or items. Every import opens for review before it's saved. Anything that couldn't be worked out, such as an ingredient with no matching food, a missing amount, the meal or the number of servings, is highlighted and has to be filled in first, and uncertain matches are marked so you can check them. Your corrections are remembered for the next import. If a page has no recipe data, you can paste the ingredient list instead.
-
-![Recipe import review](docs/screenshots/recipe-import.png)
-
-### Barcode scanning
-
-On a phone, **Scan** reads the barcode on a packaged food (EAN-13, UPC-A, EAN-8 and UPC-E) with the camera. Products are looked up on [Open Food Facts](https://world.openfoodfacts.org). The first time anyone scans a product, they check the name, nutrition and package size and add it to the food list, and from then on it's searchable by everyone on the server, by name, brand or barcode. Products that aren't on Open Food Facts can be entered from the label. The person who added a product, or an administrator, can correct it later.
-
-Where you scan decides what happens:
-
-- **Dashboard, Calendar, Day view and Foods & recipes:** the product is added to today (or the day you're viewing) as an extra food with a meal. It counts toward the day's macros, and the rest of the day's portions shrink to make room. **Add food** does the same for any food without a camera. Scanned foods can also be starred as favorites or added to today from the food list.
-- **Pantry:** each scan adds one package straight to the pantry with no questions, so you can scan a bag of groceries in a row.
-
-The live camera view needs HTTPS (or `localhost`). Over plain HTTP, Scan asks you to take a photo of the barcode instead, which opens the phone's camera and works the same way. Android Chrome uses the phone's built-in barcode reader; other browsers, including iPhone Safari, use the app's own decoder. You can always type the number under the barcode instead.
-
-![Adding a scanned product](docs/screenshots/barcode-product.png)
-
 ### Groceries
 
-The weekly shopping list is grouped by aisle and adds up the exact scaled portions on the calendar, including leftovers. It comes with a batch-cook schedule. Items the pantry already covers stay on the list, ticked off with a pantry icon, so a pantry that's behind can't make you miss anything; untick one if you still need to buy it. Items the pantry only partly covers show the full amount with a note of what's at home. **Check all**, **Uncheck all** and **Add checked to pantry** make putting the shopping away quick. With money-saving planning turned on, the planner orders each week's meals so recipes share fresh ingredients. That means fewer packages and less waste, without changing variety or favorites.
+The weekly shopping list is grouped by aisle (food groups) and adds up the exact portions on the calendar, leftovers included, with a batch-cook schedule alongside. Items the pantry already covers stay on the list, ticked off with a pantry icon, so an out-of-date pantry can't make you miss something. If the pantry only covers part of an item, the list shows the full amount and notes what's at home. **Add checked to pantry** puts away everything you bought in one go. With money-saving planning on, each week's meals are ordered so recipes share fresh ingredients, which means fewer packages and less waste without changing variety or favorites.
 
 ![Grocery list](docs/screenshots/grocery.png)
 
 ### Pantry
 
-The Pantry page keeps track of the food you have at home, with amounts and use-by dates. Items are added by scanning, by hand, or from the shopping list. New items get a typical use-by date for that kind of food, which you can change. As each planned day passes, its meals are taken out of the pantry automatically, soonest-expiring first. Anything within two weeks of its use-by date is listed under **Expiring soon**, with a count on the Pantry menu item. The pantry can be searched and sorted by aisle, name, use-by date or when items were added.
+The pantry keeps track of the food you have at home, with amounts and use-by dates. Items come in from scanning, the shopping list or by hand, and each one gets a typical use-by date for that kind of food, which you can change. As each planned day passes, its meals come out of the pantry automatically, soonest-expiring first. Anything within two weeks of its use-by date shows under **Expiring soon**, with a count on the Pantry menu item.
 
 ![Pantry](docs/screenshots/pantry.png)
 
+### Barcode scanning
+
+On a phone, **Scan** reads the barcode on packaged food (EAN-13, UPC-A, EAN-8 and UPC-E) and looks the product up on [Open Food Facts](https://world.openfoodfacts.org). The first person to scan a product checks the name, nutrition and package size before it's added, and after that everyone on the server can find it by name, brand or barcode. Products that aren't on Open Food Facts can be entered from the label, and whoever added a product, or an administrator, can correct it later.
+
+Where you scan decides what happens:
+
+- **Dashboard, calendar, day view and Foods & recipes** (on a phone: Today and the **+** button): the product is added to the day as an extra food with one of the meals. It counts toward the day's macros, and the rest of the day's portions shrink to make room. **Add food** does the same without the camera.
+- **Pantry:** each scan adds a package straight to the pantry, so you can scan a whole bag of groceries in a row.
+
+The live camera view needs HTTPS (or `localhost`). Over plain HTTP, Scan asks for a photo of the barcode instead. Android Chrome uses the phone's built-in barcode reader; other browsers, including Safari on iPhone, use the app's own decoder.
+
+![Adding a scanned product](docs/screenshots/barcode-product.png)
+
+### Importing recipes
+
+**Import recipe** on the Foods & recipes page brings in a recipe from a web link or from Mealie via its API. Link import works with any site that publishes standard recipe data, which covers most recipe sites. For Mealie, an administrator adds the server address and an API token under Settings → API connections, and then everyone can search it and import several recipes at once.
+
+Each ingredient is matched to a food in the database, and its amount is converted to grams, milliliters or items. Every import opens for review before it's saved. Anything that couldn't be worked out, like an ingredient with no matching food, a missing amount, the meal or the number of servings, is highlighted and has to be filled in first, and uncertain matches are marked for you to check. Your corrections are remembered for next time. If a page has no recipe data, you can paste the ingredient list instead.
+
+![Recipe import review](docs/screenshots/recipe-import.png)
+
 ### Meal-plan sync
 
-Two users can sync their meal plans from Account settings. One sends a request and picks which meals to share, and the other accepts. The shared meals are then re-planned together using only recipes both people can eat, and both people's favorites. Portions stay sized to each person's own targets, while the shopping list and batch-cook schedule cover both.
+Meal-plan sync allows two people to sync their meal plans from Account settings. One sends a request and picks which meals to share, and the other accepts. The shared meals are then re-planned together using only recipes you can both eat, with both of your favorites accounted for. Portions stay sized to each person's own targets, while the shopping list and batch-cook schedule cover you both.
 
-When either person changes a shared meal, it changes on their plan right away and is sent to the other person to accept or decline. A declined change means you each keep your own meal that day. A Sync button with a count of pending changes appears on the relevant pages while a sync is active. Either person can change which meals are shared (the other has to approve) or unsync at any time. Synced users can also choose to share one pantry in their sync settings. Both people's items move into it, scans and edits update it for both, and if sharing is turned off, each person keeps a copy.
+When either of you changes a shared meal, it changes on your plan right away and goes to the other person to accept or decline. If they decline, you each keep your own meal that day. While a sync is active, a Sync button on the relevant pages shows how many changes are waiting. Either of you can change which meals are shared (the other has to approve) or unsync at any time. You can also share one pantry from the sync settings: both people's items move into it and scans and edits update it for both. If you stop sharing, you each keep a copy.
 
 ![Sync panel](docs/screenshots/sync-panel.png)
 
-### Progress
-
-Charts for body weight (with a 7-day average and the plan line), body fat and lean mass, and a strength chart per exercise with estimated one-rep max and PR detection.
-
-![Progress](docs/screenshots/progress.png)
-
 ### Gym cards
 
-Add your gym membership card in Settings → Gym cards, or from the dashboard, and its barcode shows on the dashboard for check-in. Scan the barcode on the card or key tag, or type the number. Code 128, Code 39, Codabar, Interleaved 2 of 5, EAN/UPC and QR codes are supported. Scanning picks the type automatically; when you type the number, Automatic works with most gym scanners, or you can choose the type your card uses. Tap the barcode for a full-screen view that keeps the screen awake. You can keep several cards and switch between them on the dashboard. QR codes can be scanned from the card only on phones with a built-in barcode reader, such as Android; on other phones, type the text instead.
+Add your gym membership card in Settings → Gym cards or from the dashboard, and its barcode shows on the dashboard for check-in. Scan the barcode on the card or key tag, or type the number. Code 128, Code 39, Codabar, Interleaved 2 of 5, EAN/UPC and QR codes are supported. Scanning detects the type; if you type the number, Automatic works with most gym scanners, or you can pick the type your card uses. Tapping the barcode shows it full screen and keeps the screen awake, and on a phone **Check in** at the top of Today does the same. You can keep several cards and switch between them. QR codes can only be scanned on Android, where the browser has a built-in barcode reader. iPhone browsers don't have one, so the QR code's string has to be entered manually.
 
 ![Gym card](docs/screenshots/gym-card.png)
 
+### Compact phone UI
+
+Phones get a dedicated compact UI with five tabs along the bottom instead of the sidebar: Today, Plan, +, Kitchen and You.
+
+- **Today** puts the dashboard and the day view on one page. Check in at the gym, log your morning weigh-in, start the workout and see a progress summary that opens the full Progress page. Meals can be swapped from a searchable list with your favorites first, and **Customize Today** sets which panels show and in what order.
+- **Plan** has the calendar, the workout plan and the diet plan.
+- **Kitchen** has the shopping list, pantry, recipes and meal-prep schedule. The list is split into To buy, In the cart and At home, and once your shopping is done, one button puts the whole cart in the pantry. Things the pantry covers wait under At home, with a **Need it** button in case the pantry is out of date.
+- **You** has your progress, PRs, gym cards and settings.
+- **+** scans or adds food, logs your weight, shows your gym card, adds to the pantry or starts the workout from any tab.
+
+![FORGE 90 on a phone](docs/screenshots/phone.png)
+
 ### Accounts
 
-There is no public sign-up. An administrator invites people by email, and the invite link works once and expires after 7 days. Users can reset a forgotten password by email (the link lasts 30 minutes). Accounts lock after repeated failed sign-ins, and the owner is emailed a reset link. Each user can manage their profile and profile picture, password and signed-in devices, export or import their data, and delete their account.
+An administrator invites new users from Admin → Users. Each invite link works once and expires after 7 days. A forgotten password can be reset by email (the link lasts 30 minutes). Accounts lock after repeated failed sign-ins, and the owner is emailed a reset link. Everyone can manage their profile, profile picture, password and signed-in devices, export or import their data, and delete their account.
 
 ### Admin console
 
-- **Users:** invite people, resend or revoke invites, grant or remove admin rights, unlock accounts, send reset links, set temporary passwords, and delete accounts.
+- **Users:** invite people, resend or revoke invites, grant or remove admin rights, unlock accounts, send reset links, set temporary passwords and delete accounts.
 - **Security:** password rules, lockout, session length and Require HTTPS.
-- **App settings:** the app name (used in emails and the browser tab) and the app address used in email links.
-- **Email:** SMTP settings, with a test send.
+- **App settings:** the app name (used in emails and the browser tab) and the address used in email links.
+- **Email:** SMTP settings, with a test send function.
 - **Server & proxy:** checks how the current connection reaches the app (HTTPS, the client IP it sees, secure cookies) and points out any proxy settings that need changing.
 - **Activity log** and **Data & backup:** a filterable log of sign-ins and admin actions, and a full JSON export.
 
@@ -135,13 +150,13 @@ There is no public sign-up. An administrator invites people by email, and the in
 
 ## Installation
 
-The image is published to GitHub Container Registry:
+GitHub Container Registry:
 
 ```
 ghcr.io/oroshi-zz/forge_90:latest
 ```
 
-The container listens on port `8090`. Mount `/app/data` to persistent storage. An Unraid template is included at `unraid/forge90.xml`.
+The default listening port is `8090`. An Unraid template is included at `unraid/forge90.xml`.
 
 ### Configuration
 
@@ -166,7 +181,10 @@ The container listens on port `8090`. Mount `/app/data` to persistent storage. A
 | `COOKIE_SECURE` | `auto` | Marks the session cookie Secure when the request is HTTPS. |
 | `TZ` | `UTC` | Time zone used in emails. |
 
-The email settings can also be changed from Admin → Email. Invites and password resets are sent by email, so set up email before inviting anyone.
+The email settings can also be changed from Admin → Email.
+
+> [!IMPORTANT]
+> Configuring SMTP is required to send user invites and password resets. It's recommended to have SMTP configured even if you only have one user just in case of accidental lockout.
 
 ### First sign-in
 
@@ -215,4 +233,6 @@ FORGE 90 is licensed under the GNU Affero General Public License v3.0 or later. 
 
 Background photos are from Unsplash: Victor Freitas, Jorge Alberto Vega Barrera, Mina Rad, Shan A. Rajpoot, Rodrigo Rodrigues, Jason Briscoe, Vitaly Gariev, Jakob Owens, Alina Rubo, and Jonathan Borba for the sign-in page. Food values are approximations based on USDA FoodData Central. Product data for scanned barcodes comes from Open Food Facts contributors under the Open Database License. Recipe links go to their original authors.
 
-FORGE 90 is a planning tool, not medical advice.
+## Disclaimer
+
+Nothing in FORGE 90 is medical advice. Consult a medical professional before following its exercise and nutrition recommendations.

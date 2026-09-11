@@ -327,7 +327,7 @@ Object.assign(ACT, {
   'gym-full': el => gymFull(el.dataset.id),
   'gym-scan': () => { const f = $('#modal form[data-form="gym-card"]'); const draft = Object.assign({}, GC, f ? { name: f.name.value, code: f.code.value, fmt: f.fmt.value } : {}); openScanner('gym', null, draft); },
   'gym-type': () => { const d = SCN && SCN.draft; scanStop(); SCN = null; gymCardModal(d); },
-  'gym-manage': () => { UI._scrollTo = 'gym-cards'; location.hash = '#/settings'; }
+  'gym-manage': () => { if (isPhone()) { location.hash = '#/settings/gym'; return; } UI._scrollTo = 'gym-cards'; location.hash = '#/settings'; }
 });
 document.addEventListener('submit', e => { const f = e.target; if (f.dataset && f.dataset.form === 'gym-card') { e.preventDefault(); gymSave(f); } });
 document.addEventListener('input', e => { const t = e.target; if (t && t.dataset && t.dataset.input === 'gc-code' && GC) { GC.code = t.value; const p = $('#gc-prev'); if (p) p.innerHTML = gymPreviewHTML(); } });
