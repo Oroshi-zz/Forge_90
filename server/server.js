@@ -8,6 +8,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const net = require('net');
 const { sendMail } = require('./lib/smtp');
 const MAIL = require('./lib/email');
 
@@ -30,7 +31,19 @@ const PORT = +ENV.PORT || 8090;
 const HOST = ENV.HOST || '0.0.0.0';
 const DATA = path.resolve(ENV.DATA_DIR || path.join(__dirname, 'data'));
 const PUBLIC = path.join(__dirname, 'public');
-const TRUST_PROXY = /^(1|true|yes)$/i.test(ENV.TRUST_PROXY || '');
+/* Reverse proxy (Nginx Proxy Manager, SWAG, Traefik…). TRUST_PROXY:
+     unset / false  → no proxy: use the connecting address, ignore X-Forwarded-* headers
+     true           → trust whatever connects (use the address the proxy added — the last X-Forwarded-For entry)
+     IPs / CIDRs    → only trust X-Forwarded-* from these proxies, e.g. 172.18.0.0/16 (recommended) */
+const TP_RAW = String(ENV.TRUST_PROXY || '').trim();
+const TP_MODE = /^(1|true|yes|on)$/i.test(TP_RAW) ? 'all' : /^(0|false|no|off|)$/i.test(TP_RAW) ? 'off' : 'list';
+const TP_LIST = new net.BlockList(); const TP_BAD = [];
+if (TP_MODE === 'list') TP_RAW.split(/[\s,]+/).filter(Boolean).forEach(x => {
+  const [a, p] = x.split('/'); const fam = net.isIP(a); const bits = p == null ? null : +p;
+  if (!fam || (bits != null && !(Number.isInteger(bits) && bits >= 0 && bits <= (fam === 6 ? 128 : 32)))) { TP_BAD.push(x); return; }
+  if (bits == null) TP_LIST.addAddress(a, fam === 6 ? 'ipv6' : 'ipv4'); else TP_LIST.addSubnet(a, bits, fam === 6 ? 'ipv6' : 'ipv4');
+});
+if (TP_BAD.length) console.warn('  TRUST_PROXY: ignoring', TP_BAD.join(', '), '(not an IP address or CIDR range)');
 const RESET_MINUTES = 30;                        // password-reset links expire after 30 minutes
 const INVITE_DAYS = 7;                           // account invites expire after 7 days
 const VERSION = (() => { for (const f of [path.join(__dirname, 'VERSION'), path.join(__dirname, '..', 'VERSION')]) { try { return 'v' + fs.readFileSync(f, 'utf8').trim().replace(/^v/i, ''); } catch (e) { /* try next */ } } return 'v1.0'; })();
@@ -42,7 +55,7 @@ const DBF = path.join(DATA, 'db.json');
 const DEFAULT_SETTINGS = () => ({
   appName: 'FORGE 90',
   appUrl: ENV.APP_URL || '',
-  security: { pwMinLength: 10, pwRequireMix: true, lockThreshold: 5, lockMinutes: 15, autoResetOnLock: true, sessionHours: 12, rememberDays: 30, notifyPasswordChange: true },
+  security: { pwMinLength: 10, pwRequireMix: true, lockThreshold: 5, lockMinutes: 15, autoResetOnLock: true, sessionHours: 12, rememberDays: 30, notifyPasswordChange: true, requireHttps: true },
   email: {},        // only the values an admin changed in Admin → Email; everything else comes from the environment (.env / Docker)
   defaults: { theme: 'dark' }
 });
@@ -92,8 +105,26 @@ function audit(type, { userId = null, actorId = null, ip = null, detail = '' } =
   if (db.audit.length > 5000) db.audit.splice(0, db.audit.length - 5000);
   saveDb();
 }
-function clientIp(req) { if (TRUST_PROXY && req.headers['x-forwarded-for']) return String(req.headers['x-forwarded-for']).split(',')[0].trim(); return (req.socket.remoteAddress || '').replace(/^::ffff:/, ''); }
-function isHttps(req) { return !!req.socket.encrypted || (TRUST_PROXY && /https/i.test(req.headers['x-forwarded-proto'] || '')); }
+const normIp = ip => String(ip || '').trim().replace(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/, '$1');
+function ipTrusted(ip) { if (TP_MODE === 'all') return true; if (TP_MODE !== 'list') return false; ip = normIp(ip); const f = net.isIP(ip); return !!f && TP_LIST.check(ip, f === 6 ? 'ipv6' : 'ipv4'); }
+const peerIp = req => normIp(req.socket.remoteAddress);
+const fromProxy = req => ipTrusted(peerIp(req));
+// The visitor's address. Entries a client puts in X-Forwarded-For itself come first, so read from the right: the proxy appends the real address last.
+function clientIp(req) {
+  const peer = peerIp(req); if (!fromProxy(req)) return peer;
+  const xff = String(req.headers['x-forwarded-for'] || '').split(',').map(normIp).filter(ip => net.isIP(ip));
+  if (!xff.length) { const xr = normIp(req.headers['x-real-ip']); return net.isIP(xr) ? xr : peer; }
+  if (TP_MODE === 'all') return xff[xff.length - 1];
+  for (let i = xff.length - 1; i >= 0; i--) if (!ipTrusted(xff[i])) return xff[i];      // step back past our own proxies
+  return xff[0];
+}
+function isHttps(req) { return !!req.socket.encrypted || (fromProxy(req) && /^https$/i.test(String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim())); }
+/* "Require HTTPS": plain-HTTP visits to any other address (e.g. http://192.168.1.10:8090) are sent to the https:// App address */
+function httpsTarget() { const u = String(db.settings.appUrl || ENV.APP_URL || '').trim().replace(/\/+$/, ''); return /^https:\/\/[^\s/]+/i.test(u) ? u : null; }
+const httpsEnvOff = () => /^(0|false|no|off)$/i.test(ENV.REQUIRE_HTTPS || '');
+function requireHttpsOn() { return !httpsEnvOff() && db.settings.security.requireHttps !== false && !!httpsTarget(); }
+const hostOf = u => { try { return new URL(u).host.toLowerCase(); } catch (e) { return ''; } };
+const isLoopback = ip => ip === '127.0.0.1' || ip === '::1';
 function baseUrl(req) { const u = (db.settings.appUrl || ENV.APP_URL || '').replace(/\/+$/, ''); return u || `${isHttps(req) ? 'https' : 'http'}://${req.headers.host}`; }
 function maskEmail(e) { const [a, d] = e.split('@'); return (a.length <= 2 ? a[0] + '*' : a[0] + '*'.repeat(Math.min(6, a.length - 2)) + a.slice(-1)) + '@' + d; }
 
@@ -527,7 +558,7 @@ function adminSettingsView() {
   const s = JSON.parse(JSON.stringify(db.settings)); const o = db.settings.email || {}; const eff = mailConfig();
   s.email = Object.assign({}, eff, { pass: '', passSet: !!eff.pass, passSource: o.pass ? 'admin' : ENV.SMTP_PASS ? 'env' : null, ready: emailReady(),
     source: Object.fromEntries(EMAIL_KEYS.map(k => [k, o[k] != null && o[k] !== '' ? 'admin' : 'env'])) });
-  s.resetMinutes = RESET_MINUTES; s.inviteDays = INVITE_DAYS; s.envAppUrl = ENV.APP_URL || ''; delete s.emailV2; return s;
+  s.resetMinutes = RESET_MINUTES; s.inviteDays = INVITE_DAYS; s.envAppUrl = ENV.APP_URL || ''; s.httpsTarget = httpsTarget(); s.httpsEnvOff = httpsEnvOff(); delete s.emailV2; return s;
 }
 route('GET', '/api/admin/settings', { admin: true }, async (req, res) => send(res, 200, adminSettingsView()));
 route('PATCH', '/api/admin/settings', { admin: true }, async (req, res, ctx) => {
@@ -544,6 +575,7 @@ route('PATCH', '/api/admin/settings', { admin: true }, async (req, res, ctx) => 
     if (x.sessionHours != null) q.sessionHours = int(x.sessionHours, 1, 168, 'Session length');
     if (x.rememberDays != null) q.rememberDays = int(x.rememberDays, 1, 365, '“Keep me signed in” length');
     if (x.notifyPasswordChange != null) q.notifyPasswordChange = !!x.notifyPasswordChange;
+    if (x.requireHttps != null) q.requireHttps = !!x.requireHttps;
     changed.push('security'); }
   if (b.email) { const x = b.email, q = s.email = s.email || {}; const d = emailDefaults();
     const put = (k, v) => { if (String(v) === String(d[k])) delete q[k]; else q[k] = v; };   // only store what differs from the environment
@@ -563,6 +595,15 @@ route('POST', '/api/admin/email/test', { admin: true }, async (req, res, ctx) =>
   try { await deliver(to, '', MAIL.simpleEmail({ title: 'FORGE 90 test email', heading: 'Email is working ✔', lines: ['This is a test from FORGE 90 → Admin → Email.', 'Password-reset emails will be sent from this account.'], buttonUrl: baseUrl(req), buttonLabel: 'Open FORGE 90', appUrl: baseUrl(req), appName: db.settings.appName }));
     audit('email_test', { actorId: ctx.me.u.id, ip: clientIp(req), detail: 'sent to ' + to }); send(res, 200, { ok: true, to }); }
   catch (e) { audit('email_test', { actorId: ctx.me.u.id, ip: clientIp(req), detail: 'FAILED: ' + e.message.slice(0, 200) }); err(502, e.message); }
+});
+route('GET', '/api/admin/proxy', { admin: true }, async (req, res) => {
+  const h = req.headers; const au = String(db.settings.appUrl || ENV.APP_URL || '').replace(/\/+$/, '');
+  send(res, 200, { peer: peerIp(req), clientIp: clientIp(req), trusted: fromProxy(req), trustMode: TP_MODE, trustRaw: TP_RAW, trustBad: TP_BAD,
+    headers: { xff: h['x-forwarded-for'] || null, xRealIp: h['x-real-ip'] || null, proto: h['x-forwarded-proto'] || null, host: h.host || null },
+    https: isHttps(req), cookieSecure: cookieSecure(req), cookieSetting: (ENV.COOKIE_SECURE || 'auto').toLowerCase(),
+    appUrl: au || null, appUrlSource: db.settings.appUrl ? 'admin' : ENV.APP_URL ? 'env' : null,
+    requireHttps: { setting: db.settings.security.requireHttps !== false, envOff: httpsEnvOff(), active: requireHttpsOn(), target: httpsTarget() },
+    hsts: isHttps(req) && requireHttpsOn(), port: PORT, host: HOST, version: VERSION });
 });
 route('GET', '/api/admin/audit', { admin: true }, async (req, res, ctx) => {
   const q = ctx.query; const lim = Math.min(1000, +q.limit || 300); let list = db.audit.slice().reverse();
@@ -587,6 +628,17 @@ route('GET', '/api/admin/backup', { admin: true }, async (req, res, ctx) => {
 /* ---------- dispatcher ---------- */
 async function handle(req, res) {
   const url = new URL(req.url, 'http://x'); const pathname = decodeURIComponent(url.pathname);
+  const secure = isHttps(req);
+  if (!secure && requireHttpsOn() && !isLoopback(peerIp(req)) && pathname !== '/api/health') {
+    const target = httpsTarget();
+    // Only redirect visits that came in on a different address; if the https hostname itself arrives as plain HTTP the proxy isn't
+    // passing X-Forwarded-Proto (or TRUST_PROXY is off) — redirecting would loop, so serve it and flag it in Admin → Server & proxy.
+    if (String(req.headers.host || '').toLowerCase() !== hostOf(target)) {
+      if (pathname.startsWith('/api/')) return send(res, 403, { error: `Use the secure address: ${target}`, httpsUrl: target });
+      res.writeHead(302, Object.assign({ Location: target + url.pathname + url.search, 'Cache-Control': 'no-store' }, SEC_HEADERS)); return res.end();
+    }
+  }
+  if (secure && requireHttpsOn()) res.setHeader('Strict-Transport-Security', 'max-age=15552000');
   if (!pathname.startsWith('/api/')) { if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405); return res.end(); } return serveStatic(req, res, pathname); }
   const r = routes.find(x => x.method === req.method && x.re.test(pathname));
   if (!r) return send(res, 404, { error: 'Not found' });

@@ -149,6 +149,7 @@ function renderAuth() {
       ${pwField('password', 'New password', 'new-password', 'data-meter="1"')}<div id="af-meter">${pwMeter('')}</div>${pwField('confirm', 'Confirm new password', 'new-password')}
       <button class="btn primary big" type="submit">Save and continue</button></form><div class="auth-foot"><a href="#" data-act="logout">Sign out</a></div>`; }
   else if (s.screen === 'down') body = `<div class="auth-ic warn">${icon('info')}</div><h1>Can’t reach the server</h1><p class="sub">FORGE 90 couldn’t connect to its server. Make sure it’s running, then try again.</p><button class="btn primary big" data-act="auth-retry" style="width:100%">Try again</button>`;
+  document.title = appTitle() + ({ login: ' · Sign in', invite: ' · Join', forgot: ' · Reset password', sent: ' · Check your email', reset: ' · Reset password', first: ' · Set up' }[s.screen] || '');
   $('#auth').innerHTML = `<div class="auth-card"><div class="auth-brand">${LOGO}<b class="wm">FORGE<em>90</em></b></div>${body}</div>
     ${c.appName && c.appName !== 'FORGE 90' ? `<div class="auth-legal">${esc(c.appName)}</div>` : ''}`;
   const f = $('#auth form input:not([type=checkbox])'); if (f && !s.noFocus) setTimeout(() => { const e = $('#auth input[name="email"]'); (s.screen === 'login' && e && e.value ? $('#auth input[name="password"]') : s.screen === 'invite' ? $('#auth input[name="password"]') : f).focus(); }, 30);
@@ -280,7 +281,7 @@ document.addEventListener('submit', async e => { const f = e.target; if (!f.data
 
 /* ---------- admin console (#/admin) ---------- */
 const ADM = { tab: 'overview', users: null, invites: null, settings: null, stats: null, audit: null, q: '', filter: 'all', evType: '', evUser: '' };
-const ADM_TABS = [['overview', 'Overview', 'grid'], ['users', 'Users', 'users'], ['security', 'Security', 'lock'], ['app', 'App settings', 'sliders'], ['email', 'Email', 'mail'], ['activity', 'Activity log', 'activity'], ['data', 'Data & backup', 'download']];
+const ADM_TABS = [['overview', 'Overview', 'grid'], ['users', 'Users', 'users'], ['security', 'Security', 'lock'], ['app', 'App settings', 'sliders'], ['email', 'Email', 'mail'], ['proxy', 'Server & proxy', 'shield'], ['activity', 'Activity log', 'activity'], ['data', 'Data & backup', 'download']];
 function viewAdmin() {
   if (AUTH.mode !== 'server' || !AUTH.user) return serverOnly('Admin');
   if (!isAdmin()) return `<div class="page-head"><div class="t"><h1>Admin</h1></div></div><div class="card"><div class="note warn">${icon('lock')}<span>Only administrators can open the admin console.</span></div></div>`;
@@ -291,12 +292,13 @@ function viewAdmin() {
 async function adminAfter(force) {
   if (!isAdmin()) return; const t = ADM.tab;
   try {
-    const need = { overview: ['stats', 'users', 'settings', 'invites'], users: ['users', 'invites'], security: ['settings'], app: ['settings'], email: ['settings'], activity: ['audit', 'users'], data: ['stats'] }[t];
-    await Promise.all(need.filter(k => force || !ADM[k] || k === 'stats' || k === 'audit' || k === 'invites' || (k === 'users' && t === 'users')).map(async k => {
+    const need = { overview: ['stats', 'users', 'settings', 'invites'], users: ['users', 'invites'], security: ['settings'], app: ['settings'], email: ['settings'], proxy: ['proxy', 'settings'], activity: ['audit', 'users'], data: ['stats'] }[t];
+    await Promise.all(need.filter(k => force || !ADM[k] || k === 'stats' || k === 'audit' || k === 'invites' || k === 'proxy' || (k === 'users' && t === 'users')).map(async k => {
       if (k === 'users') ADM.users = (await api('GET', '/api/admin/users')).users;
       if (k === 'invites') ADM.invites = (await api('GET', '/api/admin/invites')).invites;
       if (k === 'settings') ADM.settings = await api('GET', '/api/admin/settings');
       if (k === 'stats') ADM.stats = await api('GET', '/api/admin/stats');
+      if (k === 'proxy') ADM.proxy = await api('GET', '/api/admin/proxy');
       if (k === 'audit') ADM.audit = (await api('GET', `/api/admin/audit?limit=400${ADM.evType ? '&type=' + ADM.evType : ''}${ADM.evUser ? '&user=' + ADM.evUser : ''}`)).events;
     }));
   } catch (e) { toast(e.message); if (e.status === 403 || e.status === 401) { AUTH.user && (AUTH.user.role = 'user'); return render(); } }
@@ -344,6 +346,7 @@ function admTabHTML() {
       ${admNum('Minimum password length', 'pwMinLength', s.pwMinLength, 8, 64, 'characters')}${admChk('Require letters and a number or symbol', 'pwRequireMix', s.pwRequireMix)}
       ${admNum('Failed sign-ins before lockout', 'lockThreshold', s.lockThreshold, 3, 20, 'attempts')}${admNum('Lockout lasts', 'lockMinutes', s.lockMinutes, 1, 1440, 'minutes')}
       ${admChk('When an account locks, email its owner a password-reset link', 'autoResetOnLock', s.autoResetOnLock)}${admChk('Email users when their password is changed or reset', 'notifyPasswordChange', s.notifyPasswordChange)}
+      ${admChk(`<b>Require HTTPS</b> — send plain-HTTP visits to the secure App address<br><span class="tiny muted">${st.httpsEnvOff ? 'Turned off by <code>REQUIRE_HTTPS=false</code> in the container settings.' : st.httpsTarget ? `Visits like <code>http://&lt;server-ip&gt;:8090</code> go to <b>${esc(st.httpsTarget)}</b>, and browsers are told to always use HTTPS.` : 'Takes effect once the App address starts with https:// (Admin → App settings).'} See <a href="#" data-act="adm-tab" data-v="proxy">Server &amp; proxy</a>.</span>`, 'requireHttps', s.requireHttps !== false)}
       ${admNum('Signed-in session lasts (idle)', 'sessionHours', s.sessionHours, 1, 168, 'hours')}${admNum('“Keep me signed in” lasts', 'rememberDays', s.rememberDays, 1, 365, 'days')}
       <div class="field"><label>Password-reset links expire after</label><div class="row"><input class="inp" value="${st.resetMinutes}" disabled style="max-width:90px"><span class="small muted">minutes · single use</span></div></div></div>
       <div class="note" style="margin-top:14px">${icon('info')}<span>Passwords are stored as salted scrypt hashes; reset links are random 256-bit tokens stored hashed, and every password change signs the account out everywhere else. New rules apply the next time someone chooses a password.</span></div>
@@ -378,6 +381,7 @@ function admTabHTML() {
       <select class="inp" style="max-width:240px" data-input="adm-evuser"><option value="">All users</option>${users.map(u => `<option value="${u.id}" ${ADM.evUser === u.id ? 'selected' : ''}>${esc(u.email)}</option>`).join('')}</select><button class="btn" data-act="adm-refresh">${icon('loop')}Refresh</button><span class="tiny muted" style="margin-left:auto">Newest first · last 400 matching events</span></div>
       <div class="scroll-x"><table class="tbl"><thead><tr><th>When</th><th>Event</th><th>Account</th><th>By</th><th>IP</th><th>Details</th></tr></thead><tbody>${rows || '<tr><td colspan="6" class="muted">No events.</td></tr>'}</tbody></table></div></div>`;
   }
+  if (t === 'proxy') return admProxyHTML();
   if (t === 'data') { if (!ADM.stats) return spin; const s = ADM.stats;
     return `<div class="grid g2"><div class="card"><div class="card-h"><h2>Full backup</h2></div><div class="small sub">Downloads every account (without passwords), each account’s plan data and the app settings (without the email password) as one JSON file.</div>
       <div class="row" style="margin-top:12px"><button class="btn primary" data-act="adm-backup">${icon('download')}Download backup</button></div>
@@ -385,11 +389,52 @@ function admTabHTML() {
       <div class="card"><div class="card-h"><h2>Server</h2></div><table class="tbl"><tbody><tr><td>Data folder</td><td class="small"><code>${esc(s.dataDir)}</code></td></tr><tr><td>Stored data</td><td class="num">${kb(s.dataBytes)}</td></tr><tr><td>Accounts</td><td class="num">${s.users} · ${s.invites || 0} invited · ${s.disabled} disabled</td></tr><tr><td>FORGE 90</td><td>${esc(s.version || APP_VERSION)}</td></tr><tr><td>Node.js</td><td>${esc(s.node)}</td></tr><tr><td>Up for</td><td>${s.uptime > 86400 ? fmt(s.uptime / 86400, 1) + ' days' : s.uptime > 3600 ? fmt(s.uptime / 3600, 1) + ' h' : Math.round(s.uptime / 60) + ' min'}</td></tr></tbody></table></div></div>`; }
   return '';
 }
+/* Admin → Server & proxy: what the server sees for this very request, with fixes for common reverse-proxy mistakes */
+const urlHost = u => { try { return new URL(u).host.toLowerCase(); } catch (e) { return ''; } };
+function trustSuggestion(peer) { const m = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(peer || ''); if (m && +m[1] === 172 && +m[2] >= 16 && +m[2] <= 31) return `${m[1]}.${m[2]}.0.0/16`; return peer || 'your-proxy-ip'; }
+function admProxyHTML() {
+  const p = ADM.proxy; if (!p) return spin;
+  const via = !!(p.headers.xff || p.headers.proto || p.headers.xRealIp); const reqHost = String(p.headers.host || '').toLowerCase(); const appHost = urlHost(p.appUrl);
+  const sug = esc(trustSuggestion(p.peer)); const code = v => `<code>${esc(v)}</code>`; const checks = []; const add = (st, title, text) => checks.push({ st, title, text });
+  if (p.https) add('ok', 'Connected over HTTPS', via ? 'Your proxy passes <code>X-Forwarded-Proto: https</code> and FORGE 90 trusts it.' : 'This connection is encrypted.');
+  else if (via && !p.trusted) add('bad', 'HTTPS isn’t detected', `Your proxy at ${code(p.peer)} sends forwarded headers, but FORGE 90 isn’t set to trust it. Set ${code('TRUST_PROXY=' + trustSuggestion(p.peer))} in the Unraid template, then restart the container.`);
+  else if (appHost && reqHost === appHost) add('bad', 'HTTPS isn’t detected', `You opened ${code(reqHost)}, but the request reached FORGE 90 as plain HTTP. In Nginx Proxy Manager, give the proxy host an SSL certificate and turn on <b>Force SSL</b>.`);
+  else add('warn', 'Plain HTTP', `You’re connected straight to ${code(reqHost)} without encryption, so passwords cross your network in plain text. Use your https:// address.`);
+  if (via && p.trusted) add(p.trustMode === 'all' ? 'warn' : 'ok', 'Visitor IP addresses', `FORGE 90 sees you as <b>${esc(p.clientIp)}</b>, through your proxy at ${code(p.peer)}.` + (p.trustMode === 'all' ? `<br><code>TRUST_PROXY=true</code> trusts forwarded headers from anything that can reach port ${p.port}, so someone on your network could fake their address. Lock it to your proxy: ${code('TRUST_PROXY=' + trustSuggestion(p.peer))}.` : ''));
+  else if (via) add('bad', 'Visitor IP addresses', `Every visitor looks like ${code(p.peer)} (your proxy), so sign-in limits and lockouts would hit everyone at once and the activity log shows the proxy. Set ${code('TRUST_PROXY=' + trustSuggestion(p.peer))}.`);
+  else add('ok', 'Visitor IP addresses', `Direct connection — FORGE 90 sees you as <b>${esc(p.clientIp)}</b>.`);
+  if (!p.appUrl) add('warn', 'App address', 'Not set, so links in invite and reset emails use whatever address each request came in on. Set <code>APP_URL</code> (or Admin → App settings) to your https:// address.');
+  else if (!/^https:/i.test(p.appUrl)) add('warn', 'App address', `${code(p.appUrl)} isn’t https. Change it to your https:// address so email links are secure and Require HTTPS can work.`);
+  else if (appHost !== reqHost) add('info', 'App address', `Emails link to <b>${esc(p.appUrl)}</b>; right now you’re using ${code(reqHost)}.`);
+  else add('ok', 'App address', `Invite and reset emails link to <b>${esc(p.appUrl)}</b>${p.appUrlSource === 'admin' ? ' (set in App settings)' : ''}.`);
+  if (p.https && p.cookieSecure) add('ok', 'Secure sign-in cookie', 'The session cookie is only ever sent over HTTPS.');
+  else if (p.https) add('warn', 'Secure sign-in cookie', `<code>COOKIE_SECURE=${esc(p.cookieSetting)}</code> — remove it or set it to <code>auto</code>.`);
+  else add('info', 'Secure sign-in cookie', 'Turns on automatically once you connect over HTTPS.');
+  const rh = p.requireHttps;
+  if (rh.envOff) add('info', 'Require HTTPS', 'Turned off by <code>REQUIRE_HTTPS=false</code> in the container settings.');
+  else if (!rh.setting) add('warn', 'Require HTTPS', 'Off (Admin → Security), so plain-HTTP visits by IP address are allowed.');
+  else if (!rh.target) add('info', 'Require HTTPS', 'Waiting for an https:// App address. Once it’s set, plain-HTTP visits such as <code>http://&lt;server-ip&gt;:8090</code> are sent there.');
+  else add('ok', 'Require HTTPS', `Plain-HTTP visits to any other address are sent to <b>${esc(rh.target)}</b>${p.hsts ? ', and browsers are told to always use HTTPS (HSTS).' : '.'}`);
+  if (p.trustBad.length) add('bad', 'TRUST_PROXY', `Ignored because they aren’t IP addresses or CIDR ranges: ${p.trustBad.map(code).join(', ')}.`);
+  const ic = { ok: 'check', warn: 'info', bad: 'x', info: 'info' };
+  const bad = checks.filter(c => c.st === 'bad' || c.st === 'warn').length;
+  const rows = [['Connected from', p.peer], ['X-Forwarded-For', p.headers.xff], ['X-Forwarded-Proto', p.headers.proto], ['X-Real-IP', p.headers.xRealIp], ['Host', p.headers.host], ['TRUST_PROXY', p.trustRaw || '(not set)'], ['Listening on', `${p.host}:${p.port}`], ['Version', p.version]];
+  const appUrlEx = p.appUrl && /^https:/i.test(p.appUrl) ? p.appUrl : 'https://forge.yourdomain.com';
+  return `<div class="grid g-split"><div class="card"><div class="card-h"><h2>Connection checks</h2>${bad ? `<span class="pill warn-pill">${bad} to fix</span>` : '<span class="pill acc">All good</span>'}<button class="btn sm ghost" style="margin-left:auto" data-act="adm-refresh">${icon('loop')}Re-check</button></div>
+      <div class="px-checks">${checks.map(c => `<div class="px-row ${c.st}"><span class="px-ic">${icon(ic[c.st])}</span><div><b>${c.title}</b><div class="small sub">${c.text}</div></div></div>`).join('')}</div>
+      <div class="tiny muted" style="margin-top:10px">Checks describe this browser’s connection. Open this page through your https:// address to test the proxy.</div></div>
+    <div><div class="card"><div class="card-h"><h2>What the server received</h2></div><table class="tbl"><tbody>${rows.map(([k, v]) => `<tr><td class="small">${k}</td><td class="small">${v ? `<code>${esc(v)}</code>` : '<span class="muted">—</span>'}</td></tr>`).join('')}</tbody></table></div>
+      <div style="height:16px"></div><div class="card"><div class="card-h"><h2>Nginx Proxy Manager setup</h2></div><ol class="small sub px-steps">
+        <li><b>Proxy host:</b> domain <code>${esc(urlHost(appUrlEx))}</code>, scheme <code>http</code>, forward to the FORGE 90 container (its name or IP) on port <code>${p.port}</code>. Turn on <b>Block Common Exploits</b>.</li>
+        <li><b>SSL tab:</b> pick your certificate and turn on <b>Force SSL</b>, <b>HTTP/2</b> and <b>HSTS</b>.</li>
+        <li><b>Unraid template:</b> <code>APP_URL=${esc(appUrlEx)}</code> and <code>TRUST_PROXY=${via ? sug : '&lt;proxy IP or subnet&gt;'}</code>, then apply.</li>
+        <li><b>Best:</b> put FORGE 90 and Nginx Proxy Manager on the same custom Docker network and remove FORGE 90’s port mapping, so it can only be reached through the proxy.</li></ol></div></div></div>`;
+}
 const ENV_HINT = () => ' (falls back to the environment)';
 const admNum = (label, name, v, lo, hi, unit) => `<div class="field"><label>${label}</label><div class="row" style="gap:8px;flex-wrap:nowrap"><input class="inp" type="number" name="${name}" value="${v}" min="${lo}" max="${hi}" style="max-width:110px"><span class="small muted">${unit}</span></div></div>`;
 const admChk = (label, name, v) => `<label class="adm-chk"><input type="checkbox" name="${name}" ${v ? 'checked' : ''}><span>${label}</span></label>`;
 const admSwitch = (label, key, v) => `<label class="adm-chk"><input type="checkbox" data-input="adm-quick" data-k="${key}" ${v ? 'checked' : ''}><span>${label}</span></label>`;
-async function admSave(patch, msg) { try { ADM.settings = await api('PATCH', '/api/admin/settings', patch); toast(msg || 'Settings saved'); const r = $('#adm-root'); if (r) r.innerHTML = admTabHTML(); } catch (e) { toast(e.message); } }
+async function admSave(patch, msg) { try { ADM.settings = await api('PATCH', '/api/admin/settings', patch); AUTH.config = Object.assign({}, AUTH.config, { appName: ADM.settings.appName }); document.title = appTitle() + ' · Admin'; toast(msg || 'Settings saved'); const r = $('#adm-root'); if (r) r.innerHTML = admTabHTML(); } catch (e) { toast(e.message); } }
 async function admUserAction(id, method, path, body, msg) { try { const r = await api(method, `/api/admin/users/${id}${path}`, body); if (msg) toast(typeof msg === 'function' ? msg(r) : msg); ADM.users = (await api('GET', '/api/admin/users')).users; ADM.stats = null; const rt = $('#adm-root'); if (rt) rt.innerHTML = admTabHTML(); if ($('#modal .adm-user-modal')) admUserModal(id); if (ADM.tab === 'overview') adminAfter(); return r; } catch (e) { toast(e.message); return null; } }
 function admUserModal(id) {
   const u = (ADM.users || []).find(x => x.id === id); if (!u) return closeModal(); const me = u.id === AUTH.user.id;
@@ -451,7 +496,7 @@ Object.assign(ACT, {
 document.addEventListener('submit', async e => {
   const f = e.target; const k = f.dataset && f.dataset.form; if (!k || !/^adm-/.test(k)) return; e.preventDefault();
   const fd = new FormData(f); const g = n => fd.get(n); const on = n => !!f.elements[n] && f.elements[n].checked;
-  if (k === 'adm-security') return admSave({ security: { pwMinLength: +g('pwMinLength'), pwRequireMix: on('pwRequireMix'), lockThreshold: +g('lockThreshold'), lockMinutes: +g('lockMinutes'), autoResetOnLock: on('autoResetOnLock'), notifyPasswordChange: on('notifyPasswordChange'), sessionHours: +g('sessionHours'), rememberDays: +g('rememberDays') } }, 'Security settings saved');
+  if (k === 'adm-security') return admSave({ security: { pwMinLength: +g('pwMinLength'), pwRequireMix: on('pwRequireMix'), lockThreshold: +g('lockThreshold'), lockMinutes: +g('lockMinutes'), autoResetOnLock: on('autoResetOnLock'), notifyPasswordChange: on('notifyPasswordChange'), requireHttps: on('requireHttps'), sessionHours: +g('sessionHours'), rememberDays: +g('rememberDays') } }, 'Security settings saved');
   if (k === 'adm-app') return admSave({ appName: g('appName'), appUrl: g('appUrl'), defaults: { theme: g('theme') } }, 'App settings saved');
   if (k === 'adm-email') { const p = { host: g('host'), port: +g('port'), security: g('security'), user: g('user'), fromName: g('fromName'), fromEmail: g('fromEmail') }; if (g('pass')) p.pass = g('pass'); if (on('clearPass')) p.clearPass = true; return admSave({ email: p }, 'Email settings saved — send a test to check them'); }
   if (k === 'adm-profile') return admUserAction(f.dataset.id, 'PATCH', '', { name: g('name'), email: g('email') }, 'Profile saved');

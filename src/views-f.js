@@ -24,7 +24,7 @@ function showOnboarding(done) {
       <div class="auth-hero-copy"><div class="auth-brand">${LOGO}<b class="wm">FORGE<em>90</em></b></div><p>A few questions and your training plan, calorie targets and meals are built around you.</p></div>
       <a class="auth-credit" href="${AUTH_PHOTO.page}" target="_blank" rel="noopener noreferrer">Photo · ${AUTH_PHOTO.who} / Unsplash</a></section>
     <main id="onb" class="auth-wrap"></main></div><div id="tip"></div><div id="toast"></div>`;
-  applyTheme(); renderOnboarding();
+  applyTheme(); document.title = appTitle() + ' · Welcome'; renderOnboarding();
 }
 function obApplyDraft() {           // live preview uses the real engine, so push the answers into settings (saved only on finish)
   const st = S.settings; const w = obNum(OB.w), bf = obBF(), g = obNum(OB.goal);

@@ -325,6 +325,7 @@ function sideFoot() {
   const tg = $('#side-toggle'); if (tg) { const c = !!UI.navCollapsed; tg.innerHTML = icon(c ? 'sideR' : 'sideL'); tg.title = c ? 'Expand menu' : 'Collapse menu'; tg.setAttribute('aria-label', tg.title); tg.setAttribute('aria-expanded', String(!c)); }
 }
 function effTheme() { const t = document.documentElement.dataset.theme; return t === 'system' ? (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : t; }
+const appTitle = () => (typeof AUTH !== 'undefined' && AUTH.config && AUTH.config.appName) || 'FORGE 90';   // Admin → App settings → App name
 function render() {
   if (!$('#view')) return;                                  // sign-in screen is showing
   const h = location.hash.replace(/^#\/?/, ''); const [page, arg] = h.split('/');
@@ -352,7 +353,7 @@ function render() {
   $('#view').innerHTML = html; sideFoot(); hideTip(); fpAfter();
   if (page === 'progress') progressCharts();
   window.scrollTo(0, same ? sy : 0);
-  document.title = 'FORGE 90 · ' + ((navItems().concat([['account', 'Account']]).find(n => n[0] === page) || [, page === 'day' ? 'Day' : 'Dashboard'])[1]);
+  document.title = appTitle() + ' · ' + ((navItems().concat([['account', 'Account']]).find(n => n[0] === page) || [, page === 'day' ? 'Day' : 'Dashboard'])[1]);
   if (page === 'account') accountAfter(); if (page === 'admin') adminAfter();
 }
 function applyTheme() { const t = (S && S.settings.theme) || UI.lastTheme || 'dark'; document.documentElement.dataset.theme = t; if (UI.lastTheme !== t) { UI.lastTheme = t; saveUI(); } }
