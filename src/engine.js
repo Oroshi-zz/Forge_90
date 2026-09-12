@@ -37,6 +37,16 @@ function defaultSettings() {
     kcalAdjust: 0,         // manual / trend-based adjustment
     minKcal: 1800,
     atGoal: 'maintain',    // 'maintain' = switch to maintenance calories once goal weight or BF% is reached
+    goal: 'cut',           // 'cut' | 'maintain' | 'bulk'
+    /* Bulking. Gain is set as a share of body weight per week rather than a flat pound:
+       0.25–0.5 %/wk is the range trained lifters can add with most of it as lean mass, and
+       the same absolute surplus means very different things at 150 lb and 250 lb.
+       The surplus is capped because past roughly 500 kcal/day the extra goes on as fat,
+       and the bulk stops at a body-fat ceiling, where more of every surplus calorie is
+       stored rather than used. */
+    bulkPct: 0.35,         // % of body weight gained per week (0.25–0.5)
+    bulkMaxSurplus: 500,   // kcal/day ceiling on the surplus
+    bulkMaxBF: 20,         // % body fat at which the bulk stops and holds at maintenance
     bgDim: 0.7,            // background photo dimming — fixed at 30% photo visibility
     bgPhotos: true,        // section photos behind the glass; off = plain background
     theme: 'dark',
@@ -442,22 +452,47 @@ function statsOn(date) {
 function latestStats() { return statsOn(null); }
 
 /* ---------- energy targets (Katch–McArdle) ---------- */
-function goalReached(w, bf) { const st = S.settings; return st.atGoal === 'maintain' && (w <= st.goalWeight || bf <= st.goalBF); }
+const goalKind = () => { const g = S.settings.goal; return g === 'bulk' || g === 'maintain' ? g : 'cut'; };
+// lb/week the plan expects the scale to move: negative cutting, positive bulking, 0 at maintenance
+function planRate(w) {
+  const st = S.settings; const k = goalKind();
+  if (k === 'maintain') return 0;
+  if (k === 'bulk') return bulkLb(w == null ? (latestStats() || {}).w || st.startWeight : w);
+  return -st.rate;
+}
+function bulkLb(w) {
+  const st = S.settings; const raw = (+w || st.startWeight) * (+st.bulkPct || 0.35) / 100;
+  return Math.min(raw, (+st.bulkMaxSurplus || 500) * 7 / 3500);        // the cap can bind at low body weights
+}
+function goalReached(w, bf) {
+  const st = S.settings; const k = goalKind();
+  if (k === 'maintain') return true;
+  if (k === 'bulk') return bf >= (+st.bulkMaxBF || 20) || (st.atGoal === 'maintain' && w >= st.goalWeight);
+  return st.atGoal === 'maintain' && (w <= st.goalWeight || bf <= st.goalBF);
+}
 function targetsFor(w, bf, isTrain) {
   const st = S.settings;
   const lbm = w * (1 - bf / 100);
   const bmr = 370 + 21.6 * (lbm * 0.453592);
   const restMaint = bmr * st.activity;
   const maint = restMaint + (isTrain ? st.sessionKcal : 0);
+  const kind = goalKind();
   const maintMode = goalReached(w, bf);
-  const deficit = maintMode ? 0 : st.rate * 3500 / 7;
-  const kcal = Math.max(st.minKcal, maint - deficit + (+st.kcalAdjust || 0));
+  const bulking = kind === 'bulk' && !maintMode;
+  const deficit = maintMode || kind !== 'cut' ? 0 : st.rate * 3500 / 7;
+  const surplus = bulking ? Math.min(+st.bulkMaxSurplus || 500, bulkLb(w) * 3500 / 7) : 0;
+  const kcal = Math.max(st.minKcal, maint - deficit + surplus + (+st.kcalAdjust || 0));
   const nTrain = st.trainDays.length;
   const weeklyMaint = restMaint + st.sessionKcal * nTrain / 7;
   const kr = Math.round(kcal / 10) * 10, pr = Math.round(st.proteinPerLb * w);
-  const fat = Math.round(kr * 0.27 / 9), carbs = Math.max(0, Math.round((kr - pr * 4 - fat * 9) / 4));
+  /* Fat sits lower on a bulk so the extra calories land in carbohydrate, which is what fuels
+     training volume — but never below ~0.3 g/lb, the floor tied to hormone production. */
+  const fatPct = bulking ? 0.25 : 0.27;
+  const fat = Math.max(Math.round(0.3 * w), Math.round(kr * fatPct / 9));
+  const carbs = Math.max(0, Math.round((kr - pr * 4 - fat * 9) / 4));
   return { fat, carbs, lbm, bmr: Math.round(bmr), maint: Math.round(maint), weeklyMaint: Math.round(weeklyMaint), deficit: Math.round(deficit),
-           maintMode, kcal: Math.round(kcal / 10) * 10, protein: Math.round(st.proteinPerLb * w), floorHit: maint - deficit + (+st.kcalAdjust || 0) < st.minKcal };
+           surplus: Math.round(surplus), kind, bulking, bfCap: kind === 'bulk' && bf >= (+st.bulkMaxBF || 20),
+           maintMode, kcal: Math.round(kcal / 10) * 10, protein: Math.round(st.proteinPerLb * w), floorHit: maint - deficit + surplus + (+st.kcalAdjust || 0) < st.minKcal };
 }
 
 /* ---------- recipes & portions ---------- */
@@ -660,20 +695,37 @@ function weightTrend() {
   const pts = ws.filter(x => x.d >= from).map(x => [dayDiff(from, x.d), x.w]);
   if (pts.length < 3 || pts[pts.length - 1][0] - pts[0][0] < 7) return null;
   const lr = linreg(pts); if (!lr) return null;
-  const rate = -lr.m * 7; // lb lost per week
-  const target = S.settings.rate;
+  const rate = -lr.m * 7;                       // lb lost per week (negative while gaining)
+  const kind = goalKind(); const st0 = latestStats() || {};
   let advice = null, delta = 0;
+  if (kind === 'maintain') {
+    const drift = -rate;                        // lb/wk on the scale
+    if (Math.abs(drift) <= 0.35) advice = `Holding steady: ${drift >= 0 ? '+' : ''}${drift.toFixed(2)} lb/wk. Maintenance calories look right.`;
+    else { delta = drift > 0 ? -150 : 150; advice = `You’re ${drift > 0 ? 'gaining' : 'losing'} ${Math.abs(drift).toFixed(2)} lb/wk while aiming to hold. ${delta > 0 ? 'Add' : 'Trim'} ${Math.abs(delta)} kcal/day.`; }
+    return { rate, advice, delta, points: pts.length, kind };
+  }
+  if (kind === 'bulk') {
+    const gain = -rate;                         // lb/wk gained
+    const target = bulkLb(st0.w);
+    if (gain < target * 0.5) { delta = gain < 0 ? 300 : 200; advice = `You’re gaining ${gain.toFixed(2)} lb/wk against a ${target.toFixed(2)} lb/wk target. Add ${delta} kcal/day.`; }
+    else if (gain > target * 1.6) { delta = -150; advice = `You’re gaining ${gain.toFixed(2)} lb/wk — faster than the ${target.toFixed(2)} lb/wk target, and the extra is mostly fat. Trim ${-delta} kcal/day.`; }
+    else advice = `On track: ${gain.toFixed(2)} lb/wk against a ${target.toFixed(2)} lb/wk target. Keep going.`;
+    return { rate, advice, delta, points: pts.length, kind };
+  }
+  const target = S.settings.rate;
   if (rate < target * 0.7) { delta = rate < target * 0.4 ? -200 : -125; advice = `You’re losing ${rate.toFixed(2)} lb/wk vs a ${target} lb/wk target. Trim ${-delta} kcal/day.`; }
   else if (rate > target * 1.35 && rate > 1.5) { delta = 150; advice = `You’re losing ${rate.toFixed(2)} lb/wk — faster than planned. Add ${delta} kcal/day to protect muscle and training quality.`; }
   else advice = `On track: ${rate.toFixed(2)} lb/wk vs ${target} lb/wk target. Keep going.`;
-  return { rate, advice, delta, points: pts.length };
+  return { rate, advice, delta, points: pts.length, kind };
 }
 function movingAvg(ws, days = 7) {
   return ws.map((x, i) => { const from = addDays(x.d, -(days - 1)); const win = ws.filter(y => y.d >= from && y.d <= x.d); return { d: x.d, v: win.reduce((a, y) => a + y.w, 0) / win.length }; });
 }
 function projection() {
-  const st = latestStats(); const rate = S.settings.rate;
-  const toGoal = Math.max(0, st.w - S.settings.goalWeight);
+  const st = latestStats(); const kind = goalKind();
+  const signed = planRate(st.w);                                  // negative cutting, positive bulking
+  const rate = Math.abs(signed) || 0.0001;
+  const toGoal = kind === 'bulk' ? Math.max(0, S.settings.goalWeight - st.w) : Math.max(0, st.w - S.settings.goalWeight);
   const weeks = toGoal / rate;
   const refDate = sortedWeights().length ? sortedWeights().slice(-1)[0].d : S.settings.startDate;
   const ref = maxISO(maxISO(todayISO(), refDate), S.settings.startDate);
@@ -681,12 +733,12 @@ function projection() {
   const cyc = ref <= launchEnd ? 1 : cycleOfWeek(planWeek(ref));
   const endPlan = cyc === 1 ? launchEnd : cycleEndDate(cyc);
   const daysLeft = Math.max(0, dayDiff(refDate, endPlan));
-  const endW = Math.max(S.settings.goalWeight, st.w - rate * daysLeft / 7);
+  const endW = kind === 'bulk' ? Math.min(S.settings.goalWeight, st.w + rate * daysLeft / 7) : Math.max(S.settings.goalWeight, st.w - rate * daysLeft / 7);
   const goalDate = addDays(refDate, Math.round(weeks * 7));
   // weight at goal BF if lean mass is held
   const wAtGoalBF = st.lbm / (1 - S.settings.goalBF / 100);
-  return { weeks, goalDate, endW, endPlan, cyc, wAtGoalBF, lbm: st.lbm, reached: goalReached(st.w, st.bf) };
+  return { weeks, goalDate, endW, endPlan, cyc, wAtGoalBF, lbm: st.lbm, kind, rate: signed, reached: goalReached(st.w, st.bf) };
 }
 
 /* ---------- export for node tests ---------- */
-if (typeof module !== 'undefined') module.exports = { get S() { return S; }, set S(v) { S = v; }, loadState, foodAllowed, subOn, replanMeals, exOffOn, exGroupOf, simulateMeals, shoppingStats, shareScore, packInfo, defaultPack, isFav, filterSeq, nextPlanWeekStart, markMealEdit, rescheduleWorkouts, rebuildExercises, slotVars, rebuildCatalog, ensureHorizon, ensurePlanThrough, substitutePlan, recipeAllowed, planEnd, phaseForWeek, cycleOfWeek, freshState, generatePlan, computeAll, computeDay, sessionRows, targetsFor, statsOn, amountText, groceryText, exerciseHistory, weightTrend, projection, RPS, planDates, invalidate };
+if (typeof module !== 'undefined') module.exports = { get S() { return S; }, set S(v) { S = v; }, loadState, foodAllowed, subOn, replanMeals, exOffOn, exGroupOf, simulateMeals, shoppingStats, shareScore, packInfo, defaultPack, isFav, filterSeq, nextPlanWeekStart, markMealEdit, rescheduleWorkouts, rebuildExercises, slotVars, rebuildCatalog, ensureHorizon, ensurePlanThrough, substitutePlan, recipeAllowed, planEnd, phaseForWeek, cycleOfWeek, freshState, generatePlan, computeAll, computeDay, sessionRows, targetsFor, goalKind, planRate, bulkLb, statsOn, amountText, groceryText, exerciseHistory, weightTrend, projection, RPS, planDates, invalidate };

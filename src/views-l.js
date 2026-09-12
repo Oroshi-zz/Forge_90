@@ -42,7 +42,7 @@ function plusSheet() {
   modal(`<div class="plus-m"><div class="row"><h2 style="flex:1">Quick add</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
     <div class="qa-grid">${canScan() ? b('scan', 'Scan food', 'data-act="scan" data-v="today"', 'hot') : ''}${b('plus', 'Add food', 'data-act="qa-pick"', canScan() ? '' : 'hot')}${b('scale', 'Log weight', 'data-act="weigh-sheet"')}
       ${b('dumbbell', woL, `data-act="wo-open" data-d="${t}"`)}${c ? b('scan', 'Gym card', `data-act="gym-full" data-id="${c.id}"`) : b('scan', 'Add gym card', 'data-act="gym-add"')}${canScan() ? b('box', 'Scan into pantry', 'data-act="scan" data-v="pantry"') : b('box', 'Add to pantry', 'data-act="pan-add"')}</div>
-    <div class="tiny muted" style="margin-top:12px">One button, on every tab, for the things you do standing up.</div></div>`, 'sm plus-modal');
+    <div class="tiny muted" style="margin-top:12px">One button, on every tab, for the things you do standing up.</div></div>`, 'sm plus-modal', true);
 }
 
 /* ---------------- weigh-in sheet ---------------- */
@@ -80,7 +80,7 @@ function renderMealSwap() {
     <div class="rec-search">${icon('search')}<input class="inp" type="search" id="ms-q" data-input="ms-q" value="${esc(MS.q)}" placeholder="Search recipes or ingredients…" aria-label="Search recipes" autocomplete="off"></div>
     <div class="row" style="gap:6px"><button type="button" class="btn sm ${MS.all ? '' : 'primary'}" data-act="ms-all" data-v="0">${esc(cat[0].toUpperCase() + cat.slice(1))}</button><button type="button" class="btn sm ${MS.all ? 'primary' : ''}" data-act="ms-all" data-v="1">Everything</button></div>
     <div class="ms-list" id="ms-list">${msListHTML()}</div>
-    ${r ? `<button type="button" class="btn sm ghost danger" data-act="ms-none">${icon('x')}Remove this meal</button>` : ''}</div>`, 'ms-modal');
+    ${r ? `<button type="button" class="btn sm ghost danger" data-act="ms-none">${icon('x')}Remove this meal</button>` : ''}</div>`, 'ms-modal', true);
 }
 function msListHTML() {
   const cur = (S.plan[MS.d].m || {})[MS.slot]; const r = cur && RECIPE[cur]; const cat = r ? r.cat : slotCat(MS.slot);

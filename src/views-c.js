@@ -189,10 +189,10 @@ function viewFoods() {
   const cards = rs.map(r => { const m = RPS(r.id); const ok = recipeAllowed(r); const bl = blockedBy(r); const g = RECIPE_GRAD[r.cat];
     const badges = [r.custom ? '<span class="pill acc">Custom</span>' : '', r.edited ? '<span class="pill">Edited</span>' : '', S.recipeOff[r.id] ? '<span class="pill">Turned off</span>' : '', bl.length ? `<span class="pill warn-pill" data-tip="Blocked by food preferences: ${esc(bl.join(', '))}">Blocked · ${esc(bl[0])}${bl.length > 1 ? ' +' + (bl.length - 1) : ''}</span>` : ''].join('');
     return `<div class="card recipe-row clickable ${ok ? '' : 'dim'} ${isFav(r.id) ? 'is-fav' : ''}" data-act="recipe" data-rid="${r.id}" title="Show recipe details"><div class="art sm" style="--g1:${g[0]};--g2:${g[1]}">${esc(r.emoji || '🍽️')}</div>
-      <div style="flex:1;min-width:0"><div class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.08em">${r.cat} · makes ${r.yield}</div><b>${esc(r.name)}</b>
+      <div class="rr-t" style="flex:1;min-width:0"><div class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.08em">${r.cat} · makes ${r.yield}</div><b>${esc(r.name)}</b>
         <div class="mac small"><span><b>${fmt(m.k)}</b> kcal</span> <span style="color:var(--prot)">${fmt(m.p)}P</span> <span style="color:var(--carb)">${fmt(m.c)}C</span> <span style="color:var(--fat)">${fmt(m.f)}F</span></div>
         ${linkChipsHTML(r)}<div class="row wrap" style="gap:4px;margin-top:4px">${badges}</div></div>
-      <div class="row" style="gap:4px;flex-wrap:wrap;justify-content:flex-end">
+      <div class="row rr-acts" style="gap:4px;flex-wrap:wrap;justify-content:flex-end">
         ${favBtnHTML(r.id)}<button class="btn sm" data-act="recipe-edit" data-rid="${r.id}">Edit</button><button class="btn sm ghost" data-act="recipe-dup" data-rid="${r.id}">Duplicate</button>
         ${r.custom ? `<button class="btn sm ghost danger" data-act="recipe-del" data-rid="${r.id}">${icon('trash')}</button>` : ''}
         ${r.edited ? `<button class="btn sm ghost" data-act="recipe-reset" data-rid="${r.id}">Reset</button>` : ''}

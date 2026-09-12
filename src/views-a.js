@@ -34,11 +34,11 @@ function viewDashboard() {
   const sign = (v, d = 1) => (v > 0 ? '+' : v < 0 ? '−' : '±') + fmt(Math.abs(v), d);
   const hasW = S.weights.length > 0;
   const tiles = `<div class="grid g5">
-    ${tile('Body weight', 'scale', fmt(cur.w, 1), 'lb', hasW ? `${sign(dW)} lb since start` : null, dW <= 0, 'Log your first weigh-in')}
+    ${tile('Body weight', 'scale', fmt(cur.w, 1), 'lb', hasW ? `${sign(dW)} lb since start` : null, goalKind() === 'bulk' ? dW >= 0 : dW <= 0, 'Log your first weigh-in')}
     ${tile('Body fat', 'target', fmt(cur.bf, 1), '%' + (cur.est ? ' est.' : ''), hasW ? `${sign(dBF)} pts` : null, dBF <= 0, 'Goal ' + st.goalBF + '%')}
     ${tile('Lean mass', 'dumbbell', fmt(cur.lbm, 1), 'lb', hasW ? `${sign(dL)} lb` : null, dL >= -1, 'Weight × (1 − BF%)')}
-    ${tile('Weekly trend', 'trend', trend ? fmt(trend.rate, 2) : '—', 'lb/wk', null, true, trend ? `Target ${st.rate} lb/wk` : 'Needs ~1 week of weigh-ins')}
-    ${tile('To goal', 'flame', fmt(Math.max(0, cur.w - st.goalWeight), 1), 'lb', null, true, `≈ ${fmt(pj.weeks, 0)} weeks at ${st.rate} lb/wk`)}
+    ${tile('Weekly trend', 'trend', trend ? fmt(trend.rate, 2) : '—', 'lb/wk', null, true, trend ? (goalKind() === 'maintain' ? 'Target: hold' : `Target ${fmt(Math.abs(planRate(cur.w)), 2)} lb/wk ${goalKind() === 'bulk' ? 'gain' : 'loss'}`) : 'Needs ~1 week of weigh-ins')}
+    ${tile('To goal', 'flame', fmt(Math.abs(cur.w - st.goalWeight), 1), 'lb', null, true, goalKind() === 'maintain' ? 'Holding at maintenance' : `≈ ${fmt(pj.weeks, 0)} weeks at ${fmt(Math.abs(planRate(cur.w)), 2)} lb/wk ${goalKind() === 'bulk' ? 'gain' : 'loss'}`)}
   </div>`;
 
   // today card

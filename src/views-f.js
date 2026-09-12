@@ -20,7 +20,7 @@ function showOnboarding(done) {
   const looksLikeEmail = !u.name || (u.email && u.name === u.email.split('@')[0]);
   OB = { step: 0, done, error: null,
     first: u.firstName || (looksLikeEmail ? '' : parts[0] || ''), last: u.lastName || (looksLikeEmail ? '' : parts.slice(1).join(' ')), nick: u.firstName || (looksLikeEmail ? '' : parts[0] || ''),
-    w: '', bf: '', hFt: '', hIn: '', sex: '', age: '', goal: '', rate: 1, activity: 1.4, share: true };
+    w: '', bf: '', hFt: '', hIn: '', sex: '', age: '', goal: '', rate: 1, mode: 'cut', bulkPct: 0.35, activity: 1.4, share: true };
   document.body.className = 'auth-page onb-page'; bgCurrent = null; document.body.dataset.sec = 'auth';
   document.body.innerHTML = `<div class="auth-split"><section class="auth-hero" aria-hidden="true"><div class="auth-photo" style="background-image:url('${AUTH_PHOTO.url}'), ${AUTH_PHOTO.fallback}"></div>
       <div class="auth-hero-copy"><div class="auth-brand">${LOGO}<b class="wm">FORGE<em>90</em></b></div><p>A few questions and your training plan, calorie targets and meals are built around you.</p></div>
@@ -32,12 +32,14 @@ function obApplyDraft() {           // live preview uses the real engine, so pus
   const st = S.settings; const w = obNum(OB.w), bf = obBF(), g = obNum(OB.goal);
   if (w) st.startWeight = w; if (bf) st.startBF = bf; if (g) st.goalWeight = g;
   st.rate = +OB.rate; st.activity = +OB.activity; st.shareIngredients = !!OB.share;
+  st.goal = OB.mode === 'bulk' || OB.mode === 'maintain' ? OB.mode : 'cut'; st.bulkPct = +OB.bulkPct || 0.35;
   if (bf && st.goalBF >= bf) st.goalBF = Math.max(5, Math.round(bf - 3));
   invalidate();
 }
 function obSummaryHTML() {
   obApplyDraft(); const st = S.settings; const tT = targetsFor(st.startWeight, st.startBF, true), tR = targetsFor(st.startWeight, st.startBF, false);
-  const weeks = Math.max(0, st.startWeight - st.goalWeight) / st.rate; const when = addDays(maxISO(todayISO(), st.startDate), Math.round(weeks * 7));
+  const pr = Math.abs(planRate(st.startWeight)) || 0.0001;
+  const weeks = Math.abs(st.startWeight - st.goalWeight) / pr; const when = addDays(maxISO(todayISO(), st.startDate), Math.round(weeks * 7));
   return `<div class="onb-sum"><div><span class="tiny muted">Calories · training / rest day</span><b class="num">${fmt(tT.kcal)} / ${fmt(tR.kcal)}</b></div><div><span class="tiny muted">Protein</span><b class="num">${fmt(tT.protein)} g</b></div><div><span class="tiny muted">Reach ${fmt(st.goalWeight, st.goalWeight % 1 ? 1 : 0)} lb</span><b>${fmtDate(when, { month: 'short', day: 'numeric', year: 'numeric' })}</b></div></div>`;
 }
 function renderOnboarding() {
@@ -59,11 +61,20 @@ function renderOnboarding() {
         ${fld('Age', 'age', s.age, 'type="number" inputmode="numeric" min="16" max="99"')}</div>
       <div class="note warn" style="margin-top:12px">${icon('info')}<span>${bf ? `Estimated body fat: <b>${fmt(bf, 1)}%</b>. ` : ''}This estimate (the Deurenberg formula, from BMI, age and sex) is <b>less accurate than a measured body-fat %</b> — it can be off by 5 points or more, especially if you carry a lot of muscle. When you can, measure it with a smart scale, calipers or a DEXA scan and add it to a weigh-in; your targets update automatically.</span></div></div>`; }
   if (s.step === 2) { const w = obNum(s.w) || S.settings.startWeight;
-    body = `<h1>Your goal</h1><p class="sub">FORGE 90 plans a steady cut with enough protein to keep your muscle.</p>${msg}
-    <div class="grid g2" style="gap:12px">${fld('Goal weight (lb)', 'goal', s.goal, `type="number" inputmode="decimal" step="0.1" min="70" max="${fmt(w, 1)}" required`)}
+    const gk = s.mode === 'bulk' || s.mode === 'maintain' ? s.mode : 'cut';
+    const sub = gk === 'bulk' ? 'FORGE 90 plans a measured surplus — enough to build, slow enough that most of it is muscle.'
+      : gk === 'maintain' ? 'FORGE 90 holds you at maintenance calories while you train.'
+      : 'FORGE 90 plans a steady cut with enough protein to keep your muscle.';
+    const rateCtl = gk === 'maintain' ? ''
+      : gk === 'bulk' ? `<div class="field" style="margin-top:12px"><label>Weekly gain: <b id="ob-rate-v">${fmt(+s.bulkPct, 2)} % of body weight</b></label><input type="range" name="bulkPct" min="0.15" max="0.6" step="0.05" value="${s.bulkPct}" aria-label="Weekly gain, percent of body weight">
+        <div class="row" style="justify-content:space-between"><span class="tiny muted">0.15</span><span class="tiny muted">0.35</span><span class="tiny muted">0.6 %/wk</span></div></div>`
+      : `<div class="field" style="margin-top:12px"><label>Target loss rate: <b id="ob-rate-v">${fmt(+s.rate, 2)} lb / week</b></label><input type="range" name="rate" min="0.25" max="2" step="0.05" value="${s.rate}" aria-label="Target loss rate, pounds per week">
+        <div class="row" style="justify-content:space-between"><span class="tiny muted">0.25</span><span class="tiny muted">1.0</span><span class="tiny muted">2.0 lb/wk</span></div></div>`;
+    body = `<h1>Your goal</h1><p class="sub">${sub}</p>${msg}
+    <div class="field"><label>What are you after?</label><div class="seg seg-goal">${[['cut', 'Lose fat'], ['maintain', 'Maintain'], ['bulk', 'Build muscle']].map(([v, l]) => `<button type="button" class="${gk === v ? 'on' : ''}" data-act="ob-mode" data-v="${v}">${l}</button>`).join('')}</div></div>
+    <div class="grid g2" style="gap:12px;margin-top:12px">${fld(gk === 'bulk' ? 'Goal weight (lb)' : 'Goal weight (lb)', 'goal', s.goal, `type="number" inputmode="decimal" step="0.1" ${gk === 'bulk' ? `min="${fmt(w, 1)}" max="600"` : `min="70" max="${fmt(w, 1)}"`} ${gk === 'maintain' ? '' : 'required'}`)}
       <div class="field"><label for="ob-activity">Activity level <span class="muted" style="font-weight:500">— outside the gym</span></label><select class="inp" id="ob-activity" name="activity">${ACTIVITY_LEVELS.map(([v, l, d]) => `<option value="${v}" ${+s.activity === v ? 'selected' : ''}>${l} — ${d}</option>`).join('')}</select></div></div>
-    <div class="field" style="margin-top:12px"><label>Target loss rate: <b id="ob-rate-v">${fmt(+s.rate, 2)} lb / week</b></label><input type="range" name="rate" min="0.25" max="2" step="0.05" value="${s.rate}" aria-label="Target loss rate, pounds per week">
-      <div class="row" style="justify-content:space-between"><span class="tiny muted">0.25</span><span class="tiny muted">1.0</span><span class="tiny muted">2.0 lb/wk</span></div></div>
+    ${rateCtl}
     <div id="ob-rate-info" style="margin-top:6px">${obRateInfo()}</div>`; }
   if (s.step === 3) body = `<h1>Meal planning</h1><p class="sub">One last choice. Every meal is portioned to your targets either way.</p>${msg}
     <label class="onb-share ${s.share ? 'on' : ''}"><input type="checkbox" name="share" ${s.share ? 'checked' : ''}><i class="switch ${s.share ? 'on' : ''}" aria-hidden="true"><i></i></i>
@@ -75,10 +86,11 @@ function renderOnboarding() {
   const f = el.querySelector('input:not([type=checkbox]):not([type=range]), select'); if (f && !s.noFocus) setTimeout(() => { const e = el.querySelector('input:invalid, input[value=""]:not([type=range]):not([name=bf])') || f; e.focus(); }, 30);
   s.noFocus = false;
 }
-function obRateInfo() { obApplyDraft(); return rateInfoHTML(+OB.rate); }
+function obRateInfo() { obApplyDraft(); const k = goalKind();
+  return k === 'bulk' ? bulkInfoHTML(+OB.bulkPct) : k === 'maintain' ? `<div class="tiny muted">Calories sit at maintenance — no deficit, no surplus.</div>` : rateInfoHTML(+OB.rate); }
 function obRead(form) {
   const fd = new FormData(form);
-  ['first', 'last', 'nick', 'w', 'bf', 'hFt', 'hIn', 'sex', 'age', 'goal', 'rate', 'activity'].forEach(k => { if (fd.has(k)) OB[k] = String(fd.get(k)).trim(); });
+  ['first', 'last', 'nick', 'w', 'bf', 'hFt', 'hIn', 'sex', 'age', 'goal', 'rate', 'bulkPct', 'activity'].forEach(k => { if (fd.has(k)) OB[k] = String(fd.get(k)).trim(); });
   if (form.elements.share) OB.share = form.elements.share.checked;
 }
 function obValidate() {
@@ -113,6 +125,7 @@ document.addEventListener('input', e => {
     const box = $('#ob-est'); if (box) { box.classList.toggle('hidden', !obEstimated()); const n = box.querySelector('.note span'); const bf = obBF();
       if (n) n.innerHTML = n.innerHTML.replace(/^Estimated body fat: <b>[^<]*<\/b>\. /, '').replace(/^/, bf ? `Estimated body fat: <b>${fmt(bf, 1)}%</b>. ` : ''); } }
   if (t.name === 'rate') { const v = $('#ob-rate-v'); if (v) v.textContent = fmt(+t.value, 2) + ' lb / week'; const i = $('#ob-rate-info'); if (i) i.innerHTML = obRateInfo(); }
+  if (t.name === 'bulkPct') { const v = $('#ob-rate-v'); if (v) v.textContent = fmt(+t.value, 2) + ' % of body weight'; const i = $('#ob-rate-info'); if (i) i.innerHTML = obRateInfo(); }
   if (t.name === 'goal') { const i = $('#ob-rate-info'); if (i) i.innerHTML = obRateInfo(); }
 });
 document.addEventListener('change', e => {
@@ -121,7 +134,8 @@ document.addEventListener('change', e => {
   if (t.name === 'activity') { const i = $('#ob-rate-info'); if (i) i.innerHTML = obRateInfo(); }
   if (t.name === 'share') { const l = t.closest('.onb-share'); l.classList.toggle('on', t.checked); l.querySelector('.switch').classList.toggle('on', t.checked); const s = $('#ob-sum'); if (s) s.innerHTML = obSummaryHTML(); }
 });
-Object.assign(ACT, { 'onb-back': () => { const f = $('form[data-form="onb"]'); if (f) obRead(f); OB.error = null; OB.step = Math.max(0, OB.step - 1); renderOnboarding(); } });
+Object.assign(ACT, { 'onb-back': () => { const f = $('form[data-form="onb"]'); if (f) obRead(f); OB.error = null; OB.step = Math.max(0, OB.step - 1); renderOnboarding(); },
+  'ob-mode': el => { const f = $('form[data-form="onb"]'); if (f) obRead(f); OB.mode = el.dataset.v; OB.error = null; OB.noFocus = true; renderOnboarding(); } });
 /* Reminder to replace an estimated body-fat % with a measured one */
 function bfEstimateNote() {
   if (!S.settings.bfEstimated || S.weights.some(x => x.bf != null && x.bf !== '')) return '';

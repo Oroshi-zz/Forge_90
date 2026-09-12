@@ -31,7 +31,7 @@ const IC = {
   left: '<path d="m15 18-6-6 6-6"/>', right: '<path d="m9 18 6-6-6-6"/>',
   undo: '<path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/>',
   trash: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
-  plus: '<path d="M12 5v14M5 12h14"/>', check: '<path d="M20 6 9 17l-5-5"/>', x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>', minus: '<path d="M5 12h14"/>', check: '<path d="M20 6 9 17l-5-5"/>', x: '<path d="M18 6 6 18M6 6l12 12"/>',
   flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
   trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
   download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
@@ -274,14 +274,37 @@ function toast(msg, undoable) {
   t.classList.add('on'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), TOAST_MS);
   if (!t._hover) { t._hover = true; t.addEventListener('mouseenter', () => clearTimeout(toastTimer)); t.addEventListener('mouseleave', () => { clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 4000); }); }
 }
-function modal(html, cls = '') {
-  closeModal();
+function modal(html, cls = '', backable) {
+  const old = $('#modal'); if (old) old.remove();     // replaced in place: re-rendering a sheet mustn't churn history
   const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.id = 'modal';
   bg.innerHTML = `<div class="modal ${cls}">${isPhone() ? '<div class="sh-hdl" role="button" tabindex="-1" aria-label="Close"><i></i></div>' : ''}${html}</div>`;
   bg.addEventListener('mousedown', e => { if (e.target === bg) closeModal(); });
   document.body.appendChild(bg); hideTip();
+  if (backable) backPush('modal', closeModal);
 }
-function closeModal() { const m = $('#modal'); if (m) m.remove(); }
+function closeModal() { const m = $('#modal'); if (m) m.remove(); backDrop('modal'); }
+
+/* ---------- back-to-close ----------
+   On a phone the back gesture should dismiss whatever is on top, not leave the app.
+   One history entry covers the whole overlay session; closing the last overlay gives it back. */
+const BACK_STACK = []; let BACK_SELF = false;
+function backPush(name, close) {
+  const top = BACK_STACK[BACK_STACK.length - 1];
+  if (top && top.name === name) { top.close = close; return; }        // same overlay re-rendering, not a new one
+  if (!BACK_STACK.length) { try { history.pushState({ f90: 1 }, ''); } catch (e) { /* no history */ } }
+  BACK_STACK.push({ name, close });
+}
+function backDrop(name) {                       // closed by a tap, Escape or a button: take our entry back
+  const i = BACK_STACK.map(x => x.name).lastIndexOf(name); if (i < 0) return;
+  BACK_STACK.splice(i, 1);
+  if (!BACK_STACK.length && history.state && history.state.f90) { BACK_SELF = true; try { history.back(); } catch (e) { BACK_SELF = false; } }
+}
+window.addEventListener('popstate', () => {
+  if (BACK_SELF) { BACK_SELF = false; return; }
+  const top = BACK_STACK.pop(); if (!top) return;
+  if (BACK_STACK.length) { try { history.pushState({ f90: 1 }, ''); } catch (e) { /* no history */ } }
+  try { top.close(); } catch (e) { /* already gone */ }
+});
 function confirmBox(title, text, okLabel, onOk, danger) {
   modal(`<h2>${esc(title)}</h2><p class="sub">${text}</p><div class="row" style="justify-content:flex-end;margin-top:18px"><button class="btn" data-act="close-modal">Cancel</button><button class="btn ${danger ? 'danger' : 'primary'}" id="cf-ok">${esc(okLabel)}</button></div>`, 'sm');
   $('#cf-ok').onclick = () => { closeModal(); onOk(); };

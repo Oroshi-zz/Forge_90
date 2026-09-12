@@ -193,13 +193,83 @@ function fromJsonLd(r, pageUrl, html) {
     ingredients: ingredientsOf(r.recipeIngredient || r.ingredients), steps: stepsOf(r.recipeInstructions), nutrition: nutritionOf(r.nutrition)
   };
 }
+/* ---------- last resort: a plain blog post with no structured data at all ----------
+   Plenty of recipe sites (Shopify and older WordPress blogs especially) publish nothing
+   machine-readable. Find an "Ingredients" heading and take the list under it; treat the
+   prose after the ingredient lists as the method. Flagged loose so the review screen says so. */
+const ING_HEAD = /^\s*(?:\d+[.)]\s*)?(ingredients?|what you(?:'|’)?ll need)\b/i;
+const STEP_HEAD = /^\s*(?:\d+[.)]\s*)?(instructions?|directions?|method|steps|how to make)\b/i;
+const STOP_HEAD = /^\s*(?:\d+[.)]\s*)?(instructions?|directions?|method|steps|how to make|notes?|tips?|equipment|supplies|nutrition|related|comments?|you may also|leave a)\b/i;
+// depth-aware: blogs nest lists inside list items, and a lazy regex would stop at the inner close tag
+function closeAt(html, start, tag) {
+  const re = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'gi'); re.lastIndex = start; let d = 0, m;
+  while ((m = re.exec(html))) { if (m[1]) { if (--d === 0) return re.lastIndex; } else d++; if (d > 24) break; }
+  return -1;
+}
+function liFlat(block) {                 // every item in document order; a parent keeps its own text, its sub-items follow
+  const out = []; const re = /<li\b[^>]*>/gi; let m;
+  while ((m = re.exec(block)) && out.length < 80) {
+    const end = closeAt(block, m.index, 'li');
+    const own = (end > 0 ? block.slice(m.index, end) : block.slice(m.index, m.index + 500)).replace(/<(ul|ol)\b[\s\S]*$/i, '');
+    const t = oneLine(own, 300); if (t) out.push({ text: t, links: (own.match(/<a\b/gi) || []).length });
+  }
+  return out;
+}
+function listsIn(html) {
+  const out = []; const re = /<(ul|ol)\b[^>]*>/gi; let m;
+  while ((m = re.exec(html))) {
+    const end = closeAt(html, m.index, m[1]); if (end < 0) continue;
+    out.push({ at: m.index, end, items: liFlat(html.slice(m.index, end)) });
+    re.lastIndex = end;                  // nested lists belong to the one we just took
+  }
+  return out;
+}
+const realList = l => l.items.length >= 2 && l.items.filter(i => i.links).length <= l.items.length * 0.5;
+function fromHtml(html, pageUrl) {
+  const body = html.replace(/<(script|style|nav|header|footer|template|noscript)\b[\s\S]*?<\/\1>/gi, ' ');
+  const heads = []; let m;
+  const hre = /<(h[1-6])\b[^>]*>([\s\S]*?)<\/\1>/gi;
+  while ((m = hre.exec(body))) heads.push({ at: m.index, end: hre.lastIndex, t: oneLine(m[2], 120) });
+  const bre = /<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi;          // plenty of blogs just bold the word
+  while ((m = bre.exec(body))) heads.push({ at: m.index, end: bre.lastIndex, t: oneLine(m[2], 120) });
+  heads.sort((a, b) => a.at - b.at);
+  if (!heads.length) return null;
+  const lists = listsIn(body);
+
+  const ih = heads.filter(h => ING_HEAD.test(h.t))
+    .map(h => { const stop = heads.find(x => x.at > h.end && STOP_HEAD.test(x.t)); const lim = stop ? stop.at : h.end + 8000;
+      return { h, l: lists.find(l => l.at >= h.end && l.at < lim && realList(l)) }; })
+    .find(x => x.l);
+  if (!ih) return null;
+  const ingredients = ih.l.items.map(i => ({ text: i.text })).slice(0, 80);
+
+  // garnish/tools lists usually follow straight on; the method starts after that run
+  let tail = ih.l.end;
+  for (;;) { const nx = lists.find(l => l.at >= tail && l.at - tail < 600 && realList(l)); if (!nx) break; tail = nx.end; }
+
+  let steps = [];
+  const sh = heads.find(h => h.at > ih.h.at && STEP_HEAD.test(h.t));
+  if (sh) {
+    const l = lists.find(x => x.at >= sh.end && x.at < sh.end + 4000 && realList(x));
+    if (l) steps = l.items.map(i => i.text);
+    else steps = clean(body.slice(sh.end, sh.end + 9000), 9000).split(/\n+/).map(s2 => s2.trim()).filter(s2 => s2.length > 20);
+  } else {
+    steps = clean(body.slice(tail, tail + 12000), 12000).split(/\n+/).map(s2 => s2.trim()).filter(s2 => s2.length > 24);
+  }
+
+  const near = clean(body.slice(Math.max(0, ih.h.at - 3000), ih.h.at + 3000), 6000);
+  const sv = (near.match(/\b(?:serves|servings?|yields?|makes)\b[^\d]{0,12}(\d+)/i) || [])[1];
+  return { source: 'web', loose: true, name: pageTitle(html), url: pageUrl, site: meta(html, 'og:site_name') || hostName(pageUrl),
+    servings: sv ? +sv : null, yieldText: sv ? `Serves ${sv}` : '', minutes: 0,
+    categories: [], keywords: [], ingredients, steps: steps.slice(0, 60), nutrition: null };
+}
 function parsePage(html, pageUrl) {
   const nodes = findRecipeNodes(html);
   const withIng = nodes.find(n => arr(n.recipeIngredient || n.ingredients).length) || nodes[0];
-  if (withIng) return fromJsonLd(withIng, pageUrl, html);
+  if (withIng) { const r = fromJsonLd(withIng, pageUrl, html); if (r.ingredients.length) return r; }
   const md = microdata(html);
   if (md) { const sv = servingsOf(md.yield); return { source: 'web', name: md.name || pageTitle(html), url: pageUrl, site: meta(html, 'og:site_name') || hostName(pageUrl), servings: sv.n, yieldText: sv.text, minutes: 0, categories: [], keywords: [], ingredients: md.ingredients, steps: md.steps, nutrition: null }; }
-  return null;
+  return fromHtml(html, pageUrl);
 }
 async function importFromUrl(url) {
   url = String(url || '').trim(); if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(url) && /^[\w-]+(\.[\w-]+)+(:\d+)?(\/|$)/.test(url)) url = 'https://' + url;

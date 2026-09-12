@@ -5,7 +5,7 @@
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const C = { bg: '#eef1f4', card: '#ffffff', ink: '#111827', text: '#374151', muted: '#6b7280', line: '#e5e7eb', dark: '#0f140c', lime: '#a3e635', limeInk: '#1a2e05' };
 
-function layout({ preheader, title, bodyHtml, footerNote, appUrl, appName = 'FORGE 90' }) {
+function layout({ preheader, title, bodyHtml, footerNote, appUrl, appName = 'FORGE 90', repliesTo }) {
   return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"><title>${esc(title)}</title></head>
 <body style="margin:0;padding:0;background:${C.bg};-webkit-text-size-adjust:100%;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${esc(preheader)}&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;</div>
@@ -23,7 +23,7 @@ function layout({ preheader, title, bodyHtml, footerNote, appUrl, appName = 'FOR
     <tr><td bgcolor="${C.card}" style="background:${C.card};border:1px solid ${C.line};border-top:0;border-radius:0 0 16px 16px;padding:0 28px 26px;font-family:'Segoe UI',Helvetica,Arial,sans-serif;">
       <div style="border-top:1px solid ${C.line};padding-top:16px;font-size:12px;line-height:1.55;color:${C.muted};">${footerNote || ''}</div></td></tr>
     <tr><td align="center" style="padding:18px 10px 0;font-family:'Segoe UI',Helvetica,Arial,sans-serif;font-size:12px;color:${C.muted};">
-      Sent by ${esc(appName)}${appUrl ? ` · <a href="${esc(appUrl)}" style="color:${C.muted};">${esc(appUrl.replace(/^https?:\/\//, ''))}</a>` : ''}<br>This is an automated message — replies aren’t monitored.</td></tr>
+      Sent by ${esc(appName)}${appUrl ? ` · <a href="${esc(appUrl)}" style="color:${C.muted};">${esc(appUrl.replace(/^https?:\/\//, ''))}</a>` : ''}<br>${repliesTo ? `Replying to this email reaches ${esc(repliesTo)}.` : 'This is an automated message — replies aren’t monitored.'}</td></tr>
   </table>
 </td></tr></table></body></html>`;
 }
@@ -68,7 +68,7 @@ function simpleEmail({ title, heading, lines, buttonUrl, buttonLabel, appUrl, ap
   const bodyHtml = `${h1(esc(heading || title))}${lines.map(l => p(esc(l))).join('')}${buttonUrl ? button(buttonUrl, buttonLabel || 'Open FORGE 90') : ''}`;
   return { subject: title, html: layout({ preheader: preheader || lines[0] || title, title, bodyHtml, footerNote: esc(fmtTime(new Date())), appUrl, appName }), text: `${heading || title}\n\n${lines.join('\n\n')}${buttonUrl ? `\n\n${buttonUrl}` : ''}\n— FORGE 90` };
 }
-function inviteEmail({ name, email, inviter, role, link, days, expiresAt, appUrl, appName }) {
+function inviteEmail({ name, email, inviter, role, link, days, expiresAt, appUrl, appName, inviterEmail }) {
   const first = name ? name.split(' ')[0] : ''; const hello = first ? `Hi ${esc(first)},` : 'Hi,';
   const who = inviter ? esc(inviter) : 'An administrator'; const admin = role === 'admin';
   const bodyHtml = `${h1(`You’re invited to ${esc(appName || 'FORGE 90')}`)}
@@ -81,7 +81,7 @@ function inviteEmail({ name, email, inviter, role, link, days, expiresAt, appUrl
     <p style="margin:0 0 18px;font-size:13px;word-break:break-all;"><a href="${esc(link)}" style="color:#4d7c0f;">${esc(link)}</a></p>
     ${p('Didn’t expect this? You can ignore this email — no account is created unless you accept.')}`;
   const footerNote = `Invited by ${who} · ${esc(fmtTime(new Date()))}`;
-  const html = layout({ preheader: `${inviter || 'An administrator'} invited you to ${appName || 'FORGE 90'}. The invite expires in ${days} days.`, title: `You’re invited to ${appName || 'FORGE 90'}`, bodyHtml, footerNote, appUrl, appName });
+  const html = layout({ preheader: `${inviter || 'An administrator'} invited you to ${appName || 'FORGE 90'}. The invite expires in ${days} days.`, title: `You’re invited to ${appName || 'FORGE 90'}`, bodyHtml, footerNote, appUrl, appName, repliesTo: inviterEmail || '' });
   const text = `${first ? `Hi ${first},` : 'Hi,'}\n\n${inviter || 'An administrator'} invited you to join ${appName || 'FORGE 90'}${admin ? ' as an administrator' : ''}.\n\nAccept the invite and choose your password here:\n${link}\n\nThis invite expires in ${days} days (${fmtTime(expiresAt)}) and can only be used once. You'll sign in with ${email}.\n\nDidn't expect this? You can ignore this email — no account is created unless you accept.\n— ${appName || 'FORGE 90'}`;
   return { subject: `${inviter || 'An administrator'} invited you to ${appName || 'FORGE 90'}`, html, text };
 }

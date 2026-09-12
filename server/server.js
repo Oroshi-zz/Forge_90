@@ -100,9 +100,25 @@ function pwProblem(pw, email) {
 const findUser = email => db.users.find(u => u.email === normEmail(email));
 const userById = id => db.users.find(u => u.id === id);
 const admins = () => db.users.filter(u => u.role === 'admin' && u.status === 'active');
+/* ---------- owner ----------
+   One account sits above admin: the person who set the server up. Admins can't touch it,
+   can't grant or remove admin rights, and can't demote themselves, so nobody can lock the
+   owner out or hollow out the admin list by accident. Recovery: node server.js --make-owner <email> */
+const ownerId = () => db.settings.ownerId || null;
+const isOwner = u => !!u && !!ownerId() && u.id === ownerId();
+function ensureOwner() {                       // upgrading an existing server: the oldest admin takes it
+  if (ownerId() && db.users.some(u => u.id === ownerId())) return;
+  const cand = db.users.filter(u => u.role === 'admin').sort((a2, b2) => (a2.createdAt || 0) - (b2.createdAt || 0))[0];
+  if (!cand) return;
+  db.settings.ownerId = cand.id; saveDb();
+  audit('owner_set', { userId: cand.id, detail: 'owner (longest-standing administrator)' });
+}
+// guards used by the admin user routes
+function ownerGuard(ctx, u) { if (isOwner(u) && !isOwner(ctx.me.u)) err(403, 'That’s the owner account. Only the owner can change it.'); }
+function adminChangeGuard(ctx, u) { if (u.role === 'admin' && !isOwner(ctx.me.u)) err(403, 'Only the owner can change another administrator’s access.'); }
 const isLocked = u => !!(u.lockedUntil && u.lockedUntil > now());
 const avatarUrl = u => u && u.avatar ? `/api/avatar/${u.id}?v=${encodeURIComponent(u.avatarV || '1')}` : null;
-function pubUser(u) { return u && { id: u.id, email: u.email, name: u.name, firstName: u.firstName || '', lastName: u.lastName || '', avatarUrl: avatarUrl(u), role: u.role, status: u.status, mustChange: !!u.mustChange, createdAt: u.createdAt, lastLoginAt: u.lastLoginAt || null, notify: Object.assign({ passwordChange: true, newSignIn: false }, u.notify || {}) }; }
+function pubUser(u) { return u && { id: u.id, email: u.email, name: u.name, owner: isOwner(u), firstName: u.firstName || '', lastName: u.lastName || '', avatarUrl: avatarUrl(u), role: u.role, status: u.status, mustChange: !!u.mustChange, createdAt: u.createdAt, lastLoginAt: u.lastLoginAt || null, notify: Object.assign({ passwordChange: true, newSignIn: false }, u.notify || {}) }; }
 function audit(type, { userId = null, actorId = null, ip = null, detail = '' } = {}) {
   db.audit.push({ id: uid(), t: now(), type, userId, actorId, ip, detail: String(detail).slice(0, 300) });
   if (db.audit.length > 5000) db.audit.splice(0, db.audit.length - 5000);
@@ -179,9 +195,33 @@ async function deliver(to, toName, msg) {
   const e = mailConfig(); if (!emailReady()) throw new Error('Email isn’t set up yet (Admin → Email).');
   try { return await sendMailRaw(e, to, toName, msg); } catch (x) { throw new Error(friendlySmtp(x, e.host)); }
 }
+/* A container's hostname is a random hex id, which reads as a forged HELO to strict receivers.
+   Prefer the public host from APP_URL, and fall back to something syntactically valid. */
+function heloName() {
+  const h = String(ENV.APP_URL || '').replace(/^https?:\/\//i, '').split(/[/:?#]/)[0];
+  if (/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(h) && !/^[\d.]+$/.test(h)) return h;   // a bare IP is not a HELO name
+  const d = String(mailConfig().fromEmail || '').split('@')[1];
+  return d && /\./.test(d) ? d : 'forge90.local';
+}
 function sendMailRaw(e, to, toName, msg) {
   return sendMail({ host: e.host, port: +e.port, security: e.security, user: e.user, pass: e.pass, fromName: e.fromName || db.settings.appName, fromEmail: e.fromEmail, to, toName,
+    heloName: heloName(), replyTo: msg.replyTo || null,
     subject: msg.subject, text: msg.text, html: msg.html, attachments: LOGO_PNG ? [{ filename: 'forge90.png', contentType: 'image/png', cid: 'logo@forge90', content: LOGO_PNG }] : [] });
+}
+/* Gmail and friends check that the From domain is the one that authenticated (SPF/DKIM alignment).
+   A mismatch is the usual reason invites land in spam, so say so where it's set. */
+function mailWarnings() {
+  const e = mailConfig(); const out = [];
+  const fd = String(e.fromEmail || '').split('@')[1] || '', ud = String(e.user || '').split('@')[1] || '';
+  if (fd && ud && fd.toLowerCase() !== ud.toLowerCase())
+    out.push(`The From address is at ${fd} but the mailbox signing in is at ${ud}. Most providers treat that as unauthenticated and file it as spam. Either send as ${e.user}, or add the From address as a verified alias with your mail provider.`);
+  if (/gmail\.com$|googlemail\.com$/i.test(ud) && fd && !/gmail\.com$|googlemail\.com$/i.test(fd))
+    out.push('Gmail only lets you send as your own address or an alias you have verified under "Send mail as".');
+  const host = String(ENV.APP_URL || '').replace(/^https?:\/\//i, '').split(/[/:?#]/)[0];
+  if (host && /^\d+\.\d+\.\d+\.\d+$/.test(host))
+    out.push('APP_URL is a bare IP address, so invite links point at an IP. Spam filters score that heavily — a hostname, even a free dynamic-DNS one, does much better.');
+  if (!host) out.push('APP_URL isn’t set, so invite links are built from whatever host the request arrived on. Set it to the address people actually use.');
+  return out;
 }
 async function sendReset(user, reason, req, extra = {}) {
   const tok = crypto.randomBytes(32).toString('base64url');
@@ -383,6 +423,7 @@ route('DELETE', '/api/account/sessions/:id', { auth: true }, async (req, res, ct
 route('POST', '/api/account/sessions/revoke-others', { auth: true }, async (req, res, ctx) => { const n = revokeSessions(ctx.me.u.id, ctx.me.s.id); audit('sessions_revoked', { userId: ctx.me.u.id, ip: clientIp(req), detail: `${n} session(s)` }); send(res, 200, { revoked: n }); });
 route('DELETE', '/api/account', { auth: true, limit: 'auth' }, async (req, res, ctx) => {
   const u = ctx.me.u; if (!(await verifyPw(String(ctx.body.password || ''), u.pw))) err(403, 'Your password didn’t match.');
+  if (isOwner(u)) err(400, 'You own this server. Hand ownership over first — from the server command line: node server.js --make-owner <email>');
   if (u.role === 'admin' && admins().length <= 1) err(400, 'You’re the only administrator. Make someone else an admin before deleting your account.');
   deleteUser(u); audit('account_deleted', { userId: u.id, ip: clientIp(req), detail: u.email }); setCookie(res, req, '', 0); send(res, 200, { ok: true });
 });
@@ -673,13 +714,15 @@ async function sendInvite(inv, req, actor) {
   const tok = crypto.randomBytes(32).toString('base64url'); const prev = { h: inv.h, sentAt: inv.sentAt, expiresAt: inv.expiresAt };
   inv.h = sha256(tok); inv.sentAt = now(); inv.expiresAt = now() + INVITE_DAYS * 86400000;      // a new link replaces the old one
   const link = `${baseUrl(req)}/invite?token=${tok}`;
-  const msg = MAIL.inviteEmail({ name: inv.name, email: inv.email, inviter: actor.name, role: inv.role, link, days: INVITE_DAYS, expiresAt: new Date(inv.expiresAt), appUrl: baseUrl(req), appName: db.settings.appName });
+  const msg = MAIL.inviteEmail({ name: inv.name, email: inv.email, inviter: actor.name, role: inv.role, link, days: INVITE_DAYS, expiresAt: new Date(inv.expiresAt), appUrl: baseUrl(req), appName: db.settings.appName, inviterEmail: actor.email });
+  if (actor.email && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(actor.email)) msg.replyTo = actor.email;   // a real person to reply to reads far less like bulk mail
   try { await deliver(inv.email, inv.name, msg); inv.sends = (inv.sends || 0) + 1; saveDb(); }
   catch (e) { Object.assign(inv, prev); audit('invite_failed', { actorId: actor.id, ip: clientIp(req), detail: `${inv.email}: ${e.message}`.slice(0, 300) }); err(502, 'The invite email couldn’t be sent: ' + e.message); }
 }
 route('GET', '/api/admin/invites', { admin: true }, async (req, res) => send(res, 200, { invites: db.invites.slice().sort((a, b) => b.sentAt - a.sentAt).map(inviteRow), days: INVITE_DAYS }));
 route('POST', '/api/admin/invites', { admin: true }, async (req, res, ctx) => {
   const b = ctx.body; const email = normEmail(b.email), name = String(b.name || '').trim().slice(0, 80); const role = b.role === 'admin' ? 'admin' : 'user';
+  if (role === 'admin' && !isOwner(ctx.me.u)) err(403, 'Only the owner can invite an administrator.');
   if (!validEmail(email)) err(400, 'Enter a valid email address.'); if (findUser(email)) err(409, 'An account with this email already exists.');
   let inv = db.invites.find(x => x.email === email); const again = !!inv;
   if (inv) Object.assign(inv, { name: name || inv.name, role, invitedBy: ctx.me.u.id });
@@ -700,10 +743,17 @@ route('DELETE', '/api/admin/invites/:id', { admin: true }, async (req, res, ctx)
 });
 route('PATCH', '/api/admin/users/:id', { admin: true }, async (req, res, ctx) => {
   const u = target(ctx), b = ctx.body, me = ctx.me.u; const log = [];
+  ownerGuard(ctx, u);
   const lastAdmin = u.role === 'admin' && u.status === 'active' && admins().length <= 1;
-  if (b.role != null && b.role !== u.role) { if (!['admin', 'user'].includes(b.role)) err(400, 'Unknown role.'); if (lastAdmin && b.role !== 'admin') err(400, 'There has to be at least one active administrator.'); u.role = b.role; log.push('role → ' + b.role); audit('role_changed', { userId: u.id, actorId: me.id, ip: clientIp(req), detail: b.role }); }
+  if (b.role != null && b.role !== u.role) {
+    if (!['admin', 'user'].includes(b.role)) err(400, 'Unknown role.');
+    if (!isOwner(me)) err(403, b.role === 'admin' ? 'Only the owner can make someone an administrator.' : 'Only the owner can remove administrator access.');
+    if (u.id === me.id && b.role !== 'admin') err(400, 'You can’t remove your own administrator access.');
+    if (lastAdmin && b.role !== 'admin') err(400, 'There has to be at least one active administrator.');
+    u.role = b.role; log.push('role → ' + b.role); audit('role_changed', { userId: u.id, actorId: me.id, ip: clientIp(req), detail: b.role }); }
   if (b.status != null && b.status !== u.status) {
     if (!['active', 'disabled', 'pending'].includes(b.status)) err(400, 'Unknown status.');
+    if (b.status !== 'active') adminChangeGuard(ctx, u);          // disabling an admin is a demotion by another name
     if (lastAdmin && b.status !== 'active') err(400, 'There has to be at least one active administrator.');
     if (u.id === me.id && b.status !== 'active') err(400, 'You can’t disable your own account.');
     const was = u.status; u.status = b.status; if (b.status !== 'active') revokeSessions(u.id);
@@ -714,25 +764,26 @@ route('PATCH', '/api/admin/users/:id', { admin: true }, async (req, res, ctx) =>
   if (b.email != null && normEmail(b.email) !== u.email) { const e = normEmail(b.email); if (!validEmail(e)) err(400, 'Enter a valid email address.'); if (findUser(e)) err(409, 'Another account already uses that email.'); audit('email_changed', { userId: u.id, actorId: me.id, ip: clientIp(req), detail: `${u.email} → ${e}` }); u.email = e; log.push('email'); }
   saveDb(); send(res, 200, { user: adminUserRow(u), changed: log });
 });
-route('DELETE', '/api/admin/users/:id/avatar', { admin: true }, async (req, res, ctx) => { const u = target(ctx); if (u.avatar) { removeAvatar(u); saveDb(); audit('avatar_changed', { userId: u.id, actorId: ctx.me.u.id, ip: clientIp(req), detail: 'removed by admin' }); } send(res, 200, { user: adminUserRow(u) }); });
-route('POST', '/api/admin/users/:id/unlock', { admin: true }, async (req, res, ctx) => { const u = target(ctx); u.failed = 0; u.lockedUntil = null; saveDb(); audit('unlocked', { userId: u.id, actorId: ctx.me.u.id, ip: clientIp(req) }); send(res, 200, { user: adminUserRow(u) }); });
-route('POST', '/api/admin/users/:id/send-reset', { admin: true }, async (req, res, ctx) => { const u = target(ctx); if (u.status === 'disabled') err(400, 'Enable the account first.'); const r = await sendReset(u, 'admin', req, { actorId: ctx.me.u.id }); if (!r.sent) err(502, 'The reset email couldn’t be sent: ' + r.error); send(res, 200, { ok: true, minutes: RESET_MINUTES }); });
+route('DELETE', '/api/admin/users/:id/avatar', { admin: true }, async (req, res, ctx) => { const u = target(ctx); ownerGuard(ctx, u); if (u.avatar) { removeAvatar(u); saveDb(); audit('avatar_changed', { userId: u.id, actorId: ctx.me.u.id, ip: clientIp(req), detail: 'removed by admin' }); } send(res, 200, { user: adminUserRow(u) }); });
+route('POST', '/api/admin/users/:id/unlock', { admin: true }, async (req, res, ctx) => { const u = target(ctx); ownerGuard(ctx, u); u.failed = 0; u.lockedUntil = null; saveDb(); audit('unlocked', { userId: u.id, actorId: ctx.me.u.id, ip: clientIp(req) }); send(res, 200, { user: adminUserRow(u) }); });
+route('POST', '/api/admin/users/:id/send-reset', { admin: true }, async (req, res, ctx) => { const u = target(ctx); ownerGuard(ctx, u); if (u.status === 'disabled') err(400, 'Enable the account first.'); const r = await sendReset(u, 'admin', req, { actorId: ctx.me.u.id }); if (!r.sent) err(502, 'The reset email couldn’t be sent: ' + r.error); send(res, 200, { ok: true, minutes: RESET_MINUTES }); });
 route('POST', '/api/admin/users/:id/temp-password', { admin: true }, async (req, res, ctx) => {
-  const u = target(ctx); const pw = String(ctx.body.password || ''); const pp = pwProblem(pw, u.email); if (pp) err(400, pp);
+  const u = target(ctx); ownerGuard(ctx, u); adminChangeGuard(ctx, u); const pw = String(ctx.body.password || ''); const pp = pwProblem(pw, u.email); if (pp) err(400, pp);
   u.pw = await hashPw(pw); u.mustChange = true; u.failed = 0; u.lockedUntil = null; u.pwChangedAt = now(); const n = revokeSessions(u.id, u.id === ctx.me.u.id ? ctx.me.s.id : null);
   audit('temp_password_set', { userId: u.id, actorId: ctx.me.u.id, ip: clientIp(req), detail: `${n} session(s) signed out` }); notifyPasswordChanged(u, req, 'admin'); send(res, 200, { user: adminUserRow(u) });
 });
-route('POST', '/api/admin/users/:id/revoke-sessions', { admin: true }, async (req, res, ctx) => { const u = target(ctx); const n = revokeSessions(u.id, u.id === ctx.me.u.id ? ctx.me.s.id : null); audit('sessions_revoked', { userId: u.id, actorId: ctx.me.u.id, ip: clientIp(req), detail: `${n} session(s)` }); send(res, 200, { revoked: n, user: adminUserRow(u) }); });
+route('POST', '/api/admin/users/:id/revoke-sessions', { admin: true }, async (req, res, ctx) => { const u = target(ctx); ownerGuard(ctx, u); adminChangeGuard(ctx, u); const n = revokeSessions(u.id, u.id === ctx.me.u.id ? ctx.me.s.id : null); audit('sessions_revoked', { userId: u.id, actorId: ctx.me.u.id, ip: clientIp(req), detail: `${n} session(s)` }); send(res, 200, { revoked: n, user: adminUserRow(u) }); });
 route('DELETE', '/api/admin/users/:id', { admin: true }, async (req, res, ctx) => {
   const u = target(ctx); if (u.id === ctx.me.u.id) err(400, 'Delete your own account from Account settings instead.');
+  ownerGuard(ctx, u); adminChangeGuard(ctx, u);
   if (u.role === 'admin' && admins().length <= 1 && u.status === 'active') err(400, 'There has to be at least one active administrator.');
   deleteUser(u); audit('user_deleted', { userId: u.id, actorId: ctx.me.u.id, ip: clientIp(req), detail: u.email }); send(res, 200, { ok: true });
 });
-route('GET', '/api/admin/users/:id/state', { admin: true }, async (req, res, ctx) => { const u = target(ctx); send(res, 200, readState(u.id), { 'Content-Disposition': `attachment; filename="forge90-${u.email.replace(/[^a-z0-9]+/gi, '_')}.json"` }); });
+route('GET', '/api/admin/users/:id/state', { admin: true }, async (req, res, ctx) => { const u = target(ctx); ownerGuard(ctx, u); send(res, 200, readState(u.id), { 'Content-Disposition': `attachment; filename="forge90-${u.email.replace(/[^a-z0-9]+/gi, '_')}.json"` }); });
 function adminSettingsView() {
   const s = JSON.parse(JSON.stringify(db.settings)); const o = db.settings.email || {}; const eff = mailConfig();
   s.email = Object.assign({}, eff, { pass: '', passSet: !!eff.pass, passSource: o.pass ? 'admin' : ENV.SMTP_PASS ? 'env' : null, ready: emailReady(),
-    source: Object.fromEntries(EMAIL_KEYS.map(k => [k, o[k] != null && o[k] !== '' ? 'admin' : 'env'])) });
+    source: Object.fromEntries(EMAIL_KEYS.map(k => [k, o[k] != null && o[k] !== '' ? 'admin' : 'env'])), warnings: mailWarnings() });
   s.resetMinutes = RESET_MINUTES; s.inviteDays = INVITE_DAYS; s.envAppUrl = ENV.APP_URL || ''; s.httpsTarget = httpsTarget(); s.httpsEnvOff = httpsEnvOff(); delete s.emailV2; return s;
 }
 route('GET', '/api/admin/settings', { admin: true }, async (req, res) => send(res, 200, adminSettingsView()));
@@ -836,12 +887,13 @@ async function handle(req, res) {
   }
 }
 
-/* ---------- command-line recovery:  node server.js --set-password <email> <password>  |  --make-admin <email> ---------- */
+/* ---------- command-line recovery:  node server.js --set-password <email> <password>  |  --make-admin <email>  |  --make-owner <email> ---------- */
 async function cli() {
   const a = process.argv.slice(2); if (!a.length || !/^--/.test(a[0])) return false;
   const u = findUser(a[1] || ''); if (!u) { console.error('No account with email', a[1]); process.exit(1); }
   if (a[0] === '--set-password') { const pp = pwProblem(a[2], u.email); if (!a[2] || pp) { console.error(pp || 'Give the new password as the third argument.'); process.exit(1); } u.pw = await hashPw(a[2]); u.mustChange = false; u.failed = 0; u.lockedUntil = null; u.pwChangedAt = now(); revokeSessions(u.id); audit('password_changed', { userId: u.id, detail: 'set from the server command line' }); }
   else if (a[0] === '--make-admin') { u.role = 'admin'; u.status = 'active'; u.failed = 0; u.lockedUntil = null; audit('role_changed', { userId: u.id, detail: 'admin (server command line)' }); }
+  else if (a[0] === '--make-owner') { u.role = 'admin'; u.status = 'active'; u.failed = 0; u.lockedUntil = null; db.settings.ownerId = u.id; audit('owner_set', { userId: u.id, detail: 'owner (server command line)' }); console.log(u.email, 'is now the owner.'); }
   else { console.error('Unknown option', a[0]); process.exit(1); }
   saveDb(true); console.log('Done:', a[0], u.email); process.exit(0);
 }
@@ -857,6 +909,7 @@ async function cli() {
     audit('admin_created', { detail: email }); saveDb(true);
     console.log(`\n  Default administrator created → ${email} / ${existing ? '(existing password)' : pw}\n  You'll be asked to choose a new password the first time you sign in.\n`);
   }
+  ensureOwner();          // brand new server, or an existing one upgrading: the longest-standing admin owns it
   setInterval(() => { const t = now(); const n1 = db.sessions.length, n2 = db.resets.length, n3 = db.invites.length;
     db.sessions = db.sessions.filter(s => s.expiresAt > t); db.resets = db.resets.filter(r => t - r.createdAt < 86400000); db.invites = db.invites.filter(i => t - i.expiresAt < 30 * 86400000);
     if (n1 !== db.sessions.length || n2 !== db.resets.length || n3 !== db.invites.length) saveDb(); }, 10 * 60000).unref();

@@ -291,7 +291,7 @@ function importToEditor(rec, extra = {}) {
   const dup = impExisting(rec);
   RE = { id: null, base: false, name: rec.name || '', emoji: impGuessEmoji(rec.name, cat), cat, yield: sv && sv <= 12 ? sv : '', storage: 'fridge', time: rec.minutes || 20, tags: '', fixed: false, rotate: true,
     ing: rows, steps: (rec.steps || []).join('\n'), links,
-    imp: { from: rec.source, site: rec.source === 'mealie' ? 'Mealie' : (rec.site || linkHost(rec.url)), nut: rec.nutrition || null, bigYield: sv > 12 ? sv : null, yieldText: rec.yieldText || '', skipped, noIng: !rows.length, error: extra.error || '', dup: dup ? dup.name : '', q: IMPQ && IMPQ.list.length > 1 ? { i: IMPQ.i + 1, n: IMPQ.list.length } : null, paste: !rows.length } };
+    imp: { from: rec.source, site: rec.source === 'mealie' ? 'Mealie' : (rec.site || linkHost(rec.url)), nut: rec.nutrition || null, bigYield: sv > 12 ? sv : null, yieldText: rec.yieldText || '', skipped, noIng: !rows.length, error: extra.error || (rec.loose ? 'That page had no recipe data, so this was read from the page itself. Check the amounts and steps before saving.' : ''), dup: dup ? dup.name : '', q: IMPQ && IMPQ.list.length > 1 ? { i: IMPQ.i + 1, n: IMPQ.list.length } : null, paste: !rows.length } };
   renderRecipeEditor();
 }
 

@@ -140,11 +140,12 @@ function woOpen(date, i) {
   if (!e || !e.w) { toast(d === todayISO() ? 'No session is planned today — add one from the day’s workout card.' : 'No session is planned that day.'); return; }
   closeModal(); if (!WO || WO.d !== d) WO = { d, i: 0, w: {}, r: {}, edit: null };
   const rows = woRows(); if (i != null) WO.i = i; else if (!WO.open) { const k = rows.findIndex(r => !exLogged(d, r)); WO.i = k < 0 ? rows.length - 1 : k; }
-  WO.open = true; WO.done = false; rtFollow(); woRender(); document.body.classList.add('wo-on');
+  const wasOpen = WO.open; WO.open = true; WO.done = false; rtFollow(); woRender(); document.body.classList.add('wo-on');
+  if (!wasOpen) backPush('workout', woClose);
   try { if (navigator.wakeLock && !WO_LOCK) navigator.wakeLock.request('screen').then(l => { WO_LOCK = l; }).catch(() => {}); } catch (x) { /* not supported */ }
 }
 function woClose() {
-  if (!WO) return; WO.open = false; const r = $('#wo-root'); if (r) r.innerHTML = ''; document.body.classList.remove('wo-on');
+  if (!WO || !WO.open) return; WO.open = false; backDrop('workout'); const r = $('#wo-root'); if (r) r.innerHTML = ''; document.body.classList.remove('wo-on');
   if (WO_LOCK) { WO_LOCK.release().catch(() => {}); WO_LOCK = null; }
   render(); rtPill();
 }

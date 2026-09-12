@@ -155,8 +155,33 @@ function openScanner(mode, date, draft) {
       <button type="button" class="btn sm scan-torch hidden" id="scan-torch" data-act="scan-torch">${icon('bolt')}Light</button></div>
     ${gym ? `<div class="row wrap" style="gap:8px;margin-top:10px"><button type="button" class="btn" data-act="gym-type">${icon('edit')}Type the number instead</button></div>` : `<form class="row" data-form="scan-code" style="gap:8px;margin-top:10px"><input class="inp" id="scan-code" inputmode="numeric" pattern="[0-9 ]*" placeholder="Or type the barcode number" autocomplete="off" style="flex:1"><button class="btn" type="submit">Look up</button></form>`}
     <label class="btn sm ghost scan-photo">${icon('upload')}<span class="scan-photo-t">Use a photo instead</span><input type="file" accept="image/*" capture="environment" data-input="scan-photo" hidden></label>
-    ${mode === 'pantry' ? '<div class="scan-added" id="scan-added"></div>' : ''}</div>`, 'scan-modal');
+    ${mode === 'pantry' ? `<div class="scan-added" id="scan-added">${scanAddedHTML()}</div>` : ''}</div>`, 'scan-modal');
   scanStart();
+}
+/* the "added this session" list: rebuilt from SCN.added so it survives reopening the scanner
+   (cancelling a new-product form drops back here and the list has to come back with it) */
+function scanAddedHTML() {
+  if (!SCN || SCN.mode !== 'pantry' || !SCN.added.length) return '';
+  const rows = SCN.added.slice(0, 12).map(e => `<div class="scan-row"><span class="sr-ok">${icon('check')}</span><div class="sr-t"><b>${esc(foodLabel(e.food))}</b><span class="tiny muted">${esc(pantryQtyText(e.food, packInfo(e.food).P * e.n))}${e.base > 0 ? ` · ${esc(pantryQtyText(e.food, e.base))} already here` : ''}</span></div>
+    <div class="qstep">${scanStepHTML(e, 'scan')}</div></div>`).join('');
+  const n = SCN.added.reduce((a, e) => a + e.n, 0);
+  return `<div class="tiny muted">Added this session</div>${rows}${SCN.added.length > 12 ? `<div class="tiny muted">…and ${SCN.added.length - 12} more</div>` : ''}
+    <button type="button" class="btn sm primary scan-rev" data-act="scan-review">${icon('list')}Review ${n} item${n === 1 ? '' : 's'}</button>`;
+}
+const scanStepHTML = (e, ns) => `<button type="button" class="btn icon sm" data-act="${ns}-less" data-f="${esc(e.food)}" aria-label="One fewer">${icon('minus')}</button><b class="qn">${e.n}</b><button type="button" class="btn icon sm" data-act="${ns}-more" data-f="${esc(e.food)}" aria-label="One more">${icon('plus')}</button>`;
+function scanPaint() { const el = $('#scan-added'); if (el) el.innerHTML = scanAddedHTML(); }
+/* one row per food per scanning session; scanning the same barcode again bumps its count.
+   The row a scan lands on may already have held stock (pantryAdd merges by use-by date),
+   so the count is a delta on top of `base` — dropping to zero leaves what was there before. */
+function scanCount(food, n) {
+  if (!SCN) return;
+  const e = SCN.added.find(x => x.food === food); if (!e) return;
+  n = Math.max(0, Math.round(n));
+  const q = Math.round((e.base + packInfo(food).P * n) * 100) / 100;
+  if (!n && !(e.base > 0)) pantryDel(e.itemId);
+  else pantrySet(e.itemId, { qty: q });
+  e.n = n; if (!n) SCN.added = SCN.added.filter(x => x !== e);
+  if (/^#\/(pantry|grocery)/.test(location.hash)) render();
 }
 function scanMsg(t, cls) { const m = $('#scan-msg'); if (m) { m.textContent = t; m.className = 'scan-msg ' + (cls || ''); } }
 async function scanStart() {
@@ -212,9 +237,18 @@ async function barcodeFood(code) {
 function scanUse(id) {
   if (!SCN) return;
   if (SCN.mode === 'pantry') {
-    pantryAdd(id, null, null, 'scan'); SCN.added.unshift(id); if (/^#\/(pantry|grocery)/.test(location.hash)) render();   // the page behind the scanner stays current
-    const el = $('#scan-added'); if (el) el.innerHTML = `<div class="tiny muted">Added this session</div>` + SCN.added.slice(0, 8).map(x => `<div class="scan-row">${icon('check')}<b>${esc(foodLabel(x))}</b><span class="tiny muted">${esc(pantryQtyText(x, packInfo(x).P))}</span></div>`).join('');
-    scanMsg(`Added ${foodLabel(id)} — scan the next item`, 'ok'); SCN.busy = false; return;
+    const e = SCN.added.find(x => x.food === id);
+    if (e) { scanCount(id, e.n + 1); scanMsg(`${foodLabel(id)} again — that’s ${e.n}`, 'ok'); }
+    else {
+      const P = packInfo(id).P;
+      const before = pantryItems().find(x => x.food === id && (x.exp || '') === (defaultExp(id) || ''));
+      const base = before ? Math.max(0, Math.round((+before.qty) * 100) / 100) : 0;
+      const it = pantryAdd(id, null, null, 'scan'); if (!it) { SCN.busy = false; return; }
+      SCN.added.unshift({ food: id, itemId: it.id, n: 1, base });
+      if (/^#\/(pantry|grocery)/.test(location.hash)) render();   // the page behind the scanner stays current
+      scanMsg(`Added ${foodLabel(id)} — scan the next item`, 'ok');
+    }
+    scanPaint(); SCN.busy = false; return;
   }
   const d = SCN.date; scanStop(); SCN = null; quickAdd(id, d);
 }
@@ -231,19 +265,20 @@ function productGuessSub(s) {
 }
 let PF = null;             // { gtin, resolve, sug, edit: foodId }
 const pfVal = v => v == null || v === '' ? '' : Math.round(v * 10) / 10;
+const pfInt = v => v == null || v === '' ? '' : Math.max(0, Math.round(+v || 0));   // package size, serving size and item weight are whole units
 function productFieldsHTML(v, lock) {
   const dis = lock ? 'disabled' : ''; const b = v.basis;
   return `<div class="field" style="grid-column:1/-1"><label>Name</label><input class="inp" name="n" value="${esc(v.n || '')}" required maxlength="80" placeholder="e.g. Chocolate protein bar" ${dis}></div>
     <div class="field"><label>Brand</label><input class="inp" name="brand" value="${esc(v.brand || '')}" maxlength="60" ${dis}></div>
     <div class="field"><label>Type</label><select class="inp" name="sub" ${dis}>${PRODUCT_SUBS.concat(PRODUCT_SUBS.some(x => x[0] === v.sub) || !v.sub ? [] : [[v.sub, SUB_LABEL[v.sub] || v.sub]]).map(([k, l]) => `<option value="${k}" ${k === v.sub ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div>
     <div class="field"><label>Nutrition is for</label><select class="inp" name="basis" data-input="pf-basis" ${dis || (v.edit ? 'disabled' : '')}><option value="g" ${b === 'g' ? 'selected' : ''}>100 g</option><option value="ml" ${b === 'ml' ? 'selected' : ''}>100 ml</option><option value="u" ${b === 'u' ? 'selected' : ''}>1 item (bar, bottle…)</option></select></div>
-    <div class="field pf-unit ${b === 'u' ? '' : 'hidden'}"><label>Item name & weight</label><div class="row" style="gap:6px"><input class="inp" name="u" value="${esc(v.u || 'item')}" style="width:50%" ${dis}><input class="inp" type="number" min="1" step="1" name="g" value="${esc(pfVal(v.g))}" placeholder="grams" style="width:50%" ${dis}></div></div>
+    <div class="field pf-unit ${b === 'u' ? '' : 'hidden'}"><label>Item name & weight</label><div class="row" style="gap:6px"><input class="inp" name="u" value="${esc(v.u || 'item')}" style="width:50%" ${dis}><input class="inp" type="number" min="1" step="1" name="g" value="${esc(pfInt(v.g))}" inputmode="numeric" placeholder="grams" style="width:50%" ${dis}></div></div>
     <div class="field"><label>Calories</label><input class="inp" type="number" min="0" step="0.1" name="k" value="${pfVal(v.k)}" required ${dis}></div>
     <div class="field"><label>Protein (g)</label><input class="inp" type="number" min="0" step="0.1" name="p" value="${pfVal(v.p)}" required ${dis}></div>
     <div class="field"><label>Carbs (g)</label><input class="inp" type="number" min="0" step="0.1" name="c" value="${pfVal(v.c)}" required ${dis}></div>
     <div class="field"><label>Fat (g)</label><input class="inp" type="number" min="0" step="0.1" name="f" value="${pfVal(v.f)}" required ${dis}></div>
-    <div class="field"><label>Package size <span class="muted pf-pku" style="font-weight:500">(${b === 'u' ? 'items' : b})</span></label><input class="inp" type="number" min="0" step="1" name="pk" value="${esc(pfVal(v.pk))}" ${dis}></div>
-    <div class="field"><label>Serving size (${b === 'ml' ? 'ml' : 'g'})</label><input class="inp" type="number" min="0" step="1" name="srv" value="${esc(pfVal(v.srv))}" ${dis || (b === 'u' ? 'disabled' : '')}></div>`;
+    <div class="field"><label>Package size <span class="muted pf-pku" style="font-weight:500">(${b === 'u' ? 'items' : b})</span></label><input class="inp" type="number" min="0" step="1" name="pk" value="${esc(pfInt(v.pk))}" inputmode="numeric" ${dis}></div>
+    <div class="field"><label>Serving size (${b === 'ml' ? 'ml' : 'g'})</label><input class="inp" type="number" min="0" step="1" name="srv" value="${esc(pfInt(v.srv))}" inputmode="numeric" ${dis || (b === 'u' ? 'disabled' : '')}></div>`;
 }
 function productForm(gtin, sug, error) {
   return new Promise(resolve => {
@@ -277,6 +312,7 @@ function sharedFoodEditor(id) {
 }
 async function productSave(form) {
   const fd = new FormData(form); const o = Object.fromEntries(fd.entries()); o.a = PRODUCT_AISLE[o.sub] || 'Pantry';
+  ['g', 'pk', 'srv'].forEach(k => { if (o[k] !== '' && o[k] != null) o[k] = String(pfInt(o[k])); });   // whole items/grams, whatever Open Food Facts or a typed decimal gave us
   const btn = form.querySelector('button[type=submit]'); btn.disabled = true;
   if (PF && PF.edit) {
     try { const r = await api('PATCH', '/api/foods/shared/' + encodeURIComponent(PF.edit), o); sharedAdd(r.food); PF = null; closeModal(); render(); toast(`${r.food.n} updated for everyone`); }
@@ -288,7 +324,27 @@ async function productSave(form) {
     if (SCN && SCN.mode === 'pantry') { openScannerKeep(); } res(r.food.id); }
   catch (e) { btn.disabled = false; toast(e.message); }
 }
-function openScannerKeep() { const added = SCN ? SCN.added : []; openScanner('pantry'); SCN.added = added; }
+function openScannerKeep() { const added = (SCN && SCN.added) || []; openScanner('pantry'); if (SCN) { SCN.added = added; scanPaint(); } }
+/* review what was scanned without leaving for the Pantry page: counts, amounts and use-by dates */
+function scanReview() {
+  if (!SCN || !SCN.added.length) return;
+  const added = SCN.added; scanStop();
+  SCN = { mode: 'pantry', date: todayISO(), added, last: '', lastAt: 0, draft: null, review: true };
+  modal(`<div class="scan-rev-m"><div class="row"><h2 style="flex:1">Scanned items</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
+    <div class="tiny muted" style="margin:2px 0 10px">Everything here is already in the pantry. Adjust the counts or use-by dates, or take something back off.</div>
+    <div id="scan-rev-list">${scanReviewListHTML()}</div>
+    <div class="row wrap" style="justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="btn" data-act="scan-again">${icon('scan')}Scan more</button><button type="button" class="btn primary" data-act="scan-done">Done</button></div></div>`, 'scan-rev-modal');
+}
+function scanReviewListHTML() {
+  if (!SCN || !SCN.added.length) return '<div class="muted small">Nothing left. Close this and scan again.</div>';
+  return SCN.added.map(e => { const it = pantryItems().find(x => x.id === e.itemId);
+    return `<div class="sr-row"><div class="sr-t"><b>${esc(foodLabel(e.food))}</b><span class="tiny muted">${esc(pantryQtyText(e.food, packInfo(e.food).P * e.n))}</span></div>
+      <div class="qstep">${scanStepHTML(e, 'srv')}</div>
+      <input class="inp sm sr-exp" type="date" data-input="sr-exp" data-f="${esc(e.food)}" value="${it && it.exp ? esc(it.exp) : ''}" aria-label="Use by">
+      <button type="button" class="btn icon sm ghost" data-act="srv-rm" data-f="${esc(e.food)}" aria-label="Remove">${icon('trash')}</button></div>`;
+  }).join('');
+}
+function scanReviewPaint() { const el = $('#scan-rev-list'); if (el) el.innerHTML = scanReviewListHTML(); }
 
 /* ---------- quick add to a day ---------- */
 let QP = null;
@@ -376,9 +432,25 @@ function pantryAdd(food, qty, exp, src) {
   const it = { id: pid(), food, qty: Math.round((qty != null ? +qty : packInfo(food).P) * 100) / 100, exp: exp === undefined || exp === null ? defaultExp(food) : exp, added: todayISO() };
   if (!(it.qty > 0)) return;
   if (!S.pantryThrough) S.pantryThrough = addDays(todayISO(), -1);
+  // same food, same use-by date: one row, not a pile of identical ones
+  const same = pantryItems().find(x => x.food === food && (x.exp || '') === (it.exp || ''));
+  if (same) { const qty2 = Math.round((+same.qty + it.qty) * 100) / 100; pantrySet(same.id, { qty: qty2, added: todayISO() }); return pantryItems().find(x => x.id === same.id) || same; }
   if (pantryShared()) { SY.data.pantry.items = (SY.data.pantry.items || []).concat([it]); pantryOps([{ op: 'add', item: it }]); }
   else { S.pantry = (S.pantry || []).concat([it]); saveState(); }
   return it;
+}
+// fold any duplicates already sitting in the pantry (added before merging existed, or arrived by sync)
+function pantryMergeDupes() {
+  const items = pantryItems(); const seen = {}; const merge = []; const drop = [];
+  items.forEach(x => { const k = x.food + '|' + (x.exp || '');
+    if (!seen[k]) { seen[k] = x; return; }
+    seen[k].qty = Math.round((+seen[k].qty + +x.qty) * 100) / 100;
+    if (!merge.includes(seen[k])) merge.push(seen[k]);
+    drop.push(x); });
+  if (!drop.length) return 0;
+  if (pantryShared()) { SY.data.pantry.items = items.filter(x => !drop.includes(x)); pantryOps(merge.map(x => ({ op: 'set', id: x.id, qty: x.qty })).concat(drop.map(x => ({ op: 'del', id: x.id })))); }
+  else { S.pantry = items.filter(x => !drop.includes(x)); saveState(); }
+  return drop.length;
 }
 function pantrySet(itemId, fields) {
   if (pantryShared()) { const it = SY.data.pantry.items.find(x => x.id === itemId); if (it) Object.assign(it, fields); pantryOps([Object.assign({ op: 'set', id: itemId }, fields)]); return; }
@@ -438,13 +510,15 @@ function pantrySoon() { return pantryItems().filter(x => x.exp && daysLeft(x.exp
 
 const PAN_SORTS = [['aisle', 'Aisle'], ['name', 'Name'], ['expiry', 'Use-by date'], ['added', 'Recently added']];
 function viewPantry() {
-  pantryCatchUp();
+  pantryCatchUp(); pantryMergeDupes();
   const items = pantryItems(); const soon = pantrySoon(); const shared = pantryShared();
   const byFood = {}; items.forEach(x => (byFood[x.food] = byFood[x.food] || []).push(x));
   const lotHTML = x => `<div class="pan-lot ${x.exp && daysLeft(x.exp) < 0 ? 'bad' : x.exp && daysLeft(x.exp) <= PANTRY_SOON ? 'soon' : ''}"><span class="num">${esc(pantryQtyText(x.food, x.qty))}</span><span class="tiny">${x.exp ? `${esc(expDate(x.exp))} · ${esc(expText(x.exp))}` : 'no use-by date'}</span>
       <button type="button" class="btn icon ghost sm" data-act="pan-edit" data-id="${x.id}" title="Edit" aria-label="Edit">${icon('edit')}</button><button type="button" class="btn icon ghost sm" data-act="pan-del" data-id="${x.id}" title="Used up — remove" aria-label="Remove">${icon('x')}</button></div>`;
   // search and sort
-  const words = String(UI.panQ || '').trim().toLowerCase().split(/\s+/).filter(Boolean); const sort = PAN_SORTS.some(x => x[0] === UI.panSort) ? UI.panSort : 'aisle';
+  const words = String(UI.panQ || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  // searching is nearly always "what do I have and what goes off first", so results come back soonest-first
+  const sort = words.length ? 'expiry' : (PAN_SORTS.some(x => x[0] === UI.panSort) ? UI.panSort : 'aisle');
   const hay = f => (pantryName(f) + ' ' + (ING[f] ? ING[f].n + ' ' + (ING[f].brand || '') + ' ' + (ING[f].a || '') + ' ' + (SUB_LABEL[ING[f].sub] || '') : '')).toLowerCase();
   const all = Object.keys(byFood); const foods = all.filter(f => words.every(w => hay(f).includes(w)));
   const firstExp = f => byFood[f].map(x => x.exp || '9999-12-31').sort()[0], lastAdded = f => byFood[f].map(x => x.added || '').sort().slice(-1)[0];
@@ -456,7 +530,7 @@ function viewPantry() {
     list = AISLES.concat(Object.keys(aisles).filter(a => !AISLES.includes(a))).filter(a => aisles[a]).map(a => `<div class="pan-aisle"><h3>${esc(a)}</h3>${aisles[a].sort(byName).map(foodRow).join('')}</div>`).join(''); }
   else list = foods.length ? `<div class="pan-aisle">${foods.sort(sort === 'name' ? byName : sort === 'expiry' ? (x, y) => firstExp(x).localeCompare(firstExp(y)) || byName(x, y) : (x, y) => lastAdded(y).localeCompare(lastAdded(x)) || byName(x, y)).map(foodRow).join('')}</div>` : '';
   const tools = all.length ? `<div class="row wrap pan-tools"><div class="rec-search">${icon('search')}<input class="inp" type="search" placeholder="Search the pantry…" data-input="panq" value="${esc(UI.panQ || '')}" aria-label="Search the pantry" autocomplete="off"></div>
-      <label class="pan-sort"><span class="tiny muted">Sort</span><select class="inp" data-input="pan-sort">${PAN_SORTS.map(([k, l]) => `<option value="${k}" ${k === sort ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>` : '';
+      <label class="pan-sort"><span class="tiny muted">${words.length ? 'Sorted by' : 'Sort'}</span><select class="inp" data-input="pan-sort" ${words.length ? 'disabled title="While searching, results are ordered by use-by date"' : ''}>${PAN_SORTS.map(([k, l]) => `<option value="${k}" ${k === sort ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>` : '';
   const soonCard = soon.length ? `<div class="card pan-soon"><div class="card-h"><h2>${icon('clock')}Expiring soon</h2><span class="pill warn-pill">${soon.length}</span></div>
       ${soon.map(x => `<div class="pan-srow ${daysLeft(x.exp) < 0 ? 'bad' : ''}"><b>${esc(pantryName(x.food))}</b><span class="num tiny">${esc(pantryQtyText(x.food, x.qty))}</span><span class="tiny">${esc(expText(x.exp))}</span><button type="button" class="btn sm ghost" data-act="pan-del" data-id="${x.id}">Used up</button></div>`).join('')}
       <div class="tiny muted" style="margin-top:6px">Anything within ${PANTRY_SOON} days of its use-by date shows here.</div></div>` : '';
@@ -479,17 +553,17 @@ function pantryItemModal(itemId, foodId) {
   modal(`<div><div class="row"><h2 style="flex:1">${it ? 'Edit pantry item' : 'Add to the pantry'}</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
     <form data-form="pantry" data-id="${it ? it.id : ''}" class="grid" style="gap:12px;margin-top:12px">
       <div class="field"><label>Food</label>${it ? `<b>${esc(pantryName(food))}${ING[food] && ING[food].brand ? ' · ' + esc(ING[food].brand) : ''}</b>` : `<input class="inp" list="pan-foods" name="foodq" data-input="pan-foodq" value="${food && ING[food] ? esc(foodLabel(food)) : ''}" placeholder="Search foods…" required autocomplete="off"><datalist id="pan-foods">${Object.values(ING).sort((a, b) => (isFavFood(b.id) - isFavFood(a.id)) || a.n.localeCompare(b.n)).map(g => `<option value="${esc(foodLabel(g.id))}">`).join('')}</datalist>`}</div>
-      <div class="grid g2" style="gap:12px"><div class="field"><label>Amount <span class="muted" id="pan-unit" style="font-weight:500">${esc(panUnit(food))}</span></label><input class="inp" type="number" min="0" step="any" name="qty" value="${it ? panToShown(food, it.qty) : ''}" placeholder="${it ? '' : 'one package if blank'}"></div>
+      <div class="grid g2" style="gap:12px"><div class="field"><label>Amount <span class="muted" id="pan-unit" style="font-weight:500">${esc(panUnit(food))}</span></label><input class="inp" type="number" min="0" step="1" inputmode="numeric" name="qty" value="${it ? panToShown(food, it.qty) : ''}" placeholder="${it ? '' : 'one package if blank'}"></div>
         <div class="field"><label>Use by</label><input class="inp" type="date" name="exp" value="${it && it.exp ? it.exp : ''}"><span class="tiny muted">${it ? '' : 'Blank = typical shelf life'}</span></div></div>
       <div class="row wrap" style="justify-content:flex-end;gap:8px">${it ? `<button type="button" class="btn danger" data-act="pan-del" data-id="${it.id}" style="margin-right:auto">${icon('trash')}Remove</button>` : ''}<button type="button" class="btn" data-act="close-modal">Cancel</button><button class="btn primary" type="submit">${it ? 'Save' : 'Add'}</button></div></form></div>`, 'sm');
 }
 function pantrySubmit(form) {
   const fd = new FormData(form); const itemId = form.dataset.id; const qs = String(fd.get('qty') || '').trim();
   if (itemId) { const it = pantryItems().find(x => x.id === itemId); if (!it) { closeModal(); render(); return; }
-    pantrySet(itemId, { qty: qs === '' ? 0 : Math.max(0, Math.round(panFromShown(it.food, +qs) * 100) / 100), exp: fd.get('exp') || null }); closeModal(); render(); toast('Pantry updated'); return; }
+    pantrySet(itemId, { qty: qs === '' ? 0 : Math.max(0, Math.round(panFromShown(it.food, Math.round(+qs)) * 100) / 100), exp: fd.get('exp') || null }); closeModal(); render(); toast('Pantry updated'); return; }
   const g = panFindFood(fd.get('foodq')); if (!g) { toast('Pick a food from the list'); return; }
   if (qs !== '' && !(+qs > 0)) { toast('Enter an amount above 0, or leave it blank for one package'); return; }
-  pantryAdd(g.id, qs === '' ? null : panFromShown(g.id, +qs), fd.get('exp') || null, 'manual'); closeModal(); render(); toast(`${g.n} added to the pantry`);
+  pantryAdd(g.id, qs === '' ? null : panFromShown(g.id, Math.round(+qs)), fd.get('exp') || null, 'manual'); closeModal(); render(); toast(`${g.n} added to the pantry`);
 }
 function pantryNavBadge() { const a = $('.nav a[data-nav="pantry"]'); if (!a) return; const n = S ? pantrySoon().length : 0; let b = a.querySelector('.nav-badge'); if (!n) { if (b) b.remove(); return; } if (!b) { b = document.createElement('span'); b.className = 'nav-badge'; a.appendChild(b); } b.textContent = n; b.title = `${n} pantry item${n === 1 ? '' : 's'} expiring soon`; }
 
@@ -556,6 +630,14 @@ Object.assign(ACT, {
     try { await api('DELETE', '/api/foods/shared/' + encodeURIComponent(g.id)); delete SHARED_FOODS[g.id]; rebuildCatalog(); render(); toast(`${g.n} deleted`); } catch (e) { toast(e.message); } }, true); },
   'food-edit': el => { const g = ING[el.dataset.id]; if (g && g.shared) sharedFoodEditor(g.id); else foodEditor(el.dataset.id); },
   'prod-cancel': () => { const r = PF && PF.resolve; PF = null; if (SCN && SCN.mode === 'pantry') { openScannerKeep(); } else { scanStop(); closeModal(); } if (r) r(null); },
+  'scan-less': el => { scanCount(el.dataset.f, (SCN.added.find(x => x.food === el.dataset.f) || { n: 0 }).n - 1); scanPaint(); },
+  'scan-more': el => { scanCount(el.dataset.f, (SCN.added.find(x => x.food === el.dataset.f) || { n: 0 }).n + 1); scanPaint(); },
+  'scan-review': () => scanReview(),
+  'scan-again': () => openScannerKeep(),
+  'scan-done': () => { const n = SCN ? SCN.added.reduce((a, e) => a + e.n, 0) : 0; scanStop(); SCN = null; closeModal(); render(); if (n) toast(`${n} item${n === 1 ? '' : 's'} in the pantry`); },
+  'srv-less': el => { scanCount(el.dataset.f, (SCN.added.find(x => x.food === el.dataset.f) || { n: 0 }).n - 1); scanReviewPaint(); },
+  'srv-more': el => { scanCount(el.dataset.f, (SCN.added.find(x => x.food === el.dataset.f) || { n: 0 }).n + 1); scanReviewPaint(); },
+  'srv-rm': el => { scanCount(el.dataset.f, 0); scanReviewPaint(); },
   'qa-save': () => qaSave(),
   'qa-food': el => { QP = null; quickAdd(el.dataset.id, el.dataset.d || null); },
   'qa-pick': el => quickPick(el.dataset.d || null),
@@ -586,6 +668,7 @@ document.addEventListener('input', e => {
 document.addEventListener('change', async e => {
   const t = e.target; if (!t || !t.dataset) return;
   if (t.dataset.input === 'pan-sort') { UI.panSort = t.value; saveUI(); render(); }
+  if (t.dataset.input === 'sr-exp' && SCN) { const e2 = SCN.added.find(x => x.food === t.dataset.f); if (e2) { pantrySet(e2.itemId, { exp: t.value || null }); if (/^#\/(pantry|grocery)/.test(location.hash)) render(); } }
   if (t.dataset.input === 'qa-unit' && QA) { QA.unit = t.value; QA.n = t.value === 'g' ? 100 : 1; renderQuickAdd(); }
   if (t.dataset.input === 'qa-slot' && QA) QA.slot = t.value;
   if (t.dataset.input === 'pf-basis') { const u = $('#modal .pf-unit'); if (u) u.classList.toggle('hidden', t.value !== 'u'); const s = $('#modal [name="srv"]'); if (s) s.disabled = t.value === 'u'; const pu = $('#modal .pf-pku'); if (pu) pu.textContent = `(${t.value === 'u' ? 'items' : t.value})`; }

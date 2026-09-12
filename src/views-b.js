@@ -91,7 +91,7 @@ function viewDiet() {
       <tr><td>Lean body mass</td><td class="num">${fmt(cur.lbm, 1)} lb</td><td class="muted">weight × (1 − body-fat %)</td></tr>
       <tr><td>BMR (Katch–McArdle)</td><td class="num">${fmt(tT.bmr)} kcal</td><td class="muted">370 + 21.6 × lean mass (kg)</td></tr>
       <tr><td>Maintenance — rest / training</td><td class="num">${fmt(tR.maint)} / ${fmt(tT.maint)} kcal</td><td class="muted">BMR × ${st.activity} activity, + ${st.sessionKcal} kcal on lifting days</td></tr>
-      <tr><td>Deficit</td><td class="num">${fmt(tT.deficit)} kcal/day</td><td class="muted">${tT.maintMode ? 'Goal reached — eating at maintenance (change in Settings)' : st.rate + ' lb/week × 3,500 kcal ÷ 7'}${st.kcalAdjust ? ` · adjustment ${st.kcalAdjust > 0 ? '+' : ''}${st.kcalAdjust} kcal` : ''}</td></tr>
+      <tr><td>${tT.bulking ? 'Surplus' : 'Deficit'}</td><td class="num">${fmt(tT.bulking ? tT.surplus : tT.deficit)} kcal/day</td><td class="muted">${tT.bfCap ? `At ${fmt(cur.bf, 1)}% body fat, at or above the ${st.bulkMaxBF}% ceiling — holding at maintenance` : tT.maintMode ? (goalKind() === 'maintain' ? 'Maintenance calories' : 'Goal reached — eating at maintenance (change in Settings)') : tT.bulking ? `${fmt(bulkLb(cur.w), 2)} lb/week × 3,500 kcal ÷ 7` : st.rate + ' lb/week × 3,500 kcal ÷ 7'}${st.kcalAdjust ? ` · adjustment ${st.kcalAdjust > 0 ? '+' : ''}${st.kcalAdjust} kcal` : ''}</td></tr>
     </tbody></table></div>
     <div class="small muted" style="margin-top:14px">Targets and every portion on the calendar update from your latest weigh-in.</div></div></div>`;
   const portion = (d, lbl) => { if (!d) return ''; const x = A.days[d]; return `<div class="card" style="box-shadow:none;background:var(--surface-2)"><div class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.08em">${lbl} · ${fmtDate(d)}</div>
@@ -100,9 +100,12 @@ function viewDiet() {
   const portions = `<div class="card"><div class="card-h"><h2>Serving-size suggestions</h2></div>
     <div class="small sub" style="margin:-6px 0 12px">Every recipe is written as a standard 1× serving. Each day, protein ingredients (chicken, eggs, yogurt…) are scaled to land your protein target, then carb & fat ingredients (rice, potatoes, oats, oils…) are scaled to land calories. Training days get more carbs.</div>
     <div class="grid g2" style="gap:12px">${portion(nextT, 'Next training day')}${portion(nextR, 'Next rest day')}</div>
-    ${trend ? `<div class="note ${trend.delta ? 'warn' : 'acc'}" style="margin-top:12px">${icon('trend')}<span>${esc(trend.advice)} ${trend.delta ? `<button class="btn sm" data-act="apply-trend" data-delta="${trend.delta}">Apply ${trend.delta > 0 ? '+' : ''}${trend.delta} kcal</button>` : ''}</span></div>` : `<div class="note" style="margin-top:12px">${icon('info')}<span>After ~1–2 weeks of weigh-ins, the app compares your real loss rate to the ${st.rate} lb/wk target and suggests a calorie adjustment.</span></div>`}
-    <div class="note" style="margin-top:8px">${icon('target')}<span>At ${st.rate} lb/wk you’ll be around <b>${fmt(pj.endW, 0)} lb</b> ${pj.cyc === 1 ? 'on Day 90' : 'at the end of cycle ' + pj.cyc} and reach ${st.goalWeight} lb around <b>${fmtDate(pj.goalDate, { month: 'long', year: 'numeric' })}</b>. Holding your lean mass, ${st.goalBF}% BF ≈ <b>${fmt(pj.wAtGoalBF, 0)} lb</b>.</span></div></div>`;
-  return `<div class="page-head"><div class="t"><h1>Diet plan</h1><p>A ${st.rate} lb/week cut with ${fmt(st.proteinPerLb, 2)} g protein per lb. Meals are popular high-protein meal-prep staples; multi-serving recipes are scheduled as leftovers so nothing goes to waste.</p></div>${syncBtnHTML()}</div>
+    ${trend ? `<div class="note ${trend.delta ? 'warn' : 'acc'}" style="margin-top:12px">${icon('trend')}<span>${esc(trend.advice)} ${trend.delta ? `<button class="btn sm" data-act="apply-trend" data-delta="${trend.delta}">Apply ${trend.delta > 0 ? '+' : ''}${trend.delta} kcal</button>` : ''}</span></div>` : `<div class="note" style="margin-top:12px">${icon('info')}<span>After ~1–2 weeks of weigh-ins, the app compares what the scale actually did to your ${goalKind() === 'bulk' ? `${fmt(bulkLb(cur.w), 2)} lb/wk gain` : goalKind() === 'maintain' ? 'maintenance' : `${st.rate} lb/wk loss`} target and suggests a calorie adjustment.</span></div>`}
+    ${goalKind() === 'maintain' ? '' : `<div class="note" style="margin-top:8px">${icon('target')}<span>At ${goalKind() === 'bulk' ? `${fmt(bulkLb(cur.w), 2)} lb/wk` : `${st.rate} lb/wk`} you’ll be around <b>${fmt(pj.endW, 0)} lb</b> ${pj.cyc === 1 ? 'on Day 90' : 'at the end of cycle ' + pj.cyc}${Math.abs(pj.weeks) > 0.01 ? ` and reach ${st.goalWeight} lb around <b>${fmtDate(pj.goalDate, { month: 'long', year: 'numeric' })}</b>` : ''}. Holding your lean mass, ${st.goalBF}% BF ≈ <b>${fmt(pj.wAtGoalBF, 0)} lb</b>.</span></div>`}</div>`;
+  const goalLine = goalKind() === 'bulk' ? `A ${fmt(st.bulkPct, 2)}%/week lean gain with ${fmt(st.proteinPerLb, 2)} g protein per lb, the surplus weighted toward carbohydrate to fuel training.`
+    : goalKind() === 'maintain' ? `Maintenance calories with ${fmt(st.proteinPerLb, 2)} g protein per lb.`
+    : `A ${st.rate} lb/week cut with ${fmt(st.proteinPerLb, 2)} g protein per lb.`;
+  return `<div class="page-head"><div class="t"><h1>Diet plan</h1><p>${goalLine} Meals are popular high-protein meal-prep staples; multi-serving recipes are scheduled as leftovers so nothing goes to waste.</p></div>${syncBtnHTML()}</div>
     ${bfEstimateNote()}${targets}<div style="height:16px"></div>${portions}<div style="height:16px"></div>
     <div style="height:16px"></div>
     <div class="grid g2">${lossRateCardHTML()}${bodyGoalsCardHTML()}<div style="grid-column:1/-1">${nutritionCardHTML()}</div></div>
@@ -271,7 +274,8 @@ function moneySaverHTML(wd) {
 function progRange() { const t = todayISO(); const all = sortedWeights(); const first = all.length ? minISO(all[0].d, S.settings.startDate) : S.settings.startDate; return UI.prRange === '14' ? { key: '14', from: addDays(t, -13), to: t, label: 'in 2 weeks' } : { key: 'all', from: first, to: null, label: 'since the start' }; }
 const minISO = (a, b) => a < b ? a : b;
 // plan line: from the first weigh-in (or the start) at the target loss rate
-function planLine() { const ws = sortedWeights(); const st = S.settings; const s0 = ws.length && ws[0].d < st.startDate ? ws[0].d : st.startDate; const w0 = ws.length && ws[0].d < st.startDate ? ws[0].w : st.startWeight; return { s0, w0, at: d => w0 - st.rate * dayDiff(s0, d) / 7 }; }
+function planLine() { const ws = sortedWeights(); const st = S.settings; const s0 = ws.length && ws[0].d < st.startDate ? ws[0].d : st.startDate; const w0 = ws.length && ws[0].d < st.startDate ? ws[0].w : st.startWeight;
+  const r = planRate(w0); return { s0, w0, rate: r, at: d => w0 + r * dayDiff(s0, d) / 7 }; }
 function rateOver(from) { const ws = sortedWeights().filter(x => x.d >= from); if (ws.length < 3 || dayDiff(ws[0].d, ws[ws.length - 1].d) < 7) return null; const lr = linreg(ws.map(x => [dayDiff(from, x.d), x.w])); return lr ? -lr.m * 7 : null; }
 function consistencyHTML() {
   const t = todayISO(); const mon = mondayOf(t); const weeks = [];
@@ -302,19 +306,21 @@ function viewProgress() {
   const dW = cur.w - before.w, dB = cur.bf - before.bf, dL = cur.lbm - before.lbm;
   const tile = (lbl, val, unit, delta, good) => `<div class="card stat ptile"><div class="lbl">${lbl}</div><div class="val">${val}<small>${unit}</small></div><div class="delta ${delta == null ? 'neu' : good ? 'good' : 'bad'}">${delta == null ? '&nbsp;' : delta}</div></div>`;
   const tiles = `<div class="grid g4 ptiles">${tile('Weight', fmt(cur.w, 1), 'lb', hasW ? `${sign(dW)} lb ${R.label}` : null, dW <= 0)}${tile('Body fat', fmt(cur.bf, 1), '%' + (cur.est ? ' est.' : ''), hasW ? `${sign(dB)} pts ${R.label}` : null, dB <= 0)}
-    ${tile('Lean mass', fmt(cur.lbm, 1), 'lb', hasW ? `${sign(dL)} lb · ${dL >= -1 ? 'holding' : 'dropping'}` : null, dL >= -1)}${tile('Weekly trend', rate != null ? sign(-rate, 2) : '—', 'lb/wk', `Plan ${fmt(st.rate, 2)} lb/wk`, true).replace('delta good', 'delta neu')}</div>`;
+    ${tile('Lean mass', fmt(cur.lbm, 1), 'lb', hasW ? `${sign(dL)} lb · ${dL >= -1 ? 'holding' : 'dropping'}` : null, dL >= -1)}${tile('Weekly trend', rate != null ? sign(-rate, 2) : '—', 'lb/wk', goalKind() === 'maintain' ? 'Plan: hold' : `Plan ${sign(planRate(cur.w), 2)} lb/wk`, true).replace('delta good', 'delta neu')}</div>`;
   // where the 7-day average sits against the plan line, and when the goal lands at this pace
   let pace = '';
   if (ws.length > 1) {
     const last = ws[ws.length - 1]; const avg = movingAvg(ws).slice(-1)[0].v; const gap = planLine().at(last.d) - avg;
     const lr = rate != null && rate > 0.05 ? rate : null; const when = lr ? addDays(last.d, Math.round(Math.max(0, cur.w - st.goalWeight) / lr * 7)) : null;
-    pace = `<div class="note ${Math.abs(gap) <= 0.3 || gap > 0 ? 'acc' : 'warn'}" style="margin-top:12px">${icon('trend')}<span>${lr ? `Losing <b>${fmt(lr, 2)} lb/week</b> (plan ${fmt(st.rate, 2)}). ` : ''}The 7-day average is ${Math.abs(gap) <= 0.3 ? '<b>on the plan line</b>' : `<b>${fmt(Math.abs(gap), 1)} lb ${gap > 0 ? 'ahead of' : 'behind'}</b> the plan`}.${when && cur.w > st.goalWeight ? ` At this pace you reach ${st.goalWeight} lb around <b>${esc(fmtDate(when, { month: 'long', year: 'numeric' }))}</b>.` : ''}</span></div>`;
+    const bulking = goalKind() === 'bulk'; const ahead = bulking ? gap < 0 : gap > 0;   // "ahead" is up when bulking, down when cutting
+    const moved = lr == null ? '' : bulking ? `Gaining <b>${fmt(-lr, 2)} lb/week</b> (plan ${fmt(planRate(cur.w), 2)}). ` : goalKind() === 'maintain' ? `Scale moving <b>${sign(-lr, 2)} lb/week</b> (plan: hold). ` : `Losing <b>${fmt(lr, 2)} lb/week</b> (plan ${fmt(st.rate, 2)}). `;
+    pace = `<div class="note ${Math.abs(gap) <= 0.3 || ahead ? 'acc' : 'warn'}" style="margin-top:12px">${icon('trend')}<span>${moved}The 7-day average is ${Math.abs(gap) <= 0.3 ? '<b>on the plan line</b>' : `<b>${fmt(Math.abs(gap), 1)} lb ${gap > 0 ? 'above' : 'below'}</b> the plan`}.${when && (bulking ? cur.w < st.goalWeight : cur.w > st.goalWeight) ? ` At this pace you reach ${st.goalWeight} lb around <b>${esc(fmtDate(when, { month: 'long', year: 'numeric' }))}</b>.` : ''}</span></div>`;
   }
   const range = `<div class="seg prange" role="group" aria-label="Time range">${[['all', 'Since day 1'], ['14', 'Last 2 weeks']].map(([k, l]) => `<button class="${R.key === k ? 'on' : ''}" data-act="pr-range" data-v="${k}" aria-pressed="${R.key === k}">${l}</button>`).join('')}</div>`;
   const weighCard = phone ? '' : `<div class="card"><div class="card-h"><h2>Log a weigh-in</h2></div>${weighForm()}<div class="tiny muted" style="margin-top:8px">Weigh in first thing in the morning, after the bathroom, 3–7× a week. Body fat is optional — when it’s blank, the app estimates it by holding your last measured lean mass.</div></div><div style="height:16px"></div>`;
   return `<div class="page-head"><div class="t">${phone ? `<a class="back-lnk" href="#/you">${icon('left')}You</a>` : ''}<h1>Progress</h1><p>Body weight, body fat and strength — logged here or from each day’s workout.</p></div><div class="row wrap">${range}${phone ? `<button class="btn primary" data-act="weigh-sheet">${icon('scale')}Log weight</button>` : ''}</div></div>
     ${weighCard}${tiles}<div style="height:16px"></div>
-    <div class="card"><div class="card-h"><h2>Body weight</h2><div class="legend"><span><i class="dt" style="background:var(--muted)"></i>Weigh-in</span><span><i style="background:var(--prot)"></i>7-day average</span><span><i style="background:var(--accent-2)"></i>Plan (${st.rate} lb/wk)</span></div></div><div class="chart" id="ch-weight"></div>${pace}</div>
+    <div class="card"><div class="card-h"><h2>Body weight</h2><div class="legend"><span><i class="dt" style="background:var(--muted)"></i>Weigh-in</span><span><i style="background:var(--prot)"></i>7-day average</span><span><i style="background:var(--accent-2)"></i>Plan (${goalKind() === 'maintain' ? 'hold' : sign(planRate(), 2) + ' lb/wk'})</span></div></div><div class="chart" id="ch-weight"></div>${pace}</div>
     <div style="height:16px"></div>
     <div class="grid g2 pduo"><div class="card"><div class="card-h"><h2>Body fat %</h2></div><div class="chart" id="ch-bf"></div></div><div class="card"><div class="card-h"><h2>Lean mass</h2></div><div class="chart" id="ch-lbm"></div></div></div>
     <div class="tiny muted" style="margin-top:8px">Body fat comes from the weigh-ins where you entered it; lean mass is weight × (1 − body fat). Holding lean mass while the scale drops is the goal of a cut.</div>
@@ -374,11 +380,36 @@ function trainingDaysCardHTML(coll) { const st = S.settings; const f = setField;
         <div class="tiny muted" style="margin-top:8px">After the 90-day launch the plan keeps going in 13-week cycles (Build → Intensify → Volume → Deload & Test).</div>`;
   return coll ? `<div class="card ${collCls('days')}" data-coll="days"><div class="card-h">${collHead('days', 'Training days', pill)}</div><div class="coll-body">${body}</div></div>`
     : `<div class="card"><div class="card-h"><h2>Training days</h2>${pill}</div>${body}</div>`; }
-function lossRateCardHTML() { const st = S.settings; const f = setField;
-  return `<div class="card"><div class="card-h"><h2>Target loss rate</h2><span class="pill" id="rate-pill">${fmt(st.rate, 2)} lb / week</span></div>
+const GOALS = [['cut', 'Lose fat', 'Calorie deficit, protein held high to keep muscle.'], ['maintain', 'Maintain', 'Eat at maintenance and train.'], ['bulk', 'Build muscle', 'Measured surplus, most of the extra as carbohydrate.']];
+function lossRateCardHTML() { const st = S.settings; const k = goalKind(); const cur = latestStats();
+  const goalPick = `<div class="field" style="margin-bottom:12px"><label>Goal</label><div class="seg seg-goal">${GOALS.map(([v, l]) => `<button type="button" class="${k === v ? 'on' : ''}" data-act="set-goal" data-v="${v}">${l}</button>`).join('')}</div>
+    <div class="tiny muted" style="margin-top:6px">${esc((GOALS.find(g => g[0] === k) || GOALS[0])[2])}</div></div>`;
+  if (k === 'maintain') return `<div class="card"><div class="card-h"><h2>Goal</h2><span class="pill acc">Maintenance</span></div>${goalPick}
+    <div class="tiny muted">Calories sit at maintenance for the day — no deficit, no surplus. The trend coach still flags drift in either direction.</div></div>`;
+  if (k === 'bulk') return `<div class="card"><div class="card-h"><h2>Goal</h2><span class="pill" id="rate-pill">${fmt(st.bulkPct, 2)} % / week</span></div>${goalPick}
+        <label class="tiny muted">Weekly gain, as a share of body weight</label>
+        <input type="range" min="0.15" max="0.6" step="0.05" value="${st.bulkPct}" data-input="bulkpct" style="margin:6px 0 4px">
+        <div class="row" style="justify-content:space-between"><span class="tiny muted">0.15</span><span class="tiny muted">0.35</span><span class="tiny muted">0.6 %/wk</span></div>
+        <div id="rate-info" style="margin-top:10px">${bulkInfoHTML(st.bulkPct)}</div></div>`;
+  return `<div class="card"><div class="card-h"><h2>Goal</h2><span class="pill" id="rate-pill">${fmt(st.rate, 2)} lb / week</span></div>${goalPick}
+        <label class="tiny muted">Target loss rate</label>
         <input type="range" min="0.25" max="2" step="0.05" value="${st.rate}" data-input="rate" style="margin:6px 0 4px">
         <div class="row" style="justify-content:space-between" ><span class="tiny muted">0.25</span><span class="tiny muted">1.0</span><span class="tiny muted">2.0 lb/wk</span></div>
         <div id="rate-info" style="margin-top:10px">${rateInfoHTML(st.rate)}</div></div>`; }
+/* What the chosen gain rate means in calories, and the two guard rails that matter:
+   too fast and the surplus goes on as fat; too high a body fat and it does the same. */
+function bulkInfoHTML(pct) {
+  const st = S.settings; const cur = latestStats();
+  const lb = Math.min(cur.w * pct / 100, (+st.bulkMaxSurplus || 500) * 7 / 3500);
+  const capped = cur.w * pct / 100 > lb + 1e-9;
+  const tT = targetsFor(cur.w, cur.bf, true), tR = targetsFor(cur.w, cur.bf, false);
+  const toGoal = Math.max(0, st.goalWeight - cur.w); const weeks = lb > 0 ? toGoal / lb : 0;
+  const when = addDays(maxISO(todayISO(), st.startDate), Math.round(weeks * 7));
+  const fast = pct > 0.5 ? `<div class="note warn" style="margin-top:8px">${icon('info')}<span>Above about 0.5%/week most of the extra weight is fat, not muscle — an intermediate lifter can't build tissue faster than that.</span></div>` : '';
+  const cap = cur.bf >= (+st.bulkMaxBF || 20) ? `<div class="note warn" style="margin-top:8px">${icon('info')}<span>You're at ${fmt(cur.bf, 1)}% body fat, at or above the ${st.bulkMaxBF}% ceiling, so calories are held at maintenance. Lower the ceiling setting or cut first.</span></div>` : '';
+  return `<div class="grid g3" style="gap:10px"><div><div class="tiny muted">Daily surplus</div><b class="num" style="font-size:18px">+${fmt(Math.round(lb * 3500 / 7))} kcal</b></div><div><div class="tiny muted">Training / rest day</div><b class="num" style="font-size:18px">${fmt(tT.kcal)} / ${fmt(tR.kcal)}</b></div><div><div class="tiny muted">${toGoal > 0 ? `Reach ${st.goalWeight} lb` : 'Above goal weight'}</div><b style="font-size:18px">${toGoal > 0 ? fmtDate(when, { month: 'short', year: 'numeric' }) : '—'}</b></div></div>
+    <div class="tiny muted" style="margin-top:6px">${fmt(lb, 2)} lb per week at ${fmt(cur.w, 0)} lb${capped ? ` · capped at the ${st.bulkMaxSurplus} kcal/day surplus` : ''} · stops at ${st.bulkMaxBF}% body fat.</div>${fast}${cap}`;
+}
 function bodyGoalsCardHTML() { const st = S.settings; const f = setField;
   return `<div class="card"><div class="card-h"><h2>Body & goals</h2></div><form data-form="body" class="grid g2" style="gap:12px">
         ${f('Starting weight (lb)', 'startWeight', st.startWeight, 'type="number" step="0.1"')}${f('Starting body fat %', 'startBF', st.startBF, 'type="number" step="0.1"')}
@@ -391,6 +422,7 @@ function nutritionCardHTML() { const st = S.settings; const f = setField;
         ${f('Extra kcal on lifting days', 'sessionKcal', st.sessionKcal, 'type="number" step="10"')}
         ${f('Manual calorie adjustment', 'kcalAdjust', st.kcalAdjust, 'type="number" step="25"', 'Applied to every day. The trend coach can set this for you.')}
         ${f('Calorie floor', 'minKcal', st.minKcal, 'type="number" step="50"')}
+        ${goalKind() === 'bulk' ? f('Stop bulking at body fat %', 'bulkMaxBF', st.bulkMaxBF, 'type="number" step="0.5"', 'Past this, more of every surplus calorie is stored as fat. Calories hold at maintenance instead.') + f('Largest daily surplus (kcal)', 'bulkMaxSurplus', st.bulkMaxSurplus, 'type="number" step="25"', 'A ceiling on the surplus however fast the target gain is.') : ''}
         <div class="field" style="grid-column:1/-1"><label>When you reach your goal weight or body-fat %</label><select class="inp" name="atGoal"><option value="maintain" ${st.atGoal === 'maintain' ? 'selected' : ''}>Switch to maintenance calories automatically</option><option value="continue" ${st.atGoal === 'continue' ? 'selected' : ''}>Keep the deficit going</option></select></div>
         <div><button class="btn primary" type="submit">Save</button></div></form></div>`; }
 function viewSettings(group) {
@@ -513,6 +545,8 @@ const ACT = {
   'recipe-expand': el => { const h = location.hash; REC_FROM = /^#\/recipe\//.test(h) ? REC_FROM : (h || '#/'); closeModal(); location.hash = '#/recipe/' + el.dataset.rid; },
   'toggle-done': el => { const d = el.dataset.date; if (S.done[d]) delete S.done[d]; else S.done[d] = true; saveState(); render(); toast(S.done[d] ? 'Workout marked complete 💪' : 'Marked not complete'); },
   'set-rate': el => { S.settings.rate = +el.dataset.v; saveState(); render(); toast(`Loss rate set to ${el.dataset.v} lb/week — portions updated`); },
+  'set-goal': el => { const v = el.dataset.v; if (v === S.settings.goal) return; S.settings.goal = v; S.settings.kcalAdjust = 0; saveState(); render();
+    toast(v === 'bulk' ? 'Building muscle — calories, macros and portions updated' : v === 'maintain' ? 'Maintenance — calories held level' : 'Losing fat — deficit back on'); },
   'apply-trend': el => { S.settings.kcalAdjust = (+S.settings.kcalAdjust || 0) + (+el.dataset.delta); saveState(); render(); toast(`Calories adjusted ${+el.dataset.delta > 0 ? '+' : ''}${el.dataset.delta} kcal/day`); },
   'pr-range': el => { UI.prRange = el.dataset.v === '14' ? '14' : 'all'; saveUI(); render(); },
   'del-weight': el => { S.weights = S.weights.filter(x => x.d !== el.dataset.d); saveState(); render(); toast('Weigh-in deleted'); },
@@ -560,6 +594,7 @@ document.addEventListener('change', e => {
   else if (inp === 'gro') groTick(el);
   else if (inp === 'pr-ex') { UI.prEx = el.value; saveUI(); render(); }
   else if (inp === 'rate') { S.settings.rate = +el.value; saveState(); render(); toast(`Target loss rate ${fmt(+el.value, 2)} lb/week — calories and portions updated`); }
+  else if (inp === 'bulkpct') { S.settings.bulkPct = +el.value; saveState(); render(); toast(`Target gain ${fmt(+el.value, 2)}% of body weight per week — calories and portions updated`); }
   else if (inp === 'td') {
     const days = $$('[data-input="td"]').filter(x => x.checked).map(x => +x.value).sort();
     if (!days.length) { el.checked = true; toast('Keep at least one training day'); return; }
@@ -579,6 +614,7 @@ document.addEventListener('change', e => {
 });
 document.addEventListener('input', e => {
   if (e.target.dataset.input === 'rate') { const v = +e.target.value; const pill = $('#rate-pill'); if (pill) pill.textContent = fmt(v, 2) + ' lb / week'; const prev = S.settings.rate; S.settings.rate = v; const ri = $('#rate-info'); if (ri) ri.innerHTML = rateInfoHTML(v); S.settings.rate = prev; }
+  if (e.target.dataset.input === 'bulkpct') { const v = +e.target.value; const pill = $('#rate-pill'); if (pill) pill.textContent = fmt(v, 2) + ' % / week'; const prev = S.settings.bulkPct; S.settings.bulkPct = v; const ri = $('#rate-info'); if (ri) ri.innerHTML = bulkInfoHTML(v); S.settings.bulkPct = prev; }
   if (e.target.dataset.input === 'bg-dim') document.documentElement.style.setProperty('--dim', 1 - e.target.value);
   if (e.target.dataset.input === 'recq') { UI.recQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('[data-input="recq"]'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) { /* search inputs */ } } return; }
   if (e.target.dataset.input === 'foodq') { UI.foodQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('[data-input="foodq"]'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }

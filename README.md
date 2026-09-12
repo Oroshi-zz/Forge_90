@@ -58,7 +58,13 @@ The calendar has month and week views, and workouts and meals can be dragged bet
 
 ### Nutrition
 
-Calorie targets use Katch–McArdle BMR, an activity multiplier, extra calories on lifting days, and a deficit based on your loss rate. Protein is set between 0.5 and 1 g per pound of body weight, and carbs and fat make up the rest. Every day, recipe portions are scaled so the meals hit protein and calories, with things like eggs and tortillas rounded to whole units. A trend coach compares your 7-day weight trend with the target and can adjust calories, and once you reach your goal, calories switch to maintenance.
+Pick one of three goals: lose fat, maintain, or build muscle.
+
+Calorie targets use Katch–McArdle BMR, an activity multiplier and extra calories on lifting days. Protein is set between 0.5 and 1 g per pound of body weight, and carbs and fat make up the rest. Every day, recipe portions are scaled so the meals hit protein and calories, with things like eggs and tortillas rounded to whole units. A trend coach compares your 7-day weight trend with the target and can adjust calories.
+
+- **Lose fat** takes a deficit from the loss rate you set, and switches to maintenance when you reach your goal.
+- **Maintain** holds calories level, and the coach flags drift in either direction.
+- **Build muscle** adds a surplus sized from a weekly gain target set as a share of body weight, 0.25–0.5% being the range most lifters can add without the extra going on as fat. Fat drops to 25% of calories (never below 0.3 g per pound) so the surplus lands in carbohydrate, which is what fuels training volume. The surplus is capped at 500 kcal a day, and the bulk stops and holds at maintenance once you hit the body-fat ceiling, since past that more of every extra calorie is stored than used. Both limits are adjustable.
 
 ![Diet plan](docs/screenshots/diet-plan.png)
 
@@ -82,7 +88,7 @@ The weekly shopping list is grouped by aisle (food groups) and adds up the exact
 
 ### Pantry
 
-The pantry keeps track of the food you have at home, with amounts and use-by dates. Items come in from scanning, the shopping list or by hand, and each one gets a typical use-by date for that kind of food, which you can change. As each planned day passes, its meals come out of the pantry automatically, soonest-expiring first. Anything within two weeks of its use-by date shows under **Expiring soon**, with a count on the Pantry menu item.
+The pantry keeps track of the food you have at home, with amounts and use-by dates. Items come in from scanning, the shopping list or by hand, and each one gets a typical use-by date for that kind of food, which you can change. Anything of the same food with the same use-by date is kept as one entry rather than a pile of identical rows, and searching the pantry lists what goes off soonest first. As each planned day passes, its meals come out of the pantry automatically, soonest-expiring first. Anything within two weeks of its use-by date shows under **Expiring soon**, with a count on the Pantry menu item.
 
 ![Pantry](docs/screenshots/pantry.png)
 
@@ -93,7 +99,7 @@ On a phone, **Scan** reads the barcode on packaged food (EAN-13, UPC-A, EAN-8 an
 Where you scan decides what happens:
 
 - **Dashboard, calendar, day view and Foods & recipes** (on a phone: Today and the **+** button): the product is added to the day as an extra food with one of the meals. It counts toward the day's macros, and the rest of the day's portions shrink to make room. **Add food** does the same without the camera.
-- **Pantry:** each scan adds a package straight to the pantry, so you can scan a whole bag of groceries in a row.
+- **Pantry:** each scan adds a package straight to the pantry, so you can scan a whole bag of groceries in a row. Scanning the same product again counts it up rather than starting a new row, and the count can be nudged up or down by hand. **Review** lists everything from that session with its count and use-by date, so there's no trip to the Pantry page to fix things.
 
 The live camera view needs HTTPS (or `localhost`). Over plain HTTP, Scan asks for a photo of the barcode instead. Android Chrome uses the phone's built-in barcode reader; other browsers, including Safari on iPhone, use the app's own decoder.
 
@@ -103,7 +109,7 @@ The live camera view needs HTTPS (or `localhost`). Over plain HTTP, Scan asks fo
 
 **Import recipe** on the Foods & recipes page brings in a recipe from a web link or from Mealie via its API. Link import works with any site that publishes standard recipe data, which covers most recipe sites. For Mealie, an administrator adds the server address and an API token under Settings → API connections, and then everyone can search it and import several recipes at once.
 
-Each ingredient is matched to a food in the database, and its amount is converted to grams, milliliters or items. Every import opens for review before it's saved. Anything that couldn't be worked out, like an ingredient with no matching food, a missing amount, the meal or the number of servings, is highlighted and has to be filled in first, and uncertain matches are marked for you to check. Your corrections are remembered for next time. If a page has no recipe data, you can paste the ingredient list instead.
+Each ingredient is matched to a food in the database, and its amount is converted to grams, milliliters or items. Every import opens for review before it's saved. Anything that couldn't be worked out, like an ingredient with no matching food, a missing amount, the meal or the number of servings, is highlighted and has to be filled in first, and uncertain matches are marked for you to check. Your corrections are remembered for next time. If a page publishes no recipe data at all, FORGE 90 falls back to reading the page itself — it looks for an Ingredients heading and the list under it. That's guesswork, so the review screen says so and everything is worth a check. You can always paste the ingredient list instead.
 
 ![Recipe import review](docs/screenshots/recipe-import.png)
 
@@ -134,6 +140,8 @@ Phones get a dedicated compact UI with five tabs along the bottom instead of the
 ![FORGE 90 on a phone](docs/screenshots/phone.png)
 
 ### Accounts
+
+One account is the **owner** — whoever set the server up. Only the owner can grant or remove administrator access, and no administrator can change, disable or delete the owner's account, so nobody can lock the owner out or strip the admin list by accident. Administrators can't remove their own access either. On an existing server the longest-standing administrator becomes the owner the first time it starts after updating.
 
 An administrator invites new users from Admin → Users. Each invite link works once and expires after 7 days. A forgotten password can be reset by email (the link lasts 30 minutes). Accounts lock after repeated failed sign-ins, and the owner is emailed a reset link. Everyone can manage their profile, profile picture, password and signed-in devices, export or import their data, and delete their account.
 
@@ -211,6 +219,10 @@ docker run --rm -v /path/to/data:/app/data ghcr.io/oroshi-zz/forge_90:latest \
 # or promote an existing account
 docker run --rm -v /path/to/data:/app/data ghcr.io/oroshi-zz/forge_90:latest \
   node server.js --make-admin you@example.com
+
+# or hand ownership to another account
+docker run --rm -v /path/to/data:/app/data ghcr.io/oroshi-zz/forge_90:latest \
+  node server.js --make-owner you@example.com
 ```
 
 ## Security

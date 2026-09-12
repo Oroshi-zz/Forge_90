@@ -147,6 +147,9 @@ input, select, textarea { font: inherit; color: var(--text); }
 input[type=range] { accent-color: var(--accent-2); width: 100%; }
 .pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 600; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
 .pill.acc { background: var(--accent-soft); color: var(--accent-text); }
+.seg-goal { display: flex; flex-wrap: wrap; }
+.seg-goal button { flex: 1 1 auto; min-width: 96px; }
+.pill.own { background: color-mix(in srgb, var(--good) 22%, transparent); color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); font-weight: 800; }
 .pill .dot, .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
 .tag-k { color: #fff; }
 hr.sep { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
@@ -772,7 +775,7 @@ select.inp option, select.inp optgroup { background: var(--solid); color: var(--
 @media (min-width: 861px) { body.compact .user-chip { flex-direction: column; } body.compact .uc-t, body.compact .uc-out { display: none; } body.compact .uc-main { justify-content: center; margin: 0; } }
 /* account & admin */
 .card-h h2 { display: flex; align-items: center; gap: 8px; } .card-h h2 svg { width: 18px; height: 18px; color: var(--accent-text); }
-.acc-id { display: flex; align-items: center; gap: 14px; }
+.acc-id { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .sess-row, .ev-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
 .sess-row:first-of-type, .ev-row:first-child { border-top: 0; }
 .ev-list { max-height: 360px; overflow-y: auto; }
@@ -1020,9 +1023,13 @@ button.pill.qe-ex:hover { box-shadow: inset 0 0 0 1px var(--line-2); }
 .avatar { position: relative; overflow: hidden; }
 .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; background: var(--solid); }
 .avatar.xl { width: 84px; height: 84px; font-size: 28px; }
-.acc-pic { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: none; }
-.acc-pic-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+/* the Remove button only exists once there's a photo, so this column must not grow the row when it appears */
+.acc-pic { display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 0 0 auto; width: 120px; max-width: 100%; }
+.acc-pic-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 100%; }
+.acc-pic-acts .btn { max-width: 100%; }
 .acc-pic-acts .btn svg { width: 14px; height: 14px; }
+.acc-id > :not(.acc-pic) { min-width: 0; flex: 1 1 200px; }
+.acc-id > :not(.acc-pic) b, .acc-id > :not(.acc-pic) .small, .acc-id > :not(.acc-pic) .tiny { overflow-wrap: anywhere; }
 .coll-row .seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
 .coll-row .seg::-webkit-scrollbar { display: none; }
 .coll-row .seg button { flex: none; }
@@ -1080,7 +1087,24 @@ details.dmeal-note .ing-list { margin-top: 6px; }
 .scan-added { margin-top: 12px; display: grid; gap: 4px; }
 .scan-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 9px; background: var(--surface-2); font-size: 13px; }
 .scan-row svg { width: 14px; height: 14px; color: var(--good); flex: none; }
-.scan-row b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scan-row b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scan-row .sr-ok { display: flex; flex: none; }
+.sr-t { flex: 1; min-width: 0; display: grid; }
+.sr-t b { display: block; }
+.sr-t .tiny { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* counter shared by the scanner list and the review sheet */
+.qstep { display: flex; align-items: center; gap: 2px; flex: none; }
+.qstep .btn.icon { width: 28px; height: 28px; padding: 0; }
+.qstep .btn.icon svg { width: 13px; height: 13px; color: inherit; }
+.qstep .qn { min-width: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.scan-rev { width: 100%; margin-top: 8px; justify-content: center; }
+.scan-rev-m .sr-row { display: flex; align-items: center; gap: 8px; padding: 8px; border-radius: 10px; background: var(--surface-2); margin-bottom: 6px; }
+.scan-rev-m .sr-exp { width: 140px; flex: none; padding: 5px 7px; font-size: 12px; }
+@media (max-width: 560px) {
+  .scan-rev-m .sr-row { flex-wrap: wrap; }
+  .scan-rev-m .sr-t { flex: 1 1 100%; }
+  .scan-rev-m .sr-exp { flex: 1 1 auto; width: auto; min-width: 0; }
+}
 .prod-modal { width: min(560px, 100%); }
 .prod-head { display: flex; gap: 12px; align-items: flex-start; margin-top: 8px; }
 .prod-head img, .prod-ph { width: 64px; height: 64px; flex: none; border-radius: 12px; object-fit: contain; background: #fff; border: 1px solid var(--line-2); }
@@ -1372,6 +1396,9 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
   .page-head { margin-bottom: 14px; gap: 10px; }
   .page-head h1 { font-size: 22px; }
   .page-head p { display: none; }
+  /* the title sits on its own line rather than being squeezed beside the buttons */
+  .page-head .t { flex: 1 0 100%; min-width: 0; }
+  .page-head .t h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .page-head .t { min-width: 0; }
   .hub-top h1 { font-size: 24px; margin: 4px 0 10px; }
   .hub-seg { display: flex; gap: 4px; padding: 3px; border-radius: 12px; background: var(--surface-3); margin-bottom: 16px; }
@@ -1391,7 +1418,13 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
   /* fixes: the day view and Foods & recipes no longer scroll sideways */
   .day-head { flex-wrap: wrap; }
   .recipe-row .pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
-  .recipe-row { flex-wrap: wrap; }
+  /* the actions get their own row, so the title and macros keep the full width
+     instead of being squeezed to one word per line */
+  .recipe-row { flex-wrap: wrap; align-items: flex-start; row-gap: 8px; }
+  .recipe-row > .rr-t { flex: 1 1 0; min-width: 0; }
+  .recipe-row > .rr-acts { flex: 1 0 100%; justify-content: flex-start; }
+  .recipe-row .mac { flex-wrap: wrap; row-gap: 2px; }
+  .recipe-row .art.sm { flex: none; }
 }
 @keyframes sheet-up { from { transform: translateY(100%); } }
 @media (prefers-reduced-motion: reduce) { #modal .modal { animation: none; } }

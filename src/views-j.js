@@ -301,11 +301,11 @@ async function gymFull(id) {
   const c = gymCards().find(x => x.id === id); if (!c) return; gymFullClose();
   const el = document.createElement('div'); el.id = 'gym-full'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', c.name);
   el.innerHTML = `<div class="gf-in"><div class="gf-name">${esc(c.name)}</div><div class="gf-code ${c.fmt === 'qr' ? 'qr' : ''}">${barcodeSVG(c.code, c.fmt, { h: 60 })}</div><div class="gf-num">${esc(gymHuman(c))}</div>
-    <div class="gf-tip">Turn the screen brightness up if the scanner struggles. Tap anywhere to close.</div></div>`;
-  el.addEventListener('click', gymFullClose); document.body.appendChild(el);
+    <div class="gf-tip">Turn the screen brightness up if the scanner struggles. Tap anywhere, or go back, to close.</div></div>`;
+  el.addEventListener('click', gymFullClose); document.body.appendChild(el); backPush('gym-full', gymFullClose);
   try { if (navigator.wakeLock) GYM_LOCK = await navigator.wakeLock.request('screen'); } catch (e) { GYM_LOCK = null; }
 }
-function gymFullClose() { const el = $('#gym-full'); if (el) el.remove(); if (GYM_LOCK) { GYM_LOCK.release().catch(() => {}); GYM_LOCK = null; } }
+function gymFullClose() { const el = $('#gym-full'); if (!el) return; el.remove(); if (GYM_LOCK) { GYM_LOCK.release().catch(() => {}); GYM_LOCK = null; } backDrop('gym-full'); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') gymFullClose(); });
 // Settings
 function gymSettingsHTML() {
