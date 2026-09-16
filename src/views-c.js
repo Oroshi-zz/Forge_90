@@ -146,7 +146,7 @@ function toggleFav(id) {
   const on = !isFav(id); pushUndo(`${on ? 'favorite' : 'unfavorite'} ${r.name}`);
   S.favRecipes = S.favRecipes || {}; if (on) S.favRecipes[id] = true; else delete S.favRecipes[id];
   const from = nextPlanWeekStart(); replanMeals(from);
-  const cnt = Object.keys(S.plan).filter(d => d >= from).reduce((a, d) => a + MEAL_SLOTS.filter(sl => S.plan[d].m && S.plan[d].m[sl] === id).length, 0);
+  const cnt = Object.keys(S.plan).filter(d => d >= from).reduce((a, d) => a + DAY_SLOTS.filter(sl => S.plan[d].m && S.plan[d].m[sl] === id).length, 0);
   saveState(); render(); refreshFavButtons();
   const note = !recipeAllowed(r) ? ' — but it’s blocked by your food preferences, so it won’t be scheduled' : ` — meals from ${fmtDate(from)} on re-planned (${cnt} serving${cnt === 1 ? '' : 's'} scheduled; your hand-picked meals were kept)`;
   toast(`${on ? '★ Favorited' : 'Removed from favorites:'} ${r.name}${note}`, true);
@@ -179,7 +179,7 @@ function linkChipsHTML(r) { const ls = (r.links || []).filter(l => l && l.url); 
 function viewFoods() {
   const tab = UI.foodsTab || 'recipes';
   const head = `<div class="page-head"><div class="t"><h1>Foods & recipes</h1><p>Edit the macros of any food, add your own foods and recipes, and choose which food groups the plan can use.</p></div>
-    <div class="row wrap">${scanBtnHTML('today')}${AUTH.mode === 'server' ? `<button class="btn" data-act="imp-open">${icon('download')}Import recipe</button>` : ''}<button class="btn primary" data-act="recipe-new">${icon('plus')}New recipe</button><button class="btn" data-act="food-by-name" data-v="foods">${icon('search')}Find a food</button><button class="btn" data-act="food-new">${icon('plus')}Add food</button></div></div>
+    <div class="row wrap">${scanBtnHTML('today')}${AUTH.mode === 'server' ? `<button class="btn" data-act="imp-open">${icon('download')}Import recipe</button>` : ''}<button class="btn primary" data-act="recipe-new">${icon('plus')}New recipe</button><button class="btn" data-act="food-new">${icon('plus')}Add food</button></div></div>
     <div class="seg" style="margin-bottom:16px">${[['recipes', 'Recipes'], ['foods', 'Foods & macros'], ['prefs', 'Food preferences']].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-act="foods-tab" data-v="${k}">${l}</button>`).join('')}</div>`;
   if (tab === 'prefs') return head + `<div class="card"><div class="card-h"><h2>Food preferences</h2></div>${foodPrefsHTML()}</div>`;
   if (tab === 'foods') return head + foodsTableHTML();
@@ -201,7 +201,7 @@ function viewFoods() {
         ${sw(!S.recipeOff[r.id], 'recipe-off', r.id)}</div></div>`; }).join('');
   const dr = !RE && reDraft();
   const draftBar = dr ? `<div class="note warn" style="margin-bottom:12px">${icon('edit')}<span><b>You have an unsaved recipe</b>${dr.name ? ` — “${esc(dr.name)}”` : ''}. It was kept when you left the editor.</span><span class="row" style="gap:6px"><button class="btn sm primary" data-act="re-resume">Continue editing</button><button class="btn sm ghost" data-act="re-discard">Discard</button></span></div>` : '';
-  return head + draftBar + `<div class="row wrap rec-bar" style="margin-bottom:12px"><div class="rec-search">${icon('search')}<input class="inp" type="search" placeholder="Search recipes, ingredients or tags…" data-input="recq" value="${esc(UI.recQ || '')}" aria-label="Search recipes" autocomplete="off"></div><div class="filters">${['all', 'fav', 'breakfast', 'lunch', 'dinner', 'snack'].map(c => `<button class="${f === c ? 'on' : ''}" data-act="rec-filter" data-v="${c}">${recFilterLabel(c)}</button>`).join('')}</div>${recipeSortHTML()}</div>
+  return head + draftBar + `<div class="row wrap rec-bar" style="margin-bottom:12px"><div class="rec-search">${icon('search')}<input class="inp" type="search" placeholder="Search recipes, ingredients or tags…" data-input="recq" value="${esc(UI.recQ || '')}" aria-label="Search recipes" autocomplete="off"></div><div class="filters">${['all', 'fav'].concat(RECIPE_CATS).map(c => `<button class="${f === c ? 'on' : ''}" data-act="rec-filter" data-v="${c}">${recFilterLabel(c)}</button>`).join('')}</div>${recipeSortHTML()}</div>
     <div class="tiny muted" style="margin:-4px 0 12px">★ Favorites show up about twice as often in the meal plan. Switch a recipe off to keep it out of the plan. Blocked recipes contain a food you’ve unchecked.</div>
     ${words.length ? `<div class="small muted" style="margin:-4px 0 10px">${rs.length} recipe${rs.length === 1 ? '' : 's'} match “${esc(UI.recQ.trim())}” <button class="btn sm ghost" data-act="recq-clear">${icon('x')}Clear</button></div>` : ''}
     <div class="grid g2" style="gap:10px">${cards || `<div class="muted small">${f === 'fav' && !words.length ? 'No favorites yet — tap the ☆ on any recipe.' : 'No recipes match.'}</div>`}</div>`;
@@ -294,7 +294,7 @@ function saveFood(form) {
   }
   const newId = id || Object.keys(S.customFoods).find(k => S.customFoods[k] === rec);
   rebuildCatalog(); saveState();
-  if (UI.returnToRecipe && RE) { UI.returnToRecipe = false; if (!id) RE.ing.push([newId, ING[newId].u ? 1 : 100]); closeModal(); renderRecipeEditor(); toast(`${rec.n} added to the recipe`); return; }
+  if (RE_ADDFOOD && RE) { RE_ADDFOOD = false; if (!id) RE.ing.push([newId, ING[newId].u ? 1 : 100]); closeModal(); renderRecipeEditor(); toast(`${rec.n} added to the recipe`); return; }
   closeModal(); render(); toast(`${rec.n} saved — every recipe using it is updated`);
 }
 
@@ -405,7 +405,7 @@ function recipeEditorHTML() {
       <div class="field emo-field"><label>Emoji</label>${emojiPickerHTML(e.emoji)}</div>
       <div class="field"><label>Name</label><input class="inp" data-re="name" value="${esc(e.name)}" placeholder="e.g. Chicken pesto pasta"></div></div>
     <div class="grid g4" style="gap:12px;margin-top:12px">
-      <div class="field ${im && !e.cat ? 'imp-need' : ''}"><label>Meal</label><select class="inp" data-re="cat">${e.cat ? '' : '<option value="" selected disabled>Choose…</option>'}${['breakfast', 'lunch', 'dinner', 'snack'].map(c => `<option ${e.cat === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
+      <div class="field ${im && !e.cat ? 'imp-need' : ''}"><label>Meal</label><select class="inp" data-re="cat">${e.cat ? '' : '<option value="" selected disabled>Choose…</option>'}${RECIPE_CATS.map(c => `<option ${e.cat === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
       <div class="field ${im && (!(+e.yield >= 1) || +e.yield > 12) ? 'imp-need' : ''}"><label>Servings it makes</label><input class="inp" type="number" min="1" max="12" data-re="yield" value="${e.yield}" ${im ? 'placeholder="?"' : ''}></div>
       <div class="field"><label>Storage</label><select class="inp" data-re="storage">${[['fresh', 'Eat fresh'], ['fridge', 'Fridge (4 days)'], ['freezer', 'Freezes well']].map(([v, l]) => `<option value="${v}" ${e.storage === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="field"><label>Prep (min)</label><input class="inp" type="number" min="0" data-re="time" value="${e.time}"></div>
@@ -457,7 +457,7 @@ function saveRecipe() {
    A null substitute leaves the meal alone rather than blanking the day. */
 function replaceRecipeEverywhere(rid, cat0, yld0) {
   const r = RECIPE[rid]; let n = 0, empty = false; const cat = cat0 || (r ? r.cat : null);
-  Object.values(S.plan).forEach(e => MEAL_SLOTS.forEach(slot => {
+  Object.values(S.plan).forEach(e => DAY_SLOTS.forEach(slot => {
     if (!e.m || e.m[slot] !== rid) return;
     const sub = pickSubstitute(cat || SLOT_CAT[slot], yld0 || (r ? r.yield : 1), n);
     if (sub == null) { empty = true; return; }
@@ -532,11 +532,11 @@ Object.assign(ACT, {
   're-rm': el => { RE.ing.splice(+el.dataset.i, 1); renderRecipeEditor(); },
   're-save': () => saveRecipe(),
   'food-new': () => foodEditor(null),
-  'food-new-inline': () => { const keep = RE; FP = null; foodEditor(null); RE = keep; UI.returnToRecipe = true; },
+  'food-new-inline': () => { const keep = RE; FP = null; foodEditor(null); RE = keep; RE_ADDFOOD = true; },
   'food-edit': el => foodEditor(el.dataset.id),
   'fe-calc': () => { const f = $('#modal form[data-form="food"]'); const v = n => +f.elements[n].value || 0; f.elements.k.value = Math.round(v('p') * 4 + v('c') * 4 + v('f') * 9); feSuggest(); },
-  'food-reset': el => { const id = el.dataset.id; if (!BASE_ING[id]) return; const keep = UI.returnToRecipe, re = RE;
-    delete S.foodOverrides[id]; rebuildCatalog(); saveState(); render(); foodEditor(id); UI.returnToRecipe = keep; RE = re;
+  'food-reset': el => { const id = el.dataset.id; if (!BASE_ING[id]) return; const keep = RE_ADDFOOD, re = RE;
+    delete S.foodOverrides[id]; rebuildCatalog(); saveState(); render(); foodEditor(id); RE_ADDFOOD = keep; RE = re;
     toast(`${ING[id].n} reset to its default values — every recipe using it is updated`); },
   'food-del': el => { const id = el.dataset.id; const used = RECIPES.filter(r => r.ing.some(([x]) => x === id));
     confirmBox('Delete food?', used.length ? `It’s used in ${used.length} recipe${used.length > 1 ? 's' : ''} (${esc(used.map(r => r.name).join(', '))}); it will be removed from them.` : 'This can’t be undone.', 'Delete', () => {

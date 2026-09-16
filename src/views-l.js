@@ -130,8 +130,19 @@ function viewToday(date) {
   return head + bar + `<div class="ph-stack">${syncInviteNote()}${bfEstimateNote()}${prompt}${vis.map(id => `<section class="ph-p" data-panel="${id}">${panels[id]}</section>`).join('')}
     <div class="ph-cust"><button type="button" class="btn sm ghost" data-act="dash-edit" data-l="today">${icon('grid')}Customize Today</button>${nHid ? `<span class="tiny muted">${nHid} panel${nHid === 1 ? '' : 's'} hidden</span>` : ''}</div></div>`;
 }
+/* The phone gets the same cardio session as the desktop, sized for a thumb: what it is, how
+   long, the estimated burn, and one button into the stopwatch. */
+function phCardioHTML(date, e) {
+  const c = dayCardio(e); if (!c) return '';
+  const k = CARDIO[c.k]; const kc = cardioKcal(c.k, c.min, statsOn(date).w);
+  return `<div class="card ph-wo ph-cd"><div class="row" style="gap:8px"><span class="pill cd-pill">${icon('heart')}Cardio</span><span class="muted small">${c.min} min · about ${fmt(kc)} kcal</span>${c.doneMin ? `<span class="pill acc">${icon('check')}Done</span>` : ''}</div>
+    <h2>${esc(k.name)}</h2><div class="small sub" style="margin-top:2px">${esc(k.how)}</div>
+    <button type="button" class="btn primary block big" data-act="cw-open" data-d="${date}">${icon('stopwatch')}${c.doneMin ? 'Cardio again' : 'Start cardio'}</button>
+    <div class="tiny muted" style="margin-top:8px">Estimated from your weight and the clock. It does not change today's calorie target.</div></div>`;
+}
 function todayWorkoutHTML(date) {
   const e = S.plan[date]; const t0 = todayISO();
+  if (!e.w && dayCardio(e)) return phCardioHTML(date, e);
   if (!e.w) return `<div class="card ph-rest"><span class="pill">Rest day</span><h2>Walk 8–10k steps</h2><p class="muted small">No lifting today. Get 7–9 hours of sleep and keep protein on target; calories are ~${fmt(S.settings.sessionKcal)} kcal lower and portions resize to match.</p>
       <button type="button" class="btn sm" data-act="qe" data-d="${date}" data-f="wo">${icon('plus')}Add a session</button></div>`;
   const t = TEMPLATES[e.w.t]; const rows = sessionRows(e.w); const c = loggedSets(date, rows);
@@ -142,7 +153,8 @@ function todayWorkoutHTML(date) {
     <h2>${esc(t.name)}</h2>${groups.length ? `<div class="row wrap" style="gap:6px">${groups.map(g => `<span class="pill">${esc(g)}</span>`).join('')}</div>` : ''}
     <div class="ph-prog"><div class="track"><i style="width:${c.total ? c.done / c.total * 100 : 0}%"></i></div><span class="num small muted">${c.done}/${c.total} sets</span></div>
     <button type="button" class="btn primary block big" data-act="wo-open" data-d="${date}">${icon('play')}${lbl}</button>
-    <div class="row wrap ph-wo-links"><button type="button" class="btn sm ghost" data-act="qe" data-d="${date}" data-f="wo">${icon('edit')}Change session</button>${date < t0 ? `<button type="button" class="btn sm ghost" data-act="wo-open" data-d="${date}">${icon('edit')}Log or fix sets</button>` : ''}${date <= t0 && !S.done[date] && c.done ? `<button type="button" class="btn sm ghost" data-act="toggle-done" data-date="${date}">${icon('check')}Mark complete</button>` : ''}</div></div>`;
+    ${dayCardio(e) ? `<button type="button" class="btn block" data-act="cw-open" data-d="${date}">${icon('heart')}Also today: ${esc(CARDIO[e.c.k].name)} · ${e.c.min} min</button>` : ''}
+    <div class="row wrap ph-wo-links"><button type="button" class="btn sm ghost" data-act="qe" data-d="${date}" data-f="wo">${icon('edit')}Change session</button><button type="button" class="btn sm ghost" data-act="print-wo" data-d="${date}">${icon('print')}Print</button>${date < t0 ? `<button type="button" class="btn sm ghost" data-act="wo-open" data-d="${date}">${icon('edit')}Log or fix sets</button>` : ''}${date <= t0 && !S.done[date] && c.done ? `<button type="button" class="btn sm ghost" data-act="toggle-done" data-date="${date}">${icon('check')}Mark complete</button>` : ''}</div></div>`;
 }
 // the summary on Today and You — one tap to the Progress page
 function progressCardHTML() {
@@ -168,14 +180,15 @@ function todayMacroHTML(day) {
   return `<div class="card ph-macro"><div class="kc"><b class="num">${fmt(day.totals.k)}</b><small>of ${fmt(day.tg.kcal)} kcal${(day.extras || []).length ? ' · incl. added food' : ''}</small><span class="pill ${day.isTrain ? 'acc' : ''}">${day.isTrain ? 'Training' : 'Rest'} day</span></div><div class="mb">${macroBars(day.totals, day.tg)}</div></div>`;
 }
 function todayMealsHTML(date, day, A) {
-  const rows = MEAL_SLOTS.map(slot => {
+  const rows = DAY_SLOTS.map(slot => {
     const m = day.meals.find(x => x.slot === slot); const b = A.batches.info[date + '|' + slot];
     const swp = `<button type="button" class="ph-swp" data-act="meal-swap" data-d="${date}" data-slot="${slot}" aria-label="Swap ${esc(SLOT_LABEL[slot].toLowerCase())}" title="Swap">${icon('loop')}</button>`;
+    if (!m && slot === 'dessert' && !dayHasExtras(day, slot)) return '';   // never planned for you; it shows once you add one
     if (!m) return `<div class="ph-meal empty"><button type="button" class="ph-mb" data-act="meal-swap" data-d="${date}" data-slot="${slot}"><span class="em">+</span><span class="t"><span class="slot">${SLOT_LABEL[slot]}</span><b class="muted">Nothing planned — pick a meal</b></span></button></div>${extrasHTML(day, slot)}`;
     return `<div class="ph-meal"><button type="button" class="ph-mb" data-act="recipe" data-rid="${m.r.id}"><span class="em">${esc(m.r.emoji)}</span><span class="t"><span class="slot">${SLOT_LABEL[slot]} ${batchBadge(b)}${shareBadge(date, slot)}</span><b>${esc(m.r.name)}</b><small class="num">${fmt(m.m.k)} kcal · ${fmt(m.m.p)} g protein</small></span></button>${swp}</div>${extrasHTML(day, slot)}`;
   }).join('');
   return `<div class="ph-sec"><h2>Meals</h2><span class="spacer"></span>${canScan() ? `<button type="button" class="btn icon ghost" data-act="scan" data-v="today" data-d="${date}" aria-label="Scan food" title="Scan food">${icon('scan')}</button>` : ''}<button type="button" class="btn sm ghost" data-act="qa-pick" data-d="${date}">${icon('plus')}Add food</button></div>
-    <div class="card pad0 ph-meals">${rows}</div><div class="tiny muted ph-hint">Tap a meal for the recipe and this day’s portions. ${icon('loop')} swaps it.</div>`;
+    <div class="card pad0 ph-meals">${rows}</div>${dessertAddHTML(date, day)}<div class="tiny muted ph-hint">Tap a meal for the recipe and this day’s portions. ${icon('loop')} swaps it.</div>`;
 }
 function todayWeekHTML(date, A) {
   const t = todayISO(); const days = Array.from({ length: 7 }, (_, k) => addDays(date, k - 3));
@@ -199,7 +212,7 @@ function groceryPhoneHTML(G) {
     return `<div class="pg-row ${st}"><button type="button" class="pg-it" data-act="gro-tap" data-id="${id}" aria-pressed="${st !== 'buy'}"><span class="ck">${icon('check')}</span><span class="t"><b>${esc(g.name)}</b>${note}</span><span class="q num">${esc(g.qty)}${g.sub ? `<small>${esc(g.sub)}</small>` : ''}</span></button>${st === 'home' ? `<button type="button" class="btn sm pg-need" data-act="gro-need" data-id="${id}">Need it</button>` : ''}</div>`; };
   const list = order.filter(a => aisles[a]).map(a => `<section class="pg-aisle"><h3>${esc(a)}</h3><div class="card pad0">${aisles[a].sort((x, y) => ING[x.id].n.localeCompare(ING[y.id].n)).map(row).join('')}</div></section>`).join('');
   const empty = { buy: all ? 'Everything’s in the cart or at home.' : 'Nothing planned this week.', cart: 'Tap items on To buy as you shop — they land here.', home: 'Nothing your pantry covers this week.' }[tab];
-  return `<div class="row pg-tools"><select class="inp" data-input="gro-week" aria-label="Week">${opts}</select><button type="button" class="btn icon" data-act="copy-list-ph" aria-label="Copy the list" title="Copy the list">${icon('list')}</button></div>
+  return `<div class="row pg-tools"><select class="inp" data-input="gro-week" aria-label="Week">${opts}</select><button type="button" class="btn icon" data-act="copy-list-ph" aria-label="Copy the list" title="Copy the list">${icon('list')}</button><button type="button" class="btn icon" data-act="print-gro" aria-label="Print the list" title="Print the list">${icon('print')}</button></div>
     ${syncGroceryNote(G.wd, G.A)}
     <div class="pg-chips" role="group" aria-label="Show">${[['buy', 'To buy'], ['cart', 'In the cart'], ['home', 'At home']].map(([k, l]) => `<button type="button" class="chipb ${tab === k ? 'on' : ''}" data-act="gro-tab" data-v="${k}" aria-pressed="${tab === k}">${l}<span class="n num">${n[k]}</span></button>`).join('')}</div>
     ${all ? `<div class="ph-prog"><div class="track"><i style="width:${(n.cart + n.home) / all * 100}%"></i></div><span class="num small muted">${n.cart + n.home} of ${all} sorted</span></div>
@@ -212,13 +225,13 @@ function groceryPhoneHTML(G) {
 }
 function viewPrep() {
   const G = groceryWeek();
-  return `<div class="row pg-tools"><select class="inp" data-input="gro-week" aria-label="Week">${G.opts}</select></div>
+  return `<div class="row pg-tools"><select class="inp" data-input="gro-week" aria-label="Week">${G.opts}</select><button type="button" class="btn icon" data-act="print-prep" aria-label="Print the prep schedule" title="Print the prep schedule">${icon('print')}</button></div>
     ${prepScheduleHTML(G)}<div style="height:16px"></div>${moneySaverHTML(G.wd)}`;
 }
 
 /* ---------------- YOU (phone) ---------------- */
 const SET_GROUPS = {
-  training: ['Training days & rest timer', () => trainingDaysCardHTML() + restSettingsHTML()],
+  training: ['Training style & days', () => stylesCardHTML() + '<div style="height:16px"></div>' + trainingDaysCardHTML() + restSettingsHTML()],
   targets: ['Targets & loss rate', () => lossRateCardHTML() + nutritionCardHTML()],
   body: ['Body & goals', () => bodyGoalsCardHTML()],
   gym: ['Gym cards', () => gymSettingsHTML()],
@@ -265,6 +278,7 @@ Object.assign(ACT, {
   'ws-step': el => { WS.v = Math.max(80, Math.min(500, Math.round((+WS.v + +el.dataset.v) * 10) / 10)); wsSync(); },
   'ws-save': () => wsSave(),
   'meal-swap': el => mealSwap(el.dataset.d, el.dataset.slot),
+  'dessert-add': el => mealSwap(el.dataset.d, 'dessert'),
   'ms-all': el => { MS.all = el.dataset.v === '1'; renderMealSwap(); },
   'ms-pick': el => msSet(el.dataset.rid),
   'ms-none': () => msSet(null),

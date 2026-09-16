@@ -29,6 +29,74 @@
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, .55);
   color-scheme: dark;
 }
+/* the accent picker in Appearance: a swatch per color, each painted with that color's own steps */
+.acc-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.acc-sw { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); color: var(--muted); cursor: pointer; font: inherit; }
+.acc-sw > i { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, var(--sw), var(--sw2)); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12); }
+.acc-sw:hover { border-color: var(--line-2); color: var(--text-2); }
+.acc-sw.on { border-color: var(--sw2); color: var(--text); box-shadow: 0 0 0 2px color-mix(in srgb, var(--sw) 30%, transparent); }
+.acc-sw:focus-visible { outline: 2px solid var(--sw2); outline-offset: 2px; }
+.acc-lime { --sw: #b5f23d; --sw2: #65a30d; }
+.acc-red { --sw: #fb7185; --sw2: #be123c; }
+.acc-blue { --sw: #60a5fa; --sw2: #1d4ed8; }
+.acc-purple { --sw: #a78bfa; --sw2: #6d28d9; }
+.acc-yellow { --sw: #facc15; --sw2: #a16207; }
+
+.dessert-add { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.dessert-add .tiny { flex: 1 1 260px; min-width: 0; }
+
+/* ---------- cardio ---------- */
+.chip.cd { --k: var(--kcal); display: inline-flex; align-items: center; gap: 5px; }
+.chip.cd small { opacity: .75; font-weight: 600; }
+.cell.cardio:not(.train) { background: linear-gradient(180deg, color-mix(in srgb, var(--kcal) 6%, var(--surface)) 0%, var(--surface) 42%); }
+.cd-pill { background: color-mix(in srgb, var(--kcal) 18%, transparent); color: var(--kcal); display: inline-flex; align-items: center; gap: 4px; }
+.cd-pill svg { width: 13px; height: 13px; }
+.cd-meta { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 12px; }
+.cd-meta > div { display: flex; flex-direction: column; gap: 2px; }
+.cd-min { display: inline-flex; align-items: center; gap: 8px; }
+.cd-types { display: flex; flex-direction: column; gap: 10px; margin-top: 6px; }
+.cd-grp { display: flex; flex-direction: column; gap: 5px; }
+.ph-cd .block { margin-top: 12px; }
+
+/* cardio mode: stopwatch, laps, estimated burn */
+.cw .cw-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 4px 16px 16px; overscroll-behavior: contain; }
+.cw-clock { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.cw-clock > b { font-size: clamp(48px, 16vw, 84px); line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.cw-pbar { width: 100%; margin-top: 6px; }
+.cw-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center; }
+.cw-stats > div { display: flex; flex-direction: column; gap: 2px; padding: 10px 6px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); }
+.cw-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cw-btns .btn { justify-content: center; }
+.cw-laps { list-style: none; margin: 0; padding: 0; max-height: 34vh; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r-sm); }
+.cw-laps li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.cw-laps li:last-child { border-bottom: 0; }
+.cw-laps .n { color: var(--muted); font-size: 12px; font-weight: 700; }
+.cw-how { padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); }
+.cw-foot { display: flex; gap: 10px; justify-content: space-between; }
+.set-togs { display: flex; flex-direction: column; gap: 10px; }
+.set-tog b svg { width: 15px; height: 15px; vertical-align: -3px; margin-right: 5px; }
+
+/* ---------- accent colors ----------
+   The five accent tokens and the background glow, redefined per color. Lime stays the default
+   and sets no attribute. Each color is picked separately for light and dark: the light steps are
+   dark enough to read as text on a near-white page, the dark steps light enough on a near-black
+   one, and --accent-ink flips so text on a primary button stays legible either way. */
+:root[data-accent="red"] { --accent: #e11d48; --accent-2: #be123c; --accent-ink: #ffffff; --accent-text: #be123c; --accent-soft: rgba(225, 29, 72, .14); --bg-glow1: rgba(225, 29, 72, .10); }
+:root[data-accent="blue"] { --accent: #2563eb; --accent-2: #1d4ed8; --accent-ink: #ffffff; --accent-text: #1d4ed8; --accent-soft: rgba(37, 99, 235, .14); --bg-glow1: rgba(37, 99, 235, .10); }
+:root[data-accent="purple"] { --accent: #7c3aed; --accent-2: #6d28d9; --accent-ink: #ffffff; --accent-text: #6d28d9; --accent-soft: rgba(124, 58, 237, .14); --bg-glow1: rgba(124, 58, 237, .10); }
+:root[data-accent="yellow"] { --accent: #facc15; --accent-2: #a16207; --accent-ink: #1a1400; --accent-text: #854d0e; --accent-soft: rgba(250, 204, 21, .20); --bg-glow1: rgba(250, 204, 21, .12); }
+
+:root[data-theme="dark"][data-accent="red"] { --accent: #fb7185; --accent-2: #e11d48; --accent-ink: #2a0710; --accent-text: #fda4af; --accent-soft: rgba(251, 113, 133, .14); --bg-glow1: rgba(251, 113, 133, .07); }
+:root[data-theme="dark"][data-accent="blue"] { --accent: #60a5fa; --accent-2: #3b82f6; --accent-ink: #06182e; --accent-text: #93c5fd; --accent-soft: rgba(96, 165, 250, .14); --bg-glow1: rgba(96, 165, 250, .07); }
+:root[data-theme="dark"][data-accent="purple"] { --accent: #a78bfa; --accent-2: #8b5cf6; --accent-ink: #17082e; --accent-text: #c4b5fd; --accent-soft: rgba(167, 139, 250, .14); --bg-glow1: rgba(167, 139, 250, .07); }
+:root[data-theme="dark"][data-accent="yellow"] { --accent: #facc15; --accent-2: #eab308; --accent-ink: #1a1400; --accent-text: #fde047; --accent-soft: rgba(250, 204, 21, .14); --bg-glow1: rgba(250, 204, 21, .08); }
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"][data-accent="red"] { --accent: #fb7185; --accent-2: #e11d48; --accent-ink: #2a0710; --accent-text: #fda4af; --accent-soft: rgba(251, 113, 133, .14); --bg-glow1: rgba(251, 113, 133, .07); }
+  :root[data-theme="system"][data-accent="blue"] { --accent: #60a5fa; --accent-2: #3b82f6; --accent-ink: #06182e; --accent-text: #93c5fd; --accent-soft: rgba(96, 165, 250, .14); --bg-glow1: rgba(96, 165, 250, .07); }
+  :root[data-theme="system"][data-accent="purple"] { --accent: #a78bfa; --accent-2: #8b5cf6; --accent-ink: #17082e; --accent-text: #c4b5fd; --accent-soft: rgba(167, 139, 250, .14); --bg-glow1: rgba(167, 139, 250, .07); }
+  :root[data-theme="system"][data-accent="yellow"] { --accent: #facc15; --accent-2: #eab308; --accent-ink: #1a1400; --accent-text: #fde047; --accent-soft: rgba(250, 204, 21, .14); --bg-glow1: rgba(250, 204, 21, .08); }
+}
 @media (prefers-color-scheme: dark) {
   :root[data-theme="system"] {
     --bg: #0a0d12; --bg-glow1: rgba(163, 230, 53, .07); --bg-glow2: rgba(57, 135, 229, .08);
@@ -995,6 +1063,26 @@ body.no-bg .card, body.no-bg .side, body.no-bg .lib, body.no-bg .hero { -webkit-
 .pr .pr-steps ol { padding-left: 6mm; margin: 0; } .pr .pr-steps li { margin: 1.5mm 0; }
 .pr .pr-links { margin-top: 5mm; font-size: 9pt; color: #333; word-break: break-all; }
 .pr footer { margin-top: 8mm; font-size: 8pt; color: #777; border-top: 1px solid #ddd; padding-top: 2mm; }
+/* shopping list, prep schedule and workout sheets share the recipe sheet's type and rules */
+.pr section + section { margin-top: 5mm; }
+.pr small { color: #666; }
+.pr td .q, .pr td small { font-weight: 400; }
+.pr td.bx { width: 6mm; font-size: 12pt; line-height: 1; padding-right: 1mm; }
+.pr .pr-cols section { margin-top: 0; }
+/* the shopping list flows down one column and into the next, so a short aisle leaves no hole */
+.pr .pr-flow { display: block; column-count: 2; column-gap: 9mm; }
+.pr .pr-flow section { break-inside: avoid-column; margin: 0 0 5mm; }
+.pr table.pr-wo { margin-top: 1mm; table-layout: fixed; }
+.pr .pr-wo th { text-align: left; font-size: 8.5pt; text-transform: uppercase; letter-spacing: .06em; color: #555; border-bottom: 1px solid #bbb; padding-bottom: 1mm; }
+.pr .pr-wo th:last-child, .pr .pr-wo td.sets { text-align: left; }
+.pr .pr-wo tr { break-inside: avoid-page; }
+.pr .pr-wo td { padding: 2mm 0; }
+.pr .pr-wo th:first-child, .pr .pr-wo td:first-child { width: 7mm; color: #666; }
+.pr .pr-wo th:nth-child(2), .pr .pr-wo td:nth-child(2) { width: 58mm; padding-right: 4mm; }
+.pr .pr-wo th:nth-child(3), .pr .pr-wo td:nth-child(3) { width: 35mm; padding-right: 4mm; text-align: left; }
+.pr .pr-prep td:first-child { width: 28mm; padding-right: 3mm; white-space: nowrap; vertical-align: top; }
+.pr td.sets { padding-left: 0; }
+.pr .lg { display: inline-block; min-width: 20mm; height: 6mm; margin: 0 1.5mm 1mm 0; padding: 0 1mm; border: 1px solid #bbb; border-radius: 1mm; font-size: 9pt; line-height: 6mm; text-align: center; }
 
 /* ---------- collapsible sections ---------- */
 .coll-btn { display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
@@ -1130,6 +1218,15 @@ details.dmeal-note .ing-list { margin-top: 6px; }
 .qa-modal .qa-food b { flex: 1; min-width: 0; }
 .qa-mac { margin: 14px 0 6px; font-size: 15px; font-variant-numeric: tabular-nums; }
 .qp-modal { width: min(560px, 100%); }
+/* the online (Open Food Facts) tab of the food picker */
+.seg.sm button { padding: 5px 10px; font-size: 12.5px; }
+.qp-empty { display: flex; align-items: center; gap: 10px; padding: 22px 14px; color: var(--muted); font-size: 13px; }
+.qp-empty svg { width: 18px; height: 18px; flex: none; }
+.fo-opt { align-items: flex-start; }
+.fo-img { width: 34px; height: 34px; flex: none; border-radius: 7px; object-fit: contain; background: var(--surface-3); }
+.fo-img.ph { display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.fo-img.ph svg { width: 16px; height: 16px; }
+
 .qp-list { max-height: min(56vh, 460px); overflow-y: auto; border: 1px solid var(--line-2); border-radius: 12px; }
 .qp-opt { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border: 0; border-bottom: 1px solid var(--line); background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .qp-opt:hover, .qp-opt:focus-visible { background: var(--surface-3); }

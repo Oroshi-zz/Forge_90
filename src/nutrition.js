@@ -260,9 +260,15 @@ const BASE_RECIPES = [
 const ING = {};
 const RECIPES = [];
 const RECIPE = {};
+/* MEAL_SLOTS is what the planner fills. DAY_SLOTS is what a day can hold: dessert is never
+   planned for you, but if you add one it is part of the day and its macros count like anything
+   else, so the rest of the day's portions resize around it. */
 const MEAL_SLOTS = ['breakfast', 'lunch', 'dinner', 'snack1', 'snack2'];
-const SLOT_LABEL = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack1: 'Snack', snack2: 'Snack 2' };
-const SLOT_CAT = { breakfast: 'breakfast', lunch: 'lunch', dinner: 'dinner', snack1: 'snack', snack2: 'snack' };
+const DAY_SLOTS = MEAL_SLOTS.concat(['dessert']);
+const SLOT_LABEL = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack1: 'Snack', snack2: 'Snack 2', dessert: 'Dessert' };
+const SLOT_CAT = { breakfast: 'breakfast', lunch: 'lunch', dinner: 'dinner', snack1: 'snack', snack2: 'snack', dessert: 'dessert' };
+const RECIPE_CATS = ['breakfast', 'lunch', 'dinner', 'snack', 'dessert'];   // every category a recipe can have
+const PLAN_CATS = ['breakfast', 'lunch', 'dinner', 'snack'];                // the ones the planner draws from
 
 
 /* ---------- recipe links (verified pages for each built-in recipe) ---------- */

@@ -99,7 +99,8 @@ function rtAlarmGo() {
   rtAlarmT = setInterval(beat, Math.max(1500, ((x.dur || 0) + 0.9) * 1000));
 }
 function mmss(ms) { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
-const restFor = row => (S.settings.restPlan !== false && row && +row.rest) || (+S.settings.restDef || 90);
+const RT_MIN = 15;                                   // shortest rest the timer will hold, in seconds
+const restFor = row => Math.max(RT_MIN, (S.settings.restPlan !== false && row && +row.rest) || (+S.settings.restDef || 90));
 const rtLeft = () => RT.run ? Math.max(0, RT.endAt - performance.now()) : RT.left;
 const rtBusy = () => RT.run || RT.paused;
 function rtIdle(row, keepSound) {
@@ -116,8 +117,14 @@ function rtStart() {
 }
 function rtPause() { RT.left = rtLeft(); RT.run = false; RT.paused = true; clearInterval(rtT); if (RT.cued) { soundStop(); RT.cued = false; } rtPaint(true); }
 function rtAdd(s) {
-  if (RT.flash) { rtIdle(null, true); RT.dur = s; RT.left = s * 1000; rtStart(); return; }   // "give me 30 more" right after it ends
-  RT.dur += s; if (RT.run) RT.endAt += s * 1000; else RT.left += s * 1000;
+  if (RT.flash) {                                    // it's already going off
+    if (s <= 0) { rtIdle(); rtPaint(true); return; } // taking time off a finished rest just clears it
+    rtIdle(null, true); RT.dur = Math.max(RT_MIN, s); RT.left = RT.dur * 1000; rtStart(); return;   // "give me a bit more"
+  }
+  const cur = rtLeft(), next = Math.max(RT_MIN * 1000, cur + s * 1000), delta = next - cur;
+  if (!delta) { if (s < 0) toast(`${RT_MIN} seconds is the shortest rest`); return; }
+  RT.dur = Math.max(RT_MIN, RT.dur + delta / 1000);  // the progress bar tracks the new length
+  if (RT.run) RT.endAt += delta; else RT.left = next;
   if (RT.cued && rtLeft() > (restSoundOf(restSoundId()).lead || 0) * 1000 + 150) { soundStop(); RT.cued = false; }
   rtPaint(true);
 }
@@ -136,7 +143,7 @@ function rtHTML() {
   const go = st === 'done' ? { ic: 'stop', a: 'Stop the alarm', cls: ' stop' } : { ic: RT.run ? 'pause' : 'play', a: `${RT.run ? 'Pause' : 'Start'} the rest timer`, cls: '' };
   return `<div class="rt ${st}" id="rt" role="timer" aria-label="Rest timer ${mmss(left)}">
     <div class="rt-l"><small>${lbl}</small><b class="num" id="rt-v">${mmss(left)}</b></div>
-    <div class="rt-b"><button type="button" data-act="rt-add" data-v="5" aria-label="Add 5 seconds">+5 s</button><button type="button" data-act="rt-add" data-v="30" aria-label="Add 30 seconds">+30 s</button>
+    <div class="rt-b"><button type="button" data-act="rt-add" data-v="-15" aria-label="15 seconds less"${st !== 'done' && left <= RT_MIN * 1000 ? ' disabled' : ''}>−15 s</button><button type="button" data-act="rt-add" data-v="15" aria-label="15 seconds more">+15 s</button>
       <button type="button" class="go${go.cls}" data-act="rt-go" aria-label="${go.a}">${icon(go.ic)}</button><button type="button" data-act="rt-reset" aria-label="Reset the rest timer">${icon('reset')}</button></div>
     <i class="bar" id="rt-bar" style="width:${st === 'idle' || !RT.dur ? 0 : (1 - left / (RT.dur * 1000)) * 100}%"></i></div>`;
 }
@@ -326,3 +333,98 @@ document.addEventListener('change', e => { const t = e.target; if (t && t.datase
 // the screen lock is dropped when the page is hidden; take it back when workout mode is showing again
 document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') { WO_LOCK = null; return; } if (WO && WO.open && !WO_LOCK && navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { WO_LOCK = l; }).catch(() => {}); if (RT.run) rtTick(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && WO && WO.open && !$('#modal') && !$('#gym-full')) woClose(); }, true);   // capture: runs before Escape closes a popup
+
+/* ============================================================
+   CARDIO MODE — a stopwatch with laps and a running calorie estimate.
+   Kept separate from lifting workout mode: there are no sets to log, the clock counts up rather
+   than down, and the useful controls are start/pause, lap and finish. Elapsed time is stored as
+   a start timestamp plus accumulated milliseconds, so it stays right if the screen sleeps or the
+   tab is backgrounded — a tick-counting timer drifts badly there.
+   ============================================================ */
+let CW = null;            // { d, k, min, run, at, acc, laps: [ms], open }
+let CW_LOCK = null, CW_T = null;
+const cwElapsed = () => CW ? CW.acc + (CW.run ? Date.now() - CW.at : 0) : 0;
+const cwKcal = () => CW ? cardioKcal(CW.k, cwElapsed() / 60000, statsOn(CW.d).w) : 0;
+function hms(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000)); const h = Math.floor(s / 3600);
+  return (h ? h + ':' + String(Math.floor(s / 60) % 60).padStart(2, '0') : String(Math.floor(s / 60))) + ':' + String(s % 60).padStart(2, '0');
+}
+function cwOpen(date) {
+  const d = date || todayISO(); const e = S.plan[d]; const c = e && dayCardio(e);
+  if (!c) { toast(d === todayISO() ? 'No cardio is planned today.' : 'No cardio is planned that day.'); return; }
+  closeModal();
+  if (!CW || CW.d !== d || CW.k !== c.k) CW = { d, k: c.k, min: c.min, run: false, at: 0, acc: 0, laps: [] };
+  const wasOpen = CW.open; CW.open = true; cwRender(); document.body.classList.add('wo-on');
+  if (!wasOpen) backPush('cardio', cwClose);
+  try { if (navigator.wakeLock && !CW_LOCK) navigator.wakeLock.request('screen').then(l => { CW_LOCK = l; }).catch(() => {}); } catch (x) { /* not supported */ }
+  cwTick();
+}
+function cwClose() {
+  if (!CW || !CW.open) return; CW.open = false; backDrop('cardio');
+  clearTimeout(CW_T); CW_T = null;
+  const r = $('#wo-root'); if (r) r.innerHTML = ''; document.body.classList.remove('wo-on');
+  if (CW_LOCK) { CW_LOCK.release().catch(() => {}); CW_LOCK = null; }
+  render();
+}
+function cwTick() {
+  clearTimeout(CW_T); if (!CW || !CW.open) return;
+  const t = $('#cw-time'); if (t) t.textContent = hms(cwElapsed());
+  const k = $('#cw-kcal'); if (k) k.textContent = fmt(cwKcal());
+  const b = $('#cw-bar'); if (b) b.style.width = Math.min(100, cwElapsed() / (CW.min * 60000) * 100) + '%';
+  if (CW.run) CW_T = setTimeout(cwTick, 250);
+}
+function cwStart() { if (!CW || CW.run) return; CW.run = true; CW.at = Date.now(); cwRender(); }
+function cwPause() { if (!CW || !CW.run) return; CW.acc = cwElapsed(); CW.run = false; CW.at = 0; cwRender(); }
+function cwLap() {
+  if (!CW) return; if (!CW.run) { cwStart(); return; }
+  const prev = CW.laps.reduce((a, l) => a + l, 0); const t = cwElapsed();
+  if (t - prev < 1000) return;                       // ignore a double tap
+  CW.laps.push(t - prev); cwRender();
+}
+function cwReset() { if (!CW) return; CW.run = false; CW.at = 0; CW.acc = 0; CW.laps = []; cwRender(); }
+/* Finishing writes the session to the day so the calendar and Progress can show it. */
+function cwFinish() {
+  if (!CW) return;
+  const ms = cwElapsed();
+  if (ms < 20000) { toast(ms ? 'Too short to log — get the clock past 20 seconds' : 'The clock hasn’t started yet'); return; }
+  const mins = Math.max(1, Math.round(ms / 60000));
+  const e = S.plan[CW.d]; if (e && e.c) { e.c.doneMin = mins; e.c.kcal = cwKcal(); e.c.laps = CW.laps.length; e.c.at = todayISO(); }
+  saveState(); const kc = cwKcal(); CW.open = false; backDrop('cardio'); clearTimeout(CW_T);
+  const r = $('#wo-root'); if (r) r.innerHTML = ''; document.body.classList.remove('wo-on');
+  if (CW_LOCK) { CW_LOCK.release().catch(() => {}); CW_LOCK = null; }
+  CW = null; render();
+  toast(`${mins} min logged · about ${fmt(kc)} kcal. It doesn’t change today’s calorie target.`);
+}
+function cwRender() {
+  if (!CW || !CW.open) return;
+  const root = $('#wo-root'); if (!root) return;
+  const k = CARDIO[CW.k]; const el = cwElapsed(); const goal = CW.min * 60000;
+  const laps = CW.laps.map((ms, i) => `<li><span class="n">${i + 1}</span><b class="num">${hms(ms)}</b></li>`).reverse().join('');
+  const best = CW.laps.length ? Math.min(...CW.laps) : 0;
+  root.innerHTML = `<div class="wom" role="dialog" aria-label="Cardio"><div class="wo-in cw">
+    <div class="wo-h"><button class="btn icon ghost" data-act="cw-close" aria-label="Close">${icon('x')}</button>
+      <div class="t"><b>${esc(k.name)}</b><small>${esc(fmtDate(CW.d, { weekday: 'long', month: 'short', day: 'numeric' }))} · target ${CW.min} min</small></div></div>
+    <div class="cw-body">
+      <div class="cw-clock"><b class="num" id="cw-time">${hms(el)}</b><span class="tiny muted">of ${CW.min}:00 target</span>
+        <div class="pbar cw-pbar"><i id="cw-bar" style="width:${Math.min(100, el / goal * 100)}%"></i></div></div>
+      <div class="cw-stats"><div><span class="tiny muted">Estimated burn</span><b class="num"><span id="cw-kcal">${fmt(cwKcal())}</span> kcal</b></div>
+        <div><span class="tiny muted">Laps</span><b class="num">${CW.laps.length}</b></div>
+        <div><span class="tiny muted">Best lap</span><b class="num">${best ? hms(best) : '—'}</b></div></div>
+      <div class="cw-btns"><button type="button" class="btn big ${CW.run ? '' : 'primary'}" data-act="${CW.run ? 'cw-pause' : 'cw-start'}">${icon(CW.run ? 'minus' : 'play')}${CW.run ? 'Pause' : el ? 'Resume' : 'Start'}</button>
+        <button type="button" class="btn big" data-act="cw-lap" ${CW.run || el ? '' : 'disabled'}>${icon('lap')}Lap</button></div>
+      ${laps ? `<ol class="cw-laps">${laps}</ol>` : `<div class="tiny muted cw-how">${esc(k.how)}</div>`}
+      <div class="cw-foot"><button type="button" class="btn ghost" data-act="cw-reset">Reset</button><button type="button" class="btn primary" data-act="cw-finish">${icon('check')}Finish</button></div>
+      <div class="tiny muted">The burn is estimated from your body weight and the clock (MET ${k.met}), not measured. It does not change your calorie target.</div>
+    </div></div></div>`;
+  cwTick();
+}
+Object.assign(ACT, {
+  'cw-open': el => cwOpen(el.dataset.d || todayISO()),
+  'cw-close': () => cwClose(),
+  'cw-start': () => cwStart(), 'cw-pause': () => cwPause(), 'cw-lap': () => cwLap(),
+  'cw-reset': () => confirmBox('Reset the stopwatch?', 'The time and laps for this session are cleared.', 'Reset', () => cwReset(), true),
+  'cw-finish': () => cwFinish()
+});
+// the clock is a timestamp difference, so a backgrounded tab catches up rather than falling behind
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && CW && CW.open) { cwTick(); if (!CW_LOCK && navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { CW_LOCK = l; }).catch(() => {}); } else CW_LOCK = null; });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && CW && CW.open && !$('#modal')) cwClose(); }, true);

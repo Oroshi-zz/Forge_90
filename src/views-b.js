@@ -47,6 +47,7 @@ function viewWorkouts() {
   const libCard = `<div class="card ${collCls('lib')}" data-coll="lib"><div class="card-h">${collHead('lib', 'Exercise library', `<span class="muted small">Hover for step-by-step form · switch exercises on or off · add your own with the + card</span>`)}</div><div class="coll-body">
       <div class="note" style="margin-bottom:14px">${icon('info')}<span>Switching an exercise off removes it from the rotation from this plan week on (next week if you’ve already logged it this week); past sessions keep what you did. Every muscle group keeps at least one exercise on — if every variation for a slot is off, the plan borrows another switched-on exercise for the same muscles. Research picks start switched off; hover one to see why it’s included.</span></div>${lib}</div></div>`;
   return `<div class="page-head"><div class="t"><h1>Workout plan</h1><p>A 90-day launch, then repeating 13-week cycles · ${S.settings.trainDays.length} training day${S.settings.trainDays.length === 1 ? '' : 's'} a week (change it below or in <a href="#/settings">Settings</a>) · Push / Pull / Legs — push and pull never share a session. Every muscle group rotates through 3+ exercise variations.</p></div></div>
+    ${stylesCardHTML(true)}<div style="height:16px"></div>
     ${trainingDaysCardHTML(true)}<div style="height:16px"></div>
     <section class="${collCls('cycle1')}" data-coll="cycle1"><div class="coll-row">${collHead('cycle1', 'Cycle 1 · the 90-day launch')}</div><div class="coll-body"><div class="grid g4">${phaseCards}</div></div></section><div style="height:18px"></div>
     <section class="${collCls('cycle2')}" data-coll="cycle2"><div class="coll-row">${collHead('cycle2', 'Cycle 2 onward · repeats every 13 weeks', `<span class="pill">Next: ${fmtDate(cycleStartDate(2), { month: 'short', day: 'numeric', year: 'numeric' })}</span>`)}</div><div class="coll-body">
@@ -167,13 +168,65 @@ function recipePrintHTML(rid) {
     ${links.length ? `<section class="pr-links"><h2>Source</h2>${links.map(l => `<div>${esc(l.title || l.site || '')}${l.title ? ' — ' : ''}${esc(l.url)}</div>`).join('')}</section>` : ''}
     <footer>${esc(appTitle())} · printed ${esc(fmtDate(todayISO(), { month: 'short', day: 'numeric', year: 'numeric' }))} · amounts are one standard serving; your daily portions are sized to your targets in the app.</footer></article>`;
 }
-function printRecipe(rid) {
-  if (!RECIPE[rid]) return;
+/* Every printable sheet goes through here: build it, swap the page for it, print, tidy up.
+   Recipes were the only thing with a print layout; the shopping list, the prep schedule and a
+   day's workout all came out as a screenshot of the app. */
+function printSheet(html) {
+  if (!html) { toast('There’s nothing to print here'); return; }
   let el = $('#print-area'); if (!el) { el = document.createElement('div'); el.id = 'print-area'; document.body.appendChild(el); }
-  el.innerHTML = recipePrintHTML(rid); document.body.classList.add('printing');
+  el.innerHTML = html; document.body.classList.add('printing');
   const done = () => { document.body.classList.remove('printing'); const a = $('#print-area'); if (a) a.remove(); window.removeEventListener('afterprint', done); };
   window.addEventListener('afterprint', done);
   setTimeout(() => { window.print(); setTimeout(() => { if (!window.matchMedia || !matchMedia('print').matches) done(); }, 500); }, 50);
+}
+function printRecipe(rid) { if (!RECIPE[rid]) return; printSheet(recipePrintHTML(rid)); }
+const prFoot = note => `<footer>${esc(appTitle())} · printed ${esc(fmtDate(todayISO(), { month: 'short', day: 'numeric', year: 'numeric' }))}${note ? ' · ' + esc(note) : ''}</footer>`;
+const prWeekMeta = G => `Week ${G.wk} · ${fmtDate(G.wd[0], { month: 'short', day: 'numeric' })} to ${fmtDate(G.wd[G.wd.length - 1], { month: 'short', day: 'numeric' })}`;
+/* Shopping list: aisle by aisle, with a box to tick and what the pantry already covers. */
+function groceryPrintHTML(G) {
+  const { GL, got } = G;
+  const aisles = {}; GL.rows.forEach(r => { const a = ING[r.id].a; (aisles[a] = aisles[a] || []).push(r); });
+  const order = AISLES.concat(Object.keys(aisles).filter(a => !AISLES.includes(a)));
+  const row = r => { const g = groceryText(r.id, r.total); const st = groRowState(r, got); const pi = packInfo(r.id); const npk = Math.ceil(r.total / pi.P - 1e-9);
+    const note = st.covered ? 'in your pantry' : r.have > 0 ? pantryQtyText(r.id, r.have) + ' at home' : pi.w >= .3 && pi.P > 1 ? `≈ ${npk} pack${npk === 1 ? '' : 's'}` : '';
+    return `<tr><td class="bx">${st.checked ? '☑' : '☐'}</td><td>${esc(g.name)}${note ? ` <small>${esc(note)}</small>` : ''}</td><td class="q">${esc(g.qty)}${g.sub ? ` <small>${esc(g.sub)}</small>` : ''}</td></tr>`; };
+  const cols = order.filter(a => aisles[a]).map(a => `<section><h2>${esc(a)}</h2><table>${aisles[a].slice().sort((x, y) => ING[x.id].n.localeCompare(ING[y.id].n)).map(row).join('')}</table></section>`).join('');
+  const T = groTools(GL.rows, got);
+  return `<article class="pr"><div class="pr-meta">${esc(prWeekMeta(G))}</div><h1>Shopping list</h1>
+    <div class="pr-mac">${GL.rows.length} item${GL.rows.length === 1 ? '' : 's'}${T.checked ? ` · ${T.checked} already ticked` : ''}</div>
+    <div class="pr-cols pr-flow">${cols || '<div>Nothing planned this week.</div>'}</div>
+    ${prFoot('rice and quinoa are listed uncooked; seasonings, garlic, citrus and cooking spray are not listed')}</article>`;
+}
+/* Prep schedule: what to batch cook on which day, what it covers, and the cook-fresh meals. */
+function prepPrintHTML(G) {
+  const { cooks, singles, carried } = G;
+  const cookRows = cooks.slice().sort((a, b) => a.d < b.d ? -1 : 1).map(({ d, m, b }) =>
+    `<tr><td>${esc(fmtDate(d, { weekday: 'short', month: 'short', day: 'numeric' }))}</td>
+      <td>${esc(m.r.name)} <small>×${b.batch.size}${b.batch.size < m.r.yield ? `, recipe at ${Math.round(b.batch.scale * 100)}%` : ''}</small>
+        <div><small>Eat: ${esc(b.batch.members.map(o => fmtDate(o.date, { weekday: 'short' }) + ' ' + SLOT_LABEL[o.slot].toLowerCase()).join(', '))}${m.r.storage === 'freezer' ? '; freeze the extras' : ''}</small></div></td>
+      <td class="q">~${m.r.time} min</td></tr>`).join('');
+  const fresh = {}; singles.forEach(({ m }) => fresh[m.r.id] = (fresh[m.r.id] || 0) + 1);
+  return `<article class="pr"><div class="pr-meta">${esc(prWeekMeta(G))}</div><h1>Meal prep</h1>
+    <section><h2>Batch cook</h2>${cookRows ? `<table class="pr-prep">${cookRows}</table>` : '<div>No batch cooking this week.</div>'}</section>
+    ${carried.length ? `<section><h2>Already cooked</h2><div>${esc([...new Set(carried.map(c => c.m.r.name))].join(', '))} carried over from last week.</div></section>` : ''}
+    <section><h2>Cook fresh</h2>${Object.keys(fresh).length ? `<table>${Object.entries(fresh).map(([id, n]) => `<tr><td>${esc(RECIPE[id] ? RECIPE[id].name : id)}</td><td class="q">${n} time${n === 1 ? '' : 's'}</td></tr>`).join('')}</table>` : '<div>None.</div>'}</section>
+    ${prFoot('prep the evening before or the morning of')}</article>`;
+}
+/* A day's session, with a box per set to write the weight and reps in. Anything already logged
+   is printed instead, so the same sheet works as a plan or as a record. */
+function workoutPrintHTML(date) {
+  const e = planCell(date); if (!e || !e.w || !TEMPLATES[e.w.t]) return '';
+  const t = TEMPLATES[e.w.t]; const rows = sessionRows(e.w); const wk = planWeek(date); const idx = planIndex(date);
+  const cell = (r, k) => { const s = ((S.logs[date] || {})[r.ex.id] || [])[k] || {};
+    return `<span class="lg">${s.r > 0 ? `${s.w != null && s.w !== '' ? esc(String(s.w)) : '—'} × ${esc(String(s.r))}` : ''}</span>`; };
+  const line = r => `<tr><td>${r.i + 1}</td>
+    <td>${esc(r.ex.name)}<div><small>${esc(SLOTS[r.slot].label)} · ${esc(r.ex.equip)}</small></div></td>
+    <td class="q">${r.sets} × ${esc(String(r.reps))}<div><small>RIR ${esc(String(r.rir))} · rest ${r.rest >= 120 ? r.rest / 60 + ' min' : r.rest + ' s'}</small></div></td>
+    <td class="sets">${Array.from({ length: r.sets }, (_, k) => cell(r, k)).join('')}</td></tr>`;
+  return `<article class="pr"><div class="pr-meta">${esc(fmtDate(date, { weekday: 'long', month: 'long', day: 'numeric' }))} · ${idx >= 0 ? `Day ${idx + 1} · ` : ''}Week ${wk}</div><h1>${esc(t.name)}</h1>
+    <div class="pr-mac">${rows.reduce((a, r) => a + r.sets, 0)} sets · about ${estMinutes(rows)} min${t.focus ? ` · ${esc(t.focus)}` : ''}</div>
+    <section><table class="pr-wo"><thead><tr><th>#</th><th>Exercise</th><th>Target</th><th>Sets (lb × reps)</th></tr></thead><tbody>${rows.map(line).join('')}</tbody></table></section>
+    ${prFoot('RIR is reps in reserve: how many more clean reps you could have done')}</article>`;
 }
 
 /* ---------------- GROCERY & PREP ---------------- */
@@ -192,7 +245,7 @@ function groceryWeek() {
     else { singles.push({ d, m }); m.items.forEach(it => totals[it.id] = (totals[it.id] || 0) + it.amt); if (m.partner) m.partner.items.forEach(([id, a]) => totals[id] = (totals[id] || 0) + a); }
   }));
   const carried = []; wd.forEach(d => A.days[d].meals.forEach(m => { const b = A.batches.info[d + '|' + m.slot]; if (b && b.role === 'leftover' && b.batch.cook < wd[0]) carried.push({ d, m, b }); }));
-  const got = syncActive() ? ((SY.data.grocery || {})[wd[0]] || {}) : ((S.grocery = S.grocery || {})['w' + wk] || {});
+  const got = ((syncActive() ? (SY.data.grocery || {}) : (S.grocery = S.grocery || {}))[wd[0]]) || {};
   const GL = groceryRows(A, wd, totals);
   GRO_ROWS = { rows: GL.rows, week: wd[0], wk };
   const nW = Math.ceil(dates.length / 7);
@@ -206,7 +259,7 @@ function prepScheduleHTML(G) {
       <div class="small sub" style="margin-top:3px">Eat: ${b.batch.members.map(o => fmtDate(o.date, { weekday: 'short' }) + ' ' + SLOT_LABEL[o.slot].toLowerCase()).join(' · ')}${m.r.storage === 'freezer' ? ' · freeze extras' : ''}</div>
       <div class="tiny muted">Prep ${fmtDate(prep, { weekday: 'long' })} evening or ${fmtDate(d, { weekday: 'long' })} morning · ~${m.r.time} min${b.batch.size < m.r.yield ? ` · recipe scaled to ${Math.round(b.batch.scale * 100)}%` : ''}</div></div></div>`; }).join('') || '<div class="muted small">No batch cooking this week.</div>';
   const singleSummary = {}; singles.forEach(({ m }) => singleSummary[m.r.id] = (singleSummary[m.r.id] || 0) + 1);
-  return `<div class="card"><div class="card-h"><h2>Batch-cook schedule</h2></div>${cookRows}
+  return `<div class="card"><div class="card-h"><h2>Batch-cook schedule</h2><div class="spacer"></div><button class="btn sm" data-act="print-prep">${icon('print')}Print</button></div>${cookRows}
         ${carried.length ? `<div class="note" style="margin-top:12px">${icon('loop')}<span>Carried over from last week (already cooked): ${[...new Set(carried.map(c => c.m.r.name))].map(esc).join(', ')}.</span></div>` : ''}</div>
         <div style="height:16px"></div><div class="card"><div class="card-h"><h2>Cook-fresh meals</h2></div>
         <div class="row wrap" style="gap:6px">${Object.entries(singleSummary).map(([id, n]) => `<span class="pill">${esc(RECIPE[id].emoji)} ${esc(RECIPE[id].name)}${n > 1 ? ' ×' + n : ''}</span>`).join('') || '<span class="muted small">None</span>'}</div></div>`;
@@ -225,7 +278,7 @@ function viewGrocery() {
     return `<label class="gro-item ${st.checked ? 'got' : ''} ${st.covered ? 'pan' : ''}"><input type="checkbox" data-input="gro" data-id="${id}" ${st.covered ? 'data-pan="1"' : ''} ${st.checked ? 'checked' : ''}><span>${esc(g.name)}${st.covered ? `<span class="gro-pan-ic" title="In your pantry">${icon('box')}</span>` : ''}</span><span class="q">${g.qty}${g.sub ? `<small>${g.sub}</small>` : ''}${pkTxt}${panTxt}</span></label>`; }).join('')}</div>`).join('');
   const T = groTools(GL.rows, got); const nAll = GL.rows.length;
   return `<div class="page-head"><div class="t"><h1>Grocery & meal prep</h1><p>Quantities are summed from the exact scaled portions on your calendar — including leftovers — for the selected week.</p></div>
-      <div class="row wrap">${syncBtnHTML()}<select class="inp" data-input="gro-week">${opts}</select><button class="btn" data-act="copy-list">${icon('list')}Copy list</button><button class="btn" data-act="print">Print</button></div></div>
+      <div class="row wrap">${syncBtnHTML()}<select class="inp" data-input="gro-week">${opts}</select><button class="btn" data-act="copy-list">${icon('list')}Copy list</button><button class="btn" data-act="print-gro">${icon('print')}Print list</button></div></div>
     ${syncGroceryNote(wd, A)}
     ${moneySaverHTML(wd)}<div style="height:16px"></div>
     <div class="g-half">
@@ -382,6 +435,42 @@ function rateInfoHTML(rate) {
 }
 /* settings cards shared by Settings and the Diet plan */
 const setField = (lbl, name, val, attrs = '', hint = '') => `<div class="field"><label>${lbl}</label><input class="inp" name="${name}" value="${esc(val)}" ${attrs}>${hint ? `<span class="tiny muted">${hint}</span>` : ''}</div>`;
+/* Three switches, and the program is re-prescribed rather than replaced. With both lifting
+   styles on it is the program as written; with one on, the rows that used the other style are
+   re-prescribed at matching reps and rests. Cardio is its own slot on a day, not a replacement
+   for the lifting one. */
+const STYLE_DEFS = [
+  ['strength', 'Strength', 'dumbbell', 'Heavier work in the 3 to 8 rep range with longer rests. Trains how much you can lift.'],
+  ['hypertrophy', 'Hypertrophy', 'flame', 'Moderate loads for 8 to 20 reps with shorter rests. Trains how much muscle you carry.'],
+  ['cardio', 'Cardio', 'heart', 'Adds cardio sessions to the plan, on the days without a lifting session by default.']
+];
+function stylesCardHTML(coll) {
+  const st = styles(); const cp = cardioPlan(); const on = Object.keys(st).filter(k => st[k]);
+  const pill = `<span class="pill acc">${on.length ? on.map(k => (STYLE_DEFS.find(s => s[0] === k) || [, k])[1]).join(' · ') : 'None'}</span>`;
+  const sw = STYLE_DEFS.map(([k, label, ic, why]) => `<label class="set-tog"><span><b class="small">${icon(ic)}${label}</b><span class="tiny muted">${esc(why)}</span></span>
+    <input type="checkbox" data-input="style" data-v="${k}" ${st[k] ? 'checked' : ''}><i class="switch ${st[k] ? 'on' : ''}" aria-hidden="true"><i></i></i></label>`).join('');
+  const both = st.strength && st.hypertrophy;
+  const note = both ? 'Both on: the program runs exactly as written, with its own mix of strength and hypertrophy rows.'
+    : st.strength ? 'Strength only: the hypertrophy rows are re-prescribed at lower reps with longer rests. Same movements, heavier work.'
+    : st.hypertrophy ? 'Hypertrophy only: the strength rows are re-prescribed at higher reps with shorter rests. Same movements, more volume.'
+    : 'Both lifting styles are off, so the plan is cardio only. Switch one back on to get sessions again.';
+  const cd = st.cardio ? `<hr class="sep"><div class="grid g2" style="gap:12px">
+      <div class="field"><label>Cardio sessions a week</label><div class="big-num"><button type="button" class="btn icon" data-act="cd-per" data-v="-1" aria-label="One fewer">${icon('minus')}</button><b class="num">${cp.perWeek}</b><button type="button" class="btn icon" data-act="cd-per" data-v="1" aria-label="One more">${icon('plus')}</button></div></div>
+      <div class="field"><label>Minutes each</label><div class="big-num"><button type="button" class="btn icon" data-act="cd-dur" data-v="-5" aria-label="Five minutes less">${icon('minus')}</button><b class="num">${cp.minutes}</b><button type="button" class="btn icon" data-act="cd-dur" data-v="5" aria-label="Five minutes more">${icon('plus')}</button></div></div></div>
+    <div class="field" style="margin-top:12px"><label>Kinds of cardio to rotate</label>
+      <div class="cd-types">${CARDIO_GROUPS.map(g => `<div class="cd-grp"><span class="tiny muted">${esc(g)}</span><div class="row wrap" style="gap:6px">${CARDIO_IDS.filter(id => CARDIO[id].group === g).map(id => `<label class="chk-pill ${(cp.types || []).includes(id) ? 'on' : ''}"><input type="checkbox" data-input="cd-type" data-v="${id}" ${(cp.types || []).includes(id) ? 'checked' : ''}><span>${esc(CARDIO[id].name)}</span></label>`).join('')}</div></div>`).join('')}</div></div>
+    <div class="note" style="margin-top:12px">${icon('info')}<span>Cardio lands on days without a lifting session. If a week has fewer free days than sessions asked for, the rest double up on lifting days. A day's calorie target still comes from the lifting session alone, so cardio never moves your macros.</span></div>` : '';
+  const body = `<div class="set-togs">${sw}</div><div class="note" style="margin-top:12px">${icon('info')}<span>${esc(note)}</span></div>${cd}`;
+  return coll ? `<div class="card ${collCls('styles')}" data-coll="styles"><div class="card-h">${collHead('styles', 'Training style', pill)}</div><div class="coll-body">${body}</div></div>`
+    : `<div class="card"><div class="card-h"><h2>Training style</h2>${pill}</div>${body}</div>`;
+}
+/* Every style change re-plans from today forward: sessions, cardio placement and the rest-day
+   snacks that follow whether a day has a lifting session. Past days are left as they happened. */
+function styleApply(msg) {
+  const from = maxISO(todayISO(), S.settings.startDate);
+  rescheduleWorkouts(from); saveState(); render();
+  toast(`${msg} — plan updated from ${fmtDate(from)}`, true);
+}
 function trainingDaysCardHTML(coll) { const st = S.settings; const f = setField;
   const pill = `<span class="pill acc" id="td-count">${st.trainDays.length} day${st.trainDays.length === 1 ? '' : 's'} / week</span>`;
   const body = `<div class="row wrap td-pick">${[1, 2, 3, 4, 5, 6, 0].map(i => `<label class="td ${st.trainDays.includes(i) ? 'on' : ''}"><input type="checkbox" data-input="td" value="${i}" ${st.trainDays.includes(i) ? 'checked' : ''}><span>${DOW[i]}</span></label>`).join('')}</div>
@@ -451,6 +540,7 @@ function viewSettings(group) {
   const f = (lbl, name, val, attrs = '', hint = '') => `<div class="field"><label>${lbl}</label><input class="inp" name="${name}" value="${esc(val)}" ${attrs}>${hint ? `<span class="tiny muted">${hint}</span>` : ''}</div>`;
   return `<div class="page-head"><div class="t"><h1>Settings</h1><p>${AUTH.mode === 'server' ? 'Everything is saved to your account. Export a backup now and then.' : 'Everything is saved in this browser. Export a backup now and then.'}</p></div></div>
     <div class="grid g2">
+      ${stylesCardHTML()}<div style="height:16px"></div>
       ${trainingDaysCardHTML()}
       ${lossRateCardHTML()}
       ${bodyGoalsCardHTML()}
@@ -469,6 +559,7 @@ function appearanceCardHTML() {
   const st = S.settings;
   return `<div class="card"><div class="card-h"><h2>Appearance & data</h2></div>
         <div class="field"><label>Theme</label><div class="seg">${['dark', 'light', 'system'].map(t => `<button class="${st.theme === t ? 'on' : ''}" data-act="theme" data-v="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></div>
+        <div class="field" style="margin-top:12px"><label>Accent color</label><div class="acc-pick" role="group" aria-label="Accent color">${ACCENTS.map(([v, l]) => `<button type="button" class="acc-sw acc-${v} ${(st.accent || 'lime') === v ? 'on' : ''}" data-act="accent" data-v="${v}" title="${l}" aria-label="${l}" aria-pressed="${(st.accent || 'lime') === v}"><i></i><span class="tiny">${l}</span></button>`).join('')}</div></div>
         <label class="set-tog" style="margin-top:12px"><span><b class="small">Background photos</b><span class="tiny muted">${st.bgPhotos !== false ? 'A fitness photo behind each page.' : 'Off — plain background. Pages load faster and text is easier to read.'}</span></span><input type="checkbox" data-input="bg-photos" ${st.bgPhotos !== false ? 'checked' : ''}><i class="switch ${st.bgPhotos !== false ? 'on' : ''}" aria-hidden="true"><i></i></i></label>
         ${st.bgPhotos !== false ? `<hr class="sep">${backgroundsHTML()}` : ''}
         <hr class="sep"><div class="row wrap"><button class="btn" data-act="export">${icon('download')}Export backup</button><label class="btn">${icon('upload')}Import backup<input type="file" accept="application/json" data-input="import" hidden></label>
@@ -547,7 +638,15 @@ function render() {
   if (UI._scrollTo) { const el = document.getElementById(UI._scrollTo); UI._scrollTo = null; if (el) el.scrollIntoView({ block: 'start' }); }
   tipA11y(); woRefresh();
 }
-function applyTheme() { const t = (S && S.settings.theme) || UI.lastTheme || 'dark'; document.documentElement.dataset.theme = t; if (UI.lastTheme !== t) { UI.lastTheme = t; saveUI(); } }
+/* Both the theme and the accent are mirrored into UI so the sign-in screen and the first paint
+   after a reload use the last ones seen, instead of flashing the defaults. */
+const ACCENTS = [['lime', 'Lime'], ['red', 'Red'], ['blue', 'Blue'], ['purple', 'Purple'], ['yellow', 'Yellow']];
+function applyTheme() {
+  const t = (S && S.settings.theme) || UI.lastTheme || 'dark'; document.documentElement.dataset.theme = t;
+  const a = (S && S.settings.accent) || UI.lastAccent || 'lime';
+  if (a === 'lime') delete document.documentElement.dataset.accent; else document.documentElement.dataset.accent = a;
+  if (UI.lastTheme !== t || UI.lastAccent !== a) { UI.lastTheme = t; UI.lastAccent = a; saveUI(); }
+}
 
 /* ---------------- actions ---------------- */
 const ACT = {
@@ -564,6 +663,14 @@ const ACT = {
   'plan-phase': el => { UI.planPhase = el.dataset.v; saveUI(); render(); },
   recipe: el => recipeModal(el.dataset.rid),
   'recipe-print': el => printRecipe(el.dataset.rid),
+  'cd-per': el => { const c = cardioPlan(); S.settings.cardio = Object.assign(c, { perWeek: clamp(c.perWeek + (+el.dataset.v || 0), 0, 7) }); styleApply('Cardio sessions updated'); },
+  'cd-dur': el => { const c = cardioPlan(); S.settings.cardio = Object.assign(c, { minutes: clamp(c.minutes + (+el.dataset.v || 0), 5, 180) }); styleApply('Cardio length updated'); },
+  'cd-add': el => { const d = el.dataset.d; pushUndo('add cardio'); S.plan[d].c = { k: cardioTypes()[0], min: cardioPlan().minutes, by: 'user' }; commitPlan('Cardio added'); },
+  'cd-min': el => { const d = el.dataset.d, c = S.plan[d] && S.plan[d].c; if (!c) return;
+    c.min = clamp(Math.round((+c.min || 30) + (+el.dataset.v || 0)), 5, 180); c.by = 'user'; saveState(); render(); },
+  'print-gro': () => printSheet(groceryPrintHTML(groceryWeek())),
+  'print-prep': () => printSheet(prepPrintHTML(groceryWeek())),
+  'print-wo': el => printSheet(workoutPrintHTML(el.dataset.d)),
   'recipe-expand': el => { const h = location.hash; REC_FROM = /^#\/recipe\//.test(h) ? REC_FROM : (h || '#/'); closeModal(); location.hash = '#/recipe/' + el.dataset.rid; },
   'toggle-done': el => { const d = el.dataset.date; if (S.done[d]) delete S.done[d]; else S.done[d] = true; saveState(); render(); toast(S.done[d] ? 'Workout marked complete 💪' : 'Marked not complete'); },
   'set-rate': el => { S.settings.rate = +el.dataset.v; saveState(); render(); toast(`Loss rate set to ${el.dataset.v} lb/week — portions updated`); },
@@ -573,13 +680,13 @@ const ACT = {
   'pr-range': el => { UI.prRange = el.dataset.v === '14' ? '14' : 'all'; saveUI(); render(); },
   'del-weight': el => { S.weights = S.weights.filter(x => x.d !== el.dataset.d); saveState(); render(); toast('Weigh-in deleted'); },
   theme: el => { S.settings.theme = el.dataset.v; saveState(); applyTheme(); render(); },
+  accent: el => { S.settings.accent = el.dataset.v; saveState(); applyTheme(); bgCurrent = null; render(); },
   'theme-toggle': () => { S.settings.theme = effTheme() === 'light' ? 'dark' : 'light'; saveState(); applyTheme(); render(); },
   'nav-toggle': () => { UI.navCollapsed = !UI.navCollapsed; saveUI(); hideTip(); render();
     setTimeout(() => { if (location.hash.startsWith('#/progress')) progressCharts(); if (location.hash.startsWith('#/calendar') && calIsCompact() !== UI._calCompact) render(); }, 260); },
   export: () => { const blob = new Blob([JSON.stringify(S, null, 1)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `forge90-backup-${todayISO()}.json`; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); toast('Backup downloaded'); },
   reset: () => confirmBox('Reset everything?', 'This deletes your plan edits, weigh-ins, strength logs, custom foods and recipes from this browser. Export a backup first if you want to keep them.', 'Reset', () => { S = freshState(); rebuildCatalog(); ensureHorizon(); bgCurrent = null; saveState(); undoStack.length = 0; applyTheme(); showOnboarding(() => { shell(); render(); toast('Reset complete — your new plan is ready'); }); }, true),
-  'copy-list': () => { const txt = $$('.gro-item').map(l => `${l.querySelector('input').checked ? '[x]' : '[ ]'} ${l.children[1].textContent} — ${l.querySelector('.q').childNodes[0].textContent}`).join('\n'); (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Shopping list copied'), () => toast('Copy not available — use Print instead')); },
-  print: () => window.print()
+  'copy-list': () => { const txt = $$('.gro-item').map(l => `${l.querySelector('input').checked ? '[x]' : '[ ]'} ${l.children[1].textContent} — ${l.querySelector('.q').childNodes[0].textContent}`).join('\n'); (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Shopping list copied'), () => toast('Copy not available — use Print instead')); }
 };
 function shiftCal(n) {
   if (UI.calView === 'week') UI.calWeek = addDays(UI.calWeek, 7 * n);
@@ -609,6 +716,11 @@ document.addEventListener('change', e => {
   }
   const inp = el.dataset.input;
   if (inp === 'day-wo') { pushUndo('change workout'); const d = el.dataset.date; S.plan[d].w = el.value ? { t: el.value, wk: planWeek(d) } : null; commitPlan(el.value ? `Session set to ${TEMPLATES[el.value].name}` : 'Changed to a rest day'); }
+  /* by: 'user' marks a hand-picked cardio session so re-planning leaves it alone */
+  if (inp === 'day-cardio') { pushUndo('change cardio'); const d = el.dataset.date;
+    if (el.value && CARDIO[el.value]) { const cur = S.plan[d].c || {}; S.plan[d].c = { k: el.value, min: cur.min || cardioPlan().minutes, by: 'user' }; }
+    else delete S.plan[d].c;
+    commitPlan(el.value ? `Cardio set to ${CARDIO[el.value].name}` : 'Cardio removed'); }
   else if (inp === 'day-meal') { pushUndo('change meal'); S.plan[el.dataset.date].m[el.dataset.slot] = el.value || null; markMealEdit(el.dataset.date, el.dataset.slot); commitPlan(el.value ? `${SLOT_LABEL[el.dataset.slot]} → ${RECIPE[el.value].name}` : `${SLOT_LABEL[el.dataset.slot]} removed`); }
   else if (inp === 'share') { pushUndo('ingredient sharing'); S.settings.shareIngredients = el.checked; const from = nextPlanWeekStart(); replanMeals(from); saveState(); render();
     toast(`Ingredient sharing ${el.checked ? 'on' : 'off'} — meals from ${fmtDate(from)} on re-planned (hand-picked meals kept)`, true); }
@@ -623,6 +735,20 @@ document.addEventListener('change', e => {
     pushUndo('training days'); S.settings.trainDays = days;
     const from = maxISO(todayISO(), S.settings.startDate); rescheduleWorkouts(from); saveState(); render();
     toast(`Training ${days.length} day${days.length === 1 ? '' : 's'} a week — workouts rescheduled from ${fmtDate(from)}`, true);
+  }
+  else if (inp === 'style') {
+    const k = el.dataset.v; const cur = styles();
+    if (!el.checked && (k === 'strength' || k === 'hypertrophy') && !cur.cardio && !(k === 'strength' ? cur.hypertrophy : cur.strength)) {
+      el.checked = true; toast('Keep at least one training style switched on'); return; }
+    pushUndo('training style'); S.settings.styles = Object.assign(cur, { [k]: el.checked });
+    styleApply(`${(STYLE_DEFS.find(s => s[0] === k) || [, k])[1]} ${el.checked ? 'on' : 'off'}`);
+  }
+  else if (inp === 'cd-type') {
+    const c = cardioPlan(); const set = new Set(c.types || []);
+    if (el.checked) set.add(el.dataset.v); else set.delete(el.dataset.v);
+    if (!set.size) { el.checked = true; toast('Keep at least one kind of cardio'); return; }
+    S.settings.cardio = Object.assign(c, { types: CARDIO_IDS.filter(id => set.has(id)) });
+    styleApply('Cardio kinds updated');
   }
   else if (inp === 'bg-photos') { S.settings.bgPhotos = el.checked; saveState(); bgCurrent = null; applyBackground(document.body.dataset.sec || 'settings'); render(); toast(el.checked ? 'Background photos on' : 'Background photos off'); }
   else if (inp === 'bg-dim') { S.settings.bgDim = +(1 - el.value).toFixed(2); saveState(); document.documentElement.style.setProperty('--dim', S.settings.bgDim); }

@@ -160,7 +160,7 @@ function openScanner(mode, date, draft) {
     <div class="scan-view" id="scan-view"><video id="scan-video" playsinline muted></video><div class="scan-guide"></div><div class="scan-msg" id="scan-msg">Starting the camera…</div>
       <button type="button" class="btn sm scan-torch hidden" id="scan-torch" data-act="scan-torch">${icon('bolt')}Light</button></div>
     ${gym ? `<div class="row wrap" style="gap:8px;margin-top:10px"><button type="button" class="btn" data-act="gym-type">${icon('edit')}Type the number instead</button></div>` : `<form class="row" data-form="scan-code" style="gap:8px;margin-top:10px"><input class="inp" id="scan-code" inputmode="numeric" pattern="[0-9 ]*" placeholder="Or type the barcode number" autocomplete="off" style="flex:1"><button class="btn" type="submit">Look up</button></form>
-      <div class="row" style="margin-top:8px"><button type="button" class="btn sm ghost" style="flex:1" data-act="food-by-name" data-v="${mode}" data-d="${esc(date || todayISO())}">${icon('search')}Search by name instead</button></div>`}
+      <div class="row" style="margin-top:8px"><button type="button" class="btn sm ghost" style="flex:1" data-act="food-by-name" data-v="${mode}" data-d="${esc(date || todayISO())}" data-tab="online">${icon('search')}Search online by name instead</button></div>`}
     <label class="btn sm ghost scan-photo">${icon('upload')}<span class="scan-photo-t">Use a photo instead</span><input type="file" accept="image/*" capture="environment" data-input="scan-photo" hidden></label>
     ${mode === 'pantry' ? `<div class="scan-added" id="scan-added">${scanAddedHTML()}</div>` : ''}</div>`, 'scan-modal');
   scanStart();
@@ -405,23 +405,76 @@ function qpListHTML(q, act, d) {
    The camera isn't always the way in: a lot of what people add is already on the food list,
    and loose produce has no barcode at all. Same picker, three destinations. */
 let FP = null;              // { mode: 'pantry' | 'today' | 'foods', d }
-function foodByName(mode, date, ingIndex) {
+function foodByName(mode, date, ingIndex, tab) {
   scanStop();               // release the camera if we came from the scanner
-  FP = { mode, d: date || (SCN && SCN.date) || todayISO(), i: ingIndex };
+  FP = { mode, d: date || (SCN && SCN.date) || todayISO(), i: ingIndex, tab: tab === 'online' && onlineFoodOK() ? 'online' : 'list' };
+  FO = { q: '', rows: null, busy: false, err: '' };
   const title = mode === 'pantry' ? 'Add to the pantry by name' : mode === 'foods' ? 'Find a food' : mode === 'ing' ? 'Pick an ingredient' : `Add food to ${FP.d === todayISO() ? 'today' : fmtDate(FP.d, { weekday: 'short', month: 'short', day: 'numeric' })}`;
+  modal(`<div class="qp-m"><div class="row"><h2 style="flex:1">${esc(title)}</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
+    <div id="fp-body">${fpBodyHTML()}</div></div>`, 'qp-modal');
+  fpFocus();
+}
+/* Two places to look: the food list this server already has, and Open Food Facts by name.
+   The online tab is the same catalog the scanner reads, reachable by typing for loose produce,
+   anything already out of its packaging, and labels a camera will not read. */
+const onlineFoodOK = () => AUTH.mode === 'server' && !!AUTH.user;
+let FO = null;              // { q, rows, busy, err }
+function fpFocus() { const q = $(FP && FP.tab === 'online' ? '#fo-q' : '#fp-q'); if (q && window.matchMedia && matchMedia('(pointer: fine)').matches) q.focus(); }
+function fpBodyHTML() {
+  const mode = FP.mode;
+  const tabs = onlineFoodOK() ? `<div class="seg sm" style="margin-bottom:10px">${[['list', 'On your food list'], ['online', 'Search online']].map(([k, l]) => `<button type="button" class="${FP.tab === k ? 'on' : ''}" data-act="fp-tab" data-v="${k}">${l}</button>`).join('')}</div>` : '';
+  if (FP.tab === 'online') return tabs + foOnlineHTML();
   const hint = mode === 'pantry' ? 'Pick a food to put one package in the pantry — handy for loose produce and anything without a barcode.'
     : mode === 'foods' ? 'Search everything on the food list, including products other people scanned. Pick one to see or edit it.'
     : mode === 'ing' ? 'Search the whole food database. Your recipe is untouched while this is open.'
     : 'Search the food list and anything scanned on this server.';
-  modal(`<div class="qp-m"><div class="row"><h2 style="flex:1">${esc(title)}</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
-    <div class="tiny muted" style="margin:2px 0 8px">${esc(hint)}</div>
-    <div class="row" style="gap:8px;margin-bottom:10px"><input class="inp" type="search" id="fp-q" data-input="fp-q" placeholder="Search foods and scanned products…" style="flex:1;min-width:0" autocomplete="off">${mode !== 'foods' && mode !== 'ing' && canScan() ? `<button type="button" class="btn" data-act="fp-scan">${icon('scan')}Scan</button>` : ''}</div>
-    <div class="qp-list" id="fp-list">${qpListHTML('', 'fp-pick', FP.d)}</div>
-    ${mode === 'foods' || mode === 'ing' ? `<div class="row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="btn" data-act="${mode === 'ing' ? 'food-new-inline' : 'food-new-from-pick'}">${icon('plus')}None of these — create a new food</button></div>` : ''}</div>`, 'qp-modal');
-  const q = $('#fp-q'); if (q && window.matchMedia && matchMedia('(pointer: fine)').matches) q.focus();
+  return tabs + `<div class="tiny muted" style="margin:2px 0 8px">${esc(hint)}</div>
+    <div class="row" style="gap:8px;margin-bottom:10px"><input class="inp" type="search" id="fp-q" data-input="fp-q" placeholder="Search foods and scanned products…" style="flex:1;min-width:0" autocomplete="off" value="${esc(FO.q || '')}">${mode !== 'foods' && mode !== 'ing' && canScan() ? `<button type="button" class="btn" data-act="fp-scan">${icon('scan')}Scan</button>` : ''}</div>
+    <div class="qp-list" id="fp-list">${qpListHTML(FO.q || '', 'fp-pick', FP.d)}</div>
+    ${mode === 'foods' || mode === 'ing' ? `<div class="row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="btn" data-act="${mode === 'ing' ? 'food-new-inline' : 'food-new-from-pick'}">${icon('plus')}None of these — create a new food</button></div>` : ''}`;
+}
+function foOnlineHTML() {
+  const rows = FO.rows;
+  const body = FO.busy ? `<div class="qp-empty">${icon('loop')}<span>Searching Open Food Facts…</span></div>`
+    : FO.err ? `<div class="note warn">${icon('info')}<span>${esc(FO.err)}</span></div>`
+    : rows == null ? `<div class="qp-empty">${icon('search')}<span>Type a product name and press Search. Brand names work best.</span></div>`
+    : !rows.length ? `<div class="qp-empty">${icon('search')}<span>Nothing on Open Food Facts matched “${esc(FO.q)}”. Try fewer words, or add the food yourself.</span></div>`
+    : rows.map((r, i) => `<button type="button" class="qp-opt fo-opt" data-act="fo-pick" data-i="${i}">
+        ${r.image ? `<img class="fo-img" src="${esc(r.image)}" alt="" loading="lazy" onerror="this.remove()">` : `<span class="fo-img ph">${icon('scan')}</span>`}
+        <span class="qp-t"><b>${esc(r.name)}</b><small>${esc([r.brand, r.quantity].filter(Boolean).join(' · '))}</small></span>
+        <span class="qp-p">${r.have ? '<span class="pill acc">On your list</span>' : ''}<span class="tiny muted num">${fmt(r.per100.k)} kcal · ${fmt(r.per100.p)}P / 100 ${esc(r.unit)}</span></span></button>`).join('');
+  return `<div class="tiny muted" style="margin:2px 0 8px">Search Open Food Facts, the same product database the barcode scanner reads. Pick one and you can check the numbers before it joins this server's food list.</div>
+    <form class="row" data-form="fo-search" style="gap:8px;margin-bottom:10px"><input class="inp" type="search" id="fo-q" placeholder="e.g. Fage 0% yogurt" style="flex:1;min-width:0" autocomplete="off" value="${esc(FO.q || '')}"><button class="btn primary" type="submit" ${FO.busy ? 'disabled' : ''}>${icon('search')}Search</button>${canScan() ? `<button type="button" class="btn" data-act="fp-scan" title="Scan a barcode instead">${icon('scan')}</button>` : ''}</form>
+    <div class="qp-list" id="fo-list">${body}</div>
+    <div class="tiny muted" style="margin-top:8px">Product data © Open Food Facts contributors, available under the Open Database License.</div>`;
+}
+function fpRepaint() { const b = $('#fp-body'); if (b) { b.innerHTML = fpBodyHTML(); fpFocus(); } }
+async function foSearch(q) {
+  if (!FP || !FO) return;
+  FO.q = String(q || '').trim(); FO.err = ''; FO.rows = null;
+  if (FO.q.length < 2) { FO.err = 'Type at least two letters.'; fpRepaint(); return; }
+  FO.busy = true; fpRepaint();
+  try { const r = await api('GET', '/api/foods/search?q=' + encodeURIComponent(FO.q)); if (!FO) return; FO.rows = r.results || []; FO.err = r.error || ''; }
+  catch (e) { if (FO) FO.err = e.message; }
+  if (FO) { FO.busy = false; fpRepaint(); }
+}
+/* A result the server already has goes through the normal barcode path; a new one opens the same
+   confirm-the-numbers form a scan does, so nothing reaches the shared list unchecked. */
+async function foPick(i) {
+  const row = FO && (FO.rows || [])[i]; if (!row || !FP) return;
+  const m = FP.mode, d = FP.d, ii = FP.i;
+  let id = null;
+  try { id = row.have ? await barcodeFood(row.gtin) : await productForm(row.gtin, row, null); }
+  catch (e) { toast(e.message); return; }
+  if (!id) return;
+  fpUse(id, m, d, ii);
 }
 function fpPick(id) {
-  const m = FP ? FP.mode : 'today'; const d = FP ? FP.d : todayISO(); const ii = FP ? FP.i : null; FP = null;
+  const m = FP ? FP.mode : 'today'; const d = FP ? FP.d : todayISO(); const ii = FP ? FP.i : null;
+  fpUse(id, m, d, ii);
+}
+function fpUse(id, m, d, ii) {
+  FP = null; FO = null;
   if (m === 'ing') { closeModal(); reSetIng(ii, id); return; }
   if (m === 'foods') { const g = ING[id]; closeModal(); if (g && g.shared) sharedFoodEditor(id); else foodEditor(id); return; }
   if (m === 'pantry') {
@@ -450,7 +503,7 @@ function renderQuickAdd() {
     <div class="qa-food"><b>${esc(g.n)}</b>${g.brand ? `<span class="tiny muted">${esc(g.brand)}</span>` : ''}${favFoodBtnHTML(QA.id)}</div>
     <div class="grid g2" style="gap:12px;margin-top:10px">
       <div class="field"><label>Amount</label><div class="row" style="gap:6px"><input class="inp" type="number" min="0" step="${QA.unit === 'g' ? 5 : 0.5}" value="${QA.n}" data-input="qa-n" style="width:90px"><select class="inp" data-input="qa-unit">${QA.units.map(([k, , l]) => `<option value="${k}" ${QA.unit === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div></div>
-      <div class="field"><label>With</label><select class="inp" data-input="qa-slot">${MEAL_SLOTS.map(s => `<option value="${s}" ${QA.slot === s ? 'selected' : ''}>${SLOT_LABEL[s]}</option>`).join('')}</select></div></div>
+      <div class="field"><label>With</label><select class="inp" data-input="qa-slot">${DAY_SLOTS.map(s => `<option value="${s}" ${QA.slot === s ? 'selected' : ''}>${SLOT_LABEL[s]}</option>`).join('')}</select></div></div>
     <div class="qa-mac" id="qa-mac"><b>${fmt(m.k)}</b> kcal · <span style="color:var(--prot)">${fmt(m.p)}P</span> · <span style="color:var(--carb)">${fmt(m.c)}C</span> · <span style="color:var(--fat)">${fmt(m.f)}F</span></div>
     <div class="tiny muted">It counts toward the day’s macros, and the rest of the day’s portions shrink to make room.</div>
     <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px"><button class="btn" data-act="close-modal">Cancel</button><button class="btn primary" data-act="qa-save">${icon('plus')}Add</button></div></div>`, 'sm qa-modal');
@@ -571,6 +624,21 @@ async function pantrySyncReconcile() {
     if (copy.length) toast('The pantry isn’t shared any more — you kept a copy of its items');
   }
 }
+/* Grocery ticks live in the shared copy while a sync is on and in the personal one otherwise.
+   Both are keyed by the week's start date, and every tick made during a sync is also written to
+   the personal copy, so a shop in progress survives a sync starting or ending mid-aisle. */
+async function grocerySyncReconcile() {
+  if (AUTH.mode !== 'server' || !S) return;
+  if (!syncActive()) { if (S.groShareSid) { delete S.groShareSid; saveState(); } return; }
+  if (S.groShareSid === SY.data.id) return;
+  S.groShareSid = SY.data.id; saveState();
+  const mine = S.grocery || {}; const g = SY.data.grocery = SY.data.grocery || {};
+  const weeks = Object.keys(mine).filter(w => Object.keys(mine[w] || {}).length && !g[w]);
+  for (const w of weeks) {
+    g[w] = Object.assign({}, mine[w]);
+    try { const r = await api('PUT', '/api/sync/grocery', { week: w, set: mine[w] }); SY.rev = r.rev; } catch (e) { delete g[w]; break; }
+  }
+}
 // what's in the pantry at the start of `date`, after the planned days from today until then
 function pantryProjected(date) {
   const items = pantryItems().map(x => Object.assign({}, x)); const A = computeAll(); let d = todayISO(); const use = {};
@@ -658,17 +726,18 @@ function groceryRows(A, wd, totals) {
 // checked state: pantry-covered rows are ticked unless the user unticked them (stored as 0); other rows need a tick (1)
 function groRowState(r, got) { const covered = !(r.need > 0) && r.have > 0; return { covered, checked: covered ? got[r.id] !== 0 : !!got[r.id] }; }
 function groTools(rows, got) { let checked = 0, add = 0; rows.forEach(r => { const st = groRowState(r, got); if (st.checked) { checked++; if (!st.covered) add++; } }); return { checked, add }; }
-function groGot() { const G = GRO_ROWS; if (!G) return {}; return syncActive() ? (((SY.data.grocery = SY.data.grocery || {})[G.week]) || {}) : (((S.grocery = S.grocery || {})['w' + G.wk]) || {}); }
+function groGot() { const G = GRO_ROWS; if (!G) return {}; return ((syncActive() ? (SY.data.grocery = SY.data.grocery || {}) : (S.grocery = S.grocery || {}))[G.week]) || {}; }
 // changes: [[id, 1 | 0 | null]] — null clears the entry
 async function groSetMany(changes, noRender) {
   const G = GRO_ROWS; if (!G || !changes.length) return;
   const apply = w => changes.forEach(([id, v]) => { if (v == null) delete w[id]; else w[id] = v; });
+  S.grocery = S.grocery || {}; apply(S.grocery[G.week] = S.grocery[G.week] || {});   // always shadowed locally, so ending a sync mid-shop keeps your ticks
   if (syncActive()) {
-    const g = SY.data.grocery = SY.data.grocery || {}; apply(g[G.week] = g[G.week] || {}); if (!noRender) render();
+    const g = SY.data.grocery = SY.data.grocery || {}; apply(g[G.week] = g[G.week] || {}); saveState(); if (!noRender) render();
     try { const r = await api('PUT', '/api/sync/grocery', { week: G.week, set: Object.fromEntries(changes) }); SY.rev = r.rev; } catch (e) { toast(e.message); }
     return;
   }
-  const k = 'w' + G.wk; S.grocery = S.grocery || {}; apply(S.grocery[k] = S.grocery[k] || {}); saveState(); if (!noRender) render();
+  saveState(); if (!noRender) render();
 }
 function groTick(el) {
   const id = el.dataset.id; const covered = !!el.dataset.pan;
@@ -707,9 +776,11 @@ Object.assign(ACT, {
   'scan-less': el => { scanCount(el.dataset.f, (SCN.added.find(x => x.food === el.dataset.f) || { n: 0 }).n - 1); scanPaint(); },
   'scan-more': el => { scanCount(el.dataset.f, (SCN.added.find(x => x.food === el.dataset.f) || { n: 0 }).n + 1); scanPaint(); },
   'scan-review': () => scanReview(),
-  'food-by-name': el => foodByName(el.dataset.v === 'pantry' ? 'pantry' : el.dataset.v === 'foods' ? 'foods' : 'today', el.dataset.d || null),
+  'food-by-name': el => foodByName(el.dataset.v === 'pantry' ? 'pantry' : el.dataset.v === 'foods' ? 'foods' : 'today', el.dataset.d || null, null, el.dataset.tab),
+  'fp-tab': el => { if (!FP) return; FP.tab = el.dataset.v; fpRepaint(); },
+  'fo-pick': el => foPick(+el.dataset.i),
   'fp-pick': el => fpPick(el.dataset.id),
-  'fp-scan': () => { const m = FP ? FP.mode : 'today', d = FP ? FP.d : todayISO(); FP = null;
+  'fp-scan': () => { const m = FP ? FP.mode : 'today', d = FP ? FP.d : todayISO(); FP = null; FO = null;
     if (m === 'pantry' && SCN && SCN.mode === 'pantry') openScannerKeep(); else openScanner(m === 'pantry' ? 'pantry' : 'today', d); },
   'food-new-from-pick': () => { FP = null; closeModal(); foodEditor(null); },
   'scan-again': () => openScannerKeep(),
@@ -732,6 +803,7 @@ Object.assign(ACT, {
 });
 document.addEventListener('submit', e => {
   const f = e.target; if (!f.dataset) return;
+  if (f.dataset.form === 'fo-search') { e.preventDefault(); foSearch(($('#fo-q') || {}).value || ''); return; }
   if (f.dataset.form === 'scan-code') { e.preventDefault(); const v = ($('#scan-code') || {}).value || ''; const code = gtinNorm(v); if (!/^\d{8}$|^\d{13,14}$/.test(code)) { scanMsg('Enter the 8, 12 or 13 digits under the barcode', 'warn'); return; } SCN.last = ''; scanFound(code); }
   if (f.dataset.form === 'product') { e.preventDefault(); productSave(f); }
   if (f.dataset.form === 'pantry') { e.preventDefault(); pantrySubmit(f); }
@@ -740,7 +812,7 @@ document.addEventListener('input', e => {
   const t = e.target; if (!t || !t.dataset) return;
   if (t.dataset.input === 'panq') { UI.panQ = t.value; const pos = t.selectionStart; render(); const n = $('[data-input="panq"]'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) { /* ignore */ } } return; }
   if (t.dataset.input === 'qp-q' && QP) { const l = $('#qp-list'); if (l) l.innerHTML = qpListHTML(t.value); }
-  if (t.dataset.input === 'fp-q' && FP) { const l = $('#fp-list'); if (l) l.innerHTML = qpListHTML(t.value, 'fp-pick', FP.d); }
+  if (t.dataset.input === 'fp-q' && FP) { if (FO) FO.q = t.value; const l = $('#fp-list'); if (l) l.innerHTML = qpListHTML(t.value, 'fp-pick', FP.d); }
   if (t.dataset.input === 'pan-foodq') { const g = panFindFood(t.value); const u = $('#pan-unit'); if (u) u.textContent = g ? panUnit(g.id) : ''; }
   if (!QA) return;
   if (t.dataset.input === 'qa-n') { QA.n = t.value; const m = ingMacros(QA.id, qaAmount()); const el = $('#qa-mac'); if (el) el.innerHTML = `<b>${fmt(m.k)}</b> kcal · <span style="color:var(--prot)">${fmt(m.p)}P</span> · <span style="color:var(--carb)">${fmt(m.c)}C</span> · <span style="color:var(--fat)">${fmt(m.f)}F</span>`; }

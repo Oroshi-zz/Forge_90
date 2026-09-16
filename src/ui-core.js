@@ -25,6 +25,7 @@ function loadUI() {
   Object.keys(UI).forEach(k => { delete UI[k]; });
   Object.assign(UI, JSON.parse(JSON.stringify(UI_DEFAULTS)));
   try { Object.assign(UI, JSON.parse(localStorage.getItem(uiKey()) || '{}')); } catch (e) { }
+  delete UI.returnToRecipe;                     // was persisted by mistake and could stay set after a cancelled dialog
 }
 loadUI();
 function saveUI() { try { localStorage.setItem(uiKey(), JSON.stringify(UI)); } catch (e) { } }
@@ -63,6 +64,9 @@ const IC = {
   deload: '<path d="M12 22c5.5 0 10-4.5 10-10S17.5 2 12 2 2 6.5 2 12s4.5 10 10 10Z"/><path d="M8 12h8"/>', test: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6M18 9h1.5a2.5 2.5 0 0 0 0-5H18M4 22h16M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
   grip: '<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>',
   search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  heart: '<path d="M19 14c1.5-1.5 2.5-3.1 2.5-5A4.5 4.5 0 0 0 12 6.5 4.5 4.5 0 0 0 2.5 9c0 1.9 1 3.5 2.5 5l7 7z"/>',
+  stopwatch: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6M19 5l1.5 1.5"/>',
+  lap: '<path d="M3 12h4l3 7 4-14 3 7h4"/>',
   panel: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/>',
   shield: '<path d="M12 3 4.5 6v5.5c0 4.6 3.2 8.4 7.5 9.5 4.3-1.1 7.5-4.9 7.5-9.5V6L12 3Z"/><path d="m9 12 2 2 4-4"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>', users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14a6.5 6.5 0 0 1 3.5 6"/>',
   lock: '<rect x="4.5" y="10.5" width="15" height="10.5" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/>', mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/>',
@@ -95,7 +99,7 @@ function heroArt() {
       <rect x="-50" y="-26" width="14" height="52" rx="4" fill="#b5f23d"/><rect x="-66" y="-18" width="12" height="36" rx="4" fill="#8fbf2f"/>
       <rect x="36" y="-26" width="14" height="52" rx="4" fill="#b5f23d"/><rect x="54" y="-18" width="12" height="36" rx="4" fill="#8fbf2f"/></g></svg>`;
 }
-const RECIPE_GRAD = { breakfast: ['#fde68a', '#f59e0b'], lunch: ['#a7f3d0', '#10b981'], dinner: ['#fecaca', '#ef4444'], snack: ['#c7d2fe', '#6366f1'] };
+const RECIPE_GRAD = { breakfast: ['#fde68a', '#f59e0b'], lunch: ['#a7f3d0', '#10b981'], dinner: ['#fecaca', '#ef4444'], snack: ['#c7d2fe', '#6366f1'], dessert: ['#f5d0fe', '#c026d3'] };
 
 /* ---------- muscle map (front + back) ---------- */
 const MM = {
@@ -314,7 +318,12 @@ function modal(html, cls = '', backable) {
   document.body.appendChild(bg); hideTip();
   if (backable) backPush('modal', closeModal);
 }
-function closeModal() { const m = $('#modal'); if (m) m.remove(); backDrop('modal'); }
+/* Set when "New food" is opened from inside the recipe editor, so saving that food drops it
+   straight into the recipe. It lives here rather than on UI because it is only true while that
+   one dialog is open: on UI it was written to storage and stayed set when the dialog was
+   cancelled. Declared beside closeModal so closing the dialog can always clear it. */
+let RE_ADDFOOD = false;
+function closeModal() { RE_ADDFOOD = false; const m = $('#modal'); if (m) m.remove(); backDrop('modal'); }
 
 /* ---------- back-to-close ----------
    On a phone the back gesture should dismiss whatever is on top, not leave the app.

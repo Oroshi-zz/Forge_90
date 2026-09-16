@@ -935,12 +935,138 @@ RX('biceps_a', 'The biceps A slot also had only four options. A straight bar put
    'Squeeze at the top, then lower over about three seconds until the arms are straight.'],
   ['Elbows pinned at your sides', 'Full stretch at the bottom every rep'],
   'Swinging the hips to start the rep.');
+/* ---- home-gym coverage and rotation depth ----
+   Every slot had at least one option that needs no machine, but chest fly, vertical pull and
+   triceps B had exactly one each, and seven slots sat at five variations against ten for core.
+   A band covers most of the gap: it loads the same movement without a stack or a rack. */
+RX('chest_fly', 'The only fly that needed no machine was the incline dumbbell fly. A band keeps tension at the top, where a dumbbell fly has almost none.',
+  'band_fly', 'Band Chest Fly', 'Chest', 'Resistance band', ['chest'], ['frontDelt'], false,
+  ['Anchor a band behind you at chest height, or run it across your upper back.',
+   'Step forward until there is tension with your arms open and a slight bend in the elbows.',
+   'Bring your hands together in front of your chest, leading with the upper arms.',
+   'Let them travel back until you feel a stretch across the chest.'],
+  ['Elbows stay at the same slight bend the whole set', 'Squeeze for a beat where your hands meet'],
+  'Turning it into a press by bending and straightening the elbows.');
+RX('back_vertical', 'Pull-Ups were the only vertical pull outside a gym, which rules the slot out for anyone who cannot yet do one.',
+  'band_pulldown', 'Band Lat Pulldown', 'Back', 'Resistance band', ['lats'], ['biceps', 'upperBack'], true,
+  ['Anchor a band above head height, in a door or over a beam.',
+   'Kneel or sit far enough back that the band is tight with your arms overhead.',
+   'Pull your elbows down and in towards your ribs, driving with the lats.',
+   'Let your arms return all the way up until you feel the stretch.'],
+  ['Chest up, ribs down', 'Think elbows to back pockets, not hands to chest'],
+  'Leaning back so far that it becomes a row.');
+RX('triceps_b', 'Bench Dips were the only pushdown-pattern option without a cable stack.',
+  'band_pushdown', 'Band Triceps Pushdown', 'Triceps', 'Resistance band', ['triceps'], [], false,
+  ['Anchor a band above head height and hold the free end with both hands.',
+   'Tuck your elbows against your sides and start with the forearms at about 90°.',
+   'Straighten the arms fully, keeping the elbows pinned.',
+   'Let the band pull the hands back up under control.'],
+  ['Elbows do not move, only the forearms', 'Lock out every rep'],
+  'Letting the elbows drift forward so the shoulders take over.');
+RX('back_iso', 'The lat isolation slot sat at five variations, and only the two pullovers work without a cable stack.',
+  'band_straight_arm', 'Band Straight-Arm Pulldown', 'Back', 'Resistance band', ['lats'], [], false,
+  ['Anchor a band above head height and hold it with straight arms overhead.',
+   'Keep a soft, fixed bend in the elbows.',
+   'Sweep the arms down in an arc until your hands reach your thighs.',
+   'Let them rise back overhead until the lats are stretched.'],
+  ['Arms stay locked at the same angle', 'Lean forward slightly from the hips'],
+  'Bending the elbows, which makes it a pushdown.');
+RX('biceps_a', 'The stretch-biased biceps slot sat at five, and only the incline curl trains the biceps in a lengthened position without a cable.',
+  'band_behind_curl', 'Band Behind-the-Body Curl', 'Biceps', 'Resistance band', ['biceps'], ['forearms'], false,
+  ['Anchor a band at ankle height and stand a step in front of it, facing away.',
+   'Let your arms hang so your hands sit slightly behind your hips, palms forward.',
+   'Curl up without letting your elbows travel forward.',
+   'Lower slowly until the arms are straight and you feel the stretch.'],
+  ['Elbows stay behind your torso the whole set', 'Three seconds down every rep'],
+  'Stepping back so far that the tension disappears at the bottom.');
+RX('triceps_a', 'The overhead triceps slot sat at five, all of which need a cable, a dumbbell or an EZ bar.',
+  'band_overhead_ext', 'Band Overhead Triceps Extension', 'Triceps', 'Resistance band', ['triceps'], [], false,
+  ['Anchor a band low behind you, or stand on it, and take the free end in both hands.',
+   'Raise your hands behind your head with the elbows pointing forward.',
+   'Straighten the arms overhead, keeping the upper arms still.',
+   'Lower until you feel a deep stretch along the back of the arm.'],
+  ['Upper arms stay pointing at the ceiling', 'Ribs down so the back does not arch'],
+  'Letting the elbows flare out so the shoulders take the load.');
+RX('quad_iso', 'The quad isolation slot sat at five, and two of them are the same leg extension machine.',
+  'spanish_squat', 'Spanish Squat', 'Quads', 'Resistance band + anchor', ['quads'], [], false,
+  ['Anchor a band at knee height and loop it behind both knees.',
+   'Step back until the band is tight, feet about shoulder width.',
+   'Sit straight down, letting the band hold your knees back so your shins stay vertical.',
+   'Drive back up through the middle of the foot.'],
+  ['Torso stays upright, hips drop straight down', 'Pause two seconds at the bottom'],
+  'Leaning forward, which turns it back into a squat and takes the quads out of it.');
+RX('ham_curl', 'Leg curls needed a machine, a stability ball or a partner. Sliders or a towel on a hard floor do the same job anywhere.',
+  'slider_leg_curl', 'Slider Leg Curl', 'Hamstrings', 'Sliders or a towel on a smooth floor', ['hamstrings'], ['glutes'], false,
+  ['Lie on your back with your heels on sliders or a folded towel, knees bent.',
+   'Lift your hips so your body makes a straight line from shoulders to knees.',
+   'Slide your heels away until your legs are almost straight, keeping the hips up.',
+   'Pull the heels back in without letting the hips drop.'],
+  ['Hips stay high the whole set', 'Slower on the way out than on the way in'],
+  'Letting the hips sag, which hands the work to the lower back.');
+RX('quad_main', 'The only main squat pattern that needs no machine was the barbell back squat, which needs a rack. A goblet squat needs one dumbbell.',
+  'goblet_squat', 'Goblet Squat', 'Quads', 'One dumbbell or kettlebell', ['quads'], ['glutes', 'abs'], true,
+  ['Hold a dumbbell or kettlebell against your chest, elbows tucked in.',
+   'Stand a little wider than shoulder width with your toes turned slightly out.',
+   'Sit straight down between your feet, keeping your chest up.',
+   'Go as deep as you can without the lower back rounding, then drive up.'],
+  ['Elbows stay inside the knees at the bottom', 'Chest tall the whole rep'],
+  'Letting the weight pull you forward so it turns into a hinge.');
+RX('back_row', 'There was no barbell row in the library, which left PR test week without a comparable pulling number.',
+  'barbell_row', 'Barbell Row', 'Back', 'Barbell', ['upperBack', 'lats'], ['biceps', 'lowerBack'], true,
+  ['Hinge forward to about 45° with the bar hanging at arm’s length.',
+   'Brace hard, then pull the bar to your lower ribs.',
+   'Squeeze the shoulder blades together at the top.',
+   'Lower under control without letting the torso rise.'],
+  ['Torso angle stays fixed', 'Pull to the belly button, not the chest'],
+  'Standing up with the weight instead of rowing it.');
 EXTRA_EX.forEach(id => { const s = SLOTS[EX[id].slot]; if (s && !s.vars.includes(id)) s.vars.push(id); });
 
 
 /* ============================================================
+   CARDIO
+   CD(id, name, group, met, opts) — met is the metabolic equivalent used for the calorie
+   estimate: kcal/min = MET x 3.5 x kg / 200. Values follow the Compendium of Physical
+   Activities. They are an estimate from your body weight and the clock, not a measurement:
+   no heart rate, no pace, no grade, so treat the number as a ballpark.
+   laps: the stopwatch offers laps (intervals, rounds, repeats). round: the lap is a timed round.
+   ============================================================ */
+const CARDIO = {};
+const CARDIO_GROUPS = ['Walking & running', 'Machines', 'Outdoors & water', 'Boxing & martial arts', 'Intervals & conditioning'];
+function CD(id, name, group, met, how, opts) { CARDIO[id] = Object.assign({ id, name, group, met, how }, opts || {}); }
+
+CD('walk_brisk', 'Brisk Walk', 'Walking & running', 4.3, 'A pace where holding a conversation takes a little effort. Flat ground or a treadmill at 0 to 2%.');
+CD('walk_incline', 'Incline Treadmill Walk', 'Walking & running', 6.0, 'Treadmill at 8 to 12% and 3 to 3.5 mph. Do not hold the rails; if you need to, lower the incline.');
+CD('jog', 'Easy Jog', 'Walking & running', 8.3, 'Conversational running pace, roughly 5 mph. If you cannot finish a sentence, slow down.');
+CD('run', 'Run', 'Walking & running', 9.8, 'Steady running, roughly 6 mph. Land under your hips and keep the cadence quick.');
+CD('treadmill_intervals', 'Treadmill Intervals', 'Intervals & conditioning', 9.0, 'Alternate a hard minute with a slow two. Use the lap button for each work interval.', { laps: true });
+CD('bike_stationary', 'Stationary Bike', 'Machines', 7.0, 'Seat height so your knee is almost straight at the bottom. Moderate resistance, 80 to 95 rpm.');
+CD('bike_outdoor', 'Cycling', 'Outdoors & water', 8.0, 'Outdoor riding at 12 to 14 mph. Ride terrain you can hold a steady effort on.');
+CD('air_bike', 'Air Bike', 'Machines', 8.0, 'Arms and legs together. The fan gives back exactly what you put in, so pace the first minute.', { laps: true });
+CD('row_erg', 'Rowing Machine', 'Machines', 7.0, 'Legs, then back, then arms; reverse it on the way in. Damper 4 to 6, not 10.', { laps: true });
+CD('ski_erg', 'Ski Erg', 'Machines', 7.0, 'Hinge at the hips and finish the pull past your thighs. Let the arms come all the way back up.', { laps: true });
+CD('elliptical', 'Elliptical', 'Machines', 5.0, 'Push through the whole foot and use the handles. Add resistance before adding speed.');
+CD('stair', 'Stair Climber', 'Machines', 9.0, 'Stand tall, full steps, light hands. Leaning on the rails cuts the work roughly in half.');
+CD('swim', 'Swimming', 'Outdoors & water', 8.3, 'Freestyle at a steady effort. Rest on the wall as needed and keep the clock running.', { laps: true });
+CD('hike', 'Hiking', 'Outdoors & water', 6.0, 'Trail walking with some elevation. A pack makes it harder without making it faster.');
+CD('jump_rope', 'Jump Rope', 'Intervals & conditioning', 11.8, 'Small jumps, wrists turning the rope. Start with 30 seconds on and 30 off until the misses stop.', { laps: true });
+CD('boxing_bag', 'Boxing — Heavy Bag', 'Boxing & martial arts', 5.5, 'Three-minute rounds with a minute of rest. Hands up, turn the hips into the shot, breathe out on contact.', { laps: true, round: 180 });
+CD('boxing_pads', 'Boxing — Pads & Sparring', 'Boxing & martial arts', 7.8, 'Rounds with a partner on the pads. Work combinations rather than single hard shots.', { laps: true, round: 180 });
+CD('boxing_shadow', 'Shadow Boxing', 'Boxing & martial arts', 4.5, 'Rounds in front of a mirror with no bag. Footwork and form first, speed second.', { laps: true, round: 180 });
+CD('kickboxing', 'Kickboxing', 'Boxing & martial arts', 10.3, 'Punches and kicks in rounds. Reset your stance after every combination.', { laps: true, round: 180 });
+CD('martial_arts', 'Martial Arts Class', 'Boxing & martial arts', 10.3, 'A class at a moderate to vigorous pace, including drilling and rolling or sparring.');
+CD('hiit', 'HIIT Circuit', 'Intervals & conditioning', 8.0, 'Hard 20 to 40 second efforts with equal or longer rest. Pick movements you can do with good form when tired.', { laps: true });
+CD('sled', 'Sled Push or Drag', 'Intervals & conditioning', 8.0, 'Heavy enough to be slow, light enough to keep moving. Walk back as the rest.', { laps: true });
+CD('battle_ropes', 'Battle Ropes', 'Intervals & conditioning', 8.0, 'Alternating waves for 20 to 30 seconds. Stay in a quarter squat and keep the ribs down.', { laps: true });
+CD('dance', 'Dance Cardio', 'Intervals & conditioning', 7.3, 'Any class or routine at a steady effort. It counts.');
+const CARDIO_IDS = Object.keys(CARDIO);
+const CARDIO_DEFAULT = ['walk_incline', 'bike_stationary', 'row_erg'];
+
+/* ============================================================
    SESSION TEMPLATES
-   row: [slot, type(S=strength,H=hypertrophy,T=test), sets, reps, restSec, variationOffset, note]
+   row: [slot, type(S=strength,H=hypertrophy,T=test), sets, reps, restSec, variationOffset, note, pin]
+   pin names one exercise the row should always use, so PR test week measures the same lift every
+   cycle instead of whatever the rotation lands on. It falls back to the rotation if that
+   exercise is switched off, so a machine-only gym still gets a session.
    ============================================================ */
 const TEMPLATES = {
   P1A: { name: 'Upper A — Strength', short: 'Upper A · Strength', kind: 'upper', phase: 1, icon: 'upper',
@@ -1000,7 +1126,7 @@ const TEMPLATES = {
       ['quad_iso', 'H', 3, '12–15', 75, 0],
       ['chest_press', 'H', 3, '8–12', 120, 1],
       ['back_row', 'H', 3, '10–12', 90, 1],
-      ['ham_curl', 'H', 3, '12–15', 75, 1],
+      ['ham_hinge', 'H', 3, '10–12', 90, 1],
       ['chest_fly', 'H', 3, '12–15', 60, 0],
       ['rear_delt', 'H', 3, '15–20', 60, 0],
       ['biceps_b', 'H', 3, '10–15', 45, 0, 'Superset A — alternate with triceps'],
@@ -1050,17 +1176,17 @@ const TEMPLATES = {
   T1: { name: 'PR Test — Upper', short: 'PR Test · Upper', kind: 'test', phase: 4, icon: 'test',
     focus: 'Warm up in 3–4 ramping sets, then one all-out-but-clean top set. Compare to Week 1.',
     rows: [
-      ['chest_press', 'T', 1, '3–5 RM', 240, 0, 'Ramp: 50% ×8, 70% ×5, 85% ×2, then top set'],
-      ['back_row', 'T', 1, '3–5 RM', 240, 0],
+      ['chest_press', 'T', 1, '3–5 RM', 240, 0, 'Ramp: 50% ×8, 70% ×5, 85% ×2, then top set', 'barbell_bench'],
+      ['back_row', 'T', 1, '3–5 RM', 240, 0, '', 'barbell_row'],
       ['back_vertical', 'T', 1, '5–8 RM', 180, 0],
-      ['delt_press', 'T', 1, '5–8 RM', 180, 0],
+      ['delt_press', 'T', 1, '5–8 RM', 180, 0, '', 'standing_ohp'],
       ['biceps_a', 'T', 1, '8 RM', 120, 0],
       ['triceps_b', 'T', 1, '8 RM', 120, 0]] },
   T2: { name: 'PR Test — Lower', short: 'PR Test · Lower', kind: 'test', phase: 4, icon: 'test',
     focus: 'Top sets on the main leg movements. Stop the set when form breaks — that’s your RM.',
     rows: [
-      ['quad_main', 'T', 1, '3–5 RM', 240, 0, 'Ramp: 50% ×8, 70% ×5, 85% ×2, then top set'],
-      ['ham_hinge', 'T', 1, '5–8 RM', 180, 0],
+      ['quad_main', 'T', 1, '3–5 RM', 240, 0, 'Ramp: 50% ×8, 70% ×5, 85% ×2, then top set', 'barbell_back_squat'],
+      ['ham_hinge', 'T', 1, '5–8 RM', 180, 0, '', 'trap_bar_deadlift'],
       ['ham_curl', 'T', 1, '8 RM', 120, 0],
       ['glute', 'T', 1, '8 RM', 120, 0],
       ['calves', 'T', 1, '10 RM', 90, 0],
@@ -1085,7 +1211,7 @@ Object.assign(TEMPLATES, {
     rows: [
       ['quad_iso', 'H', 3, '15–20', 60, 1, 'Pre-exhaust — controlled 3 s lowering'],
       ['quad_main', 'H', 3, '10–15', 120, 1],
-      ['ham_curl', 'H', 4, '10–15', 75, 2],
+      ['ham_hinge', 'H', 4, '10–15', 90, 2],
       ['quad_uni', 'H', 3, '10–12 / leg', 75, 1],
       ['glute', 'H', 3, '12–15', 60, 1],
       ['calves', 'H', 4, '12–20', 45, 1],
@@ -1117,7 +1243,7 @@ TPL('FPA', 'Push A — Strength', 'Push A · Strength', 'push', 1, 'Chest and sh
 TPL('FLA', 'Pull A — Strength', 'Pull A · Strength', 'pull', 1, 'Heavy rows, then vertical pulls, lat isolation, rear delts and biceps.', [
   ['back_row', 'S', 4, '6–8', 150, 0], ['back_vertical', 'H', 3, '8–10', 120, 0], ['back_iso', 'H', 3, '12–15', 75, 0], ['rear_delt', 'H', 3, '12–15', 60, 0], ['biceps_a', 'H', 3, '10–12', 60, 0], ['biceps_b', 'H', 2, '10–12', 60, 1]]);
 TPL('FGA', 'Legs — Intro', 'Legs · Intro', 'legs', 1, 'Moderate leg volume while recovery adapts to the deficit. Legs come up to full frequency in month 2.', [
-  ['quad_main', 'H', 3, '10–12', 120, 0], ['ham_curl', 'H', 3, '10–12', 90, 0], ['quad_iso', 'H', 2, '12–15', 75, 0], ['calves', 'H', 3, '12–15', 60, 0], ['core', 'H', 3, '10–15', 60, 0]]);
+  ['quad_main', 'H', 3, '10–12', 120, 0], ['ham_hinge', 'H', 3, '8–12', 90, 0], ['ham_curl', 'H', 3, '10–12', 90, 0], ['quad_iso', 'H', 2, '12–15', 75, 0], ['calves', 'H', 3, '12–15', 60, 0], ['core', 'H', 3, '10–15', 60, 0]]);
 TPL('FPB', 'Push B — Hypertrophy', 'Push B · Hypertrophy', 'push', 1, 'Higher-rep chest and delt work using different variations from Push A.', [
   ['chest_press', 'H', 3, '8–12', 120, 1], ['chest_fly', 'H', 3, '12–15', 75, 1], ['delt_press', 'H', 3, '10–12', 90, 1], ['side_delt', 'H', 4, '15–20', 60, 1], ['triceps_a', 'H', 3, '12–15', 60, 0], ['triceps_b', 'H', 2, '12–15', 60, 1]]);
 TPL('FLB', 'Pull B — Hypertrophy', 'Pull B · Hypertrophy', 'pull', 1, 'Higher-rep back, rear delt and biceps work using different variations from Pull A.', [
@@ -1161,13 +1287,13 @@ TPL('DLPUSH', 'Deload — Push', 'Deload · Push', 'deload', 4, 'Half the sets a
 TPL('DLPULL', 'Deload — Pull', 'Deload · Pull', 'deload', 4, 'Half the sets at ~60% of your recent working weights.', [
   ['back_row', 'H', 2, '8–10', 90, 0, NOTE_60], ['back_vertical', 'H', 2, '8–10', 90, 0, NOTE_60], ['rear_delt', 'H', 2, '12–15', 60, 0], ['biceps_a', 'H', 2, '12', 45, 0]]);
 TPL('DLLEGS', 'Deload — Legs', 'Deload · Legs', 'deload', 4, 'Half the sets at ~60% of your recent working weights.', [
-  ['quad_main', 'H', 2, '10', 90, 0, NOTE_60], ['ham_curl', 'H', 2, '10–12', 60, 0], ['calves', 'H', 2, '12–15', 60, 0], ['core', 'H', 2, '10–15', 60, 0]]);
+  ['quad_main', 'H', 2, '10', 90, 0, NOTE_60], ['ham_hinge', 'H', 2, '10–12', 75, 0], ['calves', 'H', 2, '12–15', 60, 0], ['core', 'H', 2, '10–15', 60, 0]]);
 TPL('TPUSH', 'PR Test — Push', 'PR Test · Push', 'test', 4, 'Warm up in 3–4 ramping sets, then one all-out-but-clean top set on each lift.', [
-  ['chest_press', 'T', 1, '3–5 RM', 240, 0, NOTE_RAMP], ['delt_press', 'T', 1, '5–8 RM', 180, 0], ['triceps_b', 'T', 1, '8 RM', 120, 0], ['side_delt', 'H', 2, '12–15', 60, 0]]);
+  ['chest_press', 'T', 1, '3–5 RM', 240, 0, NOTE_RAMP, 'barbell_bench'], ['delt_press', 'T', 1, '5–8 RM', 180, 0, '', 'standing_ohp'], ['triceps_b', 'T', 1, '8 RM', 120, 0], ['side_delt', 'H', 2, '12–15', 60, 0]]);
 TPL('TPULL', 'PR Test — Pull', 'PR Test · Pull', 'test', 4, 'Warm up in 3–4 ramping sets, then one all-out-but-clean top set on each lift.', [
-  ['back_row', 'T', 1, '3–5 RM', 240, 0, NOTE_RAMP], ['back_vertical', 'T', 1, '5–8 RM', 180, 0], ['biceps_a', 'T', 1, '8 RM', 120, 0], ['rear_delt', 'H', 2, '15–20', 60, 0]]);
+  ['back_row', 'T', 1, '3–5 RM', 240, 0, NOTE_RAMP, 'barbell_row'], ['back_vertical', 'T', 1, '5–8 RM', 180, 0], ['biceps_a', 'T', 1, '8 RM', 120, 0], ['rear_delt', 'H', 2, '15–20', 60, 0]]);
 TPL('TLEGS', 'PR Test — Legs', 'PR Test · Legs', 'test', 4, 'Top sets on the main leg movements. Stop the set when form breaks — that’s your RM.', [
-  ['quad_main', 'T', 1, '3–5 RM', 240, 0, NOTE_RAMP], ['ham_hinge', 'T', 1, '5–8 RM', 180, 0], ['ham_curl', 'T', 1, '8 RM', 120, 0], ['glute', 'T', 1, '8 RM', 120, 0], ['calves', 'T', 1, '10 RM', 90, 0], ['core', 'H', 2, '10–15', 60, 0]]);
+  ['quad_main', 'T', 1, '3–5 RM', 240, 0, NOTE_RAMP, 'barbell_back_squat'], ['ham_hinge', 'T', 1, '5–8 RM', 180, 0, '', 'trap_bar_deadlift'], ['ham_curl', 'T', 1, '8 RM', 120, 0], ['glute', 'T', 1, '8 RM', 120, 0], ['calves', 'T', 1, '10 RM', 90, 0], ['core', 'H', 2, '10–15', 60, 0]]);
 
 // seq = the rolling order sessions are assigned in (continues across weeks, restarts each phase)
 const PHASE_DEFS = {

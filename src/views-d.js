@@ -102,7 +102,7 @@ function renderQuickEdit() {
       <select class="inp" id="qe-wo" data-input="qe-wo" style="margin-top:8px;width:100%">${woOpts}</select>${woBody}
       <div class="row wrap" style="gap:6px;margin-top:10px"><a class="btn sm ghost" href="#/day/${d}" data-act="close-go" data-h="#/day/${d}">${icon('list')}Open day to log sets</a><a class="btn sm ghost" href="#/workouts" data-act="close-go" data-h="#/workouts">${icon('grip')}Swap in the program</a></div></section>
     <section class="qe-sec ${QE.focus !== 'wo' ? 'focus' : ''}"><div class="row"><h3 style="flex:1">${icon('food')}Meals</h3><span class="tiny muted">★ favorites first · changes keep your hand-picked meals when the plan re-plans</span></div>
-      ${MEAL_SLOTS.map(mealRow).join('')}
+      ${DAY_SLOTS.map(mealRow).join('')}
       <div class="qe-tot"><div><span class="tiny muted">Day total</span><b class="num">${fmt(x.totals.k)}</b><span class="small muted"> / ${fmt(x.tg.kcal)} kcal</span></div><div class="small num"><span style="color:var(--prot)"><b>${fmt(x.totals.p)}</b>/${fmt(x.tg.protein)}g P</span> · <span style="color:var(--carb)">${fmt(x.totals.c)}C</span> · <span style="color:var(--fat)">${fmt(x.totals.f)}F</span></div><span class="tiny muted">Portions resize automatically</span></div></section>
     <div class="row" style="justify-content:flex-end;margin-top:12px;gap:6px"><button class="btn" data-act="undo" ${undoStack.length ? '' : 'disabled'}>${icon('undo')}Undo</button><button class="btn primary" data-act="close-modal">Done</button></div>`);
   const f = QE.focus === 'wo' ? $('#qe-wo') : QE.focus.startsWith('meal:') ? $('#qe-' + QE.focus.slice(5)) : null;

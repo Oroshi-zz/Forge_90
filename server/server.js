@@ -642,6 +642,17 @@ route('GET', '/api/barcode/:code', { auth: true }, async (req, res, ctx) => {
   try { off = await PROD.offLookup(code); } catch (e) { offError = e.message; }
   send(res, 200, { gtin: code, suggest: off, error: offError });
 });
+/* Name search against the same Open Food Facts catalog the scanner uses, for loose produce,
+   anything already out of its packaging, and labels the camera will not read. */
+route('GET', '/api/foods/search', { auth: true }, async (req, res, ctx) => {
+  if (limited('foodsearch:' + ctx.me.u.id, 120, 10 * 60000)) err(429, 'Too many searches. Wait a few minutes.');
+  const q = String(ctx.query.q || '').trim();
+  if (q.length < 2) return send(res, 200, { q, results: [] });
+  const known = {}; Object.values(sharedFoods.foods).forEach(f => { if (f.gtin) known[f.gtin] = f.id; });
+  let results = [], error = null;
+  try { results = await PROD.offSearch(q, ctx.query.page); } catch (e) { error = e.message; }
+  send(res, 200, { q, results: results.map(r => Object.assign({}, r, { have: known[r.gtin] || null })), error });
+});
 route('POST', '/api/foods/shared', { auth: true }, async (req, res, ctx) => {
   if (limited('foodadd:' + ctx.me.u.id, 60, 60 * 60000)) err(429, 'Too many new products in an hour.');
   const b = ctx.body; const gtin = b.gtin ? PROD.normGtin(b.gtin) : null; if (b.gtin && !gtin) err(400, 'That isn’t a valid barcode number.');

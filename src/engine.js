@@ -93,12 +93,30 @@ function loadState(from) {
   migrateState();
   rebuildCatalog(); rebuildExercises();
   ensureHorizon();
+  migrateGrocery();
   if (!S.v || S.v < 3) { rescheduleWorkouts(maxISO(todayISO(), S.settings.startDate)); S.v = 3; }
   if (S.v < 4) { substitutePlan(maxISO(todayISO(), S.settings.startDate)); S.v = 4; }
   if (S.v < 5) { replanMeals(nextPlanWeekStart()); S.v = 5; S._sharingIntro = true; }   // v5: ingredient-sharing planner
   if (!(+S.settings.bgDim >= 0 && +S.settings.bgDim <= 1)) S.settings.bgDim = 0.7;
   saveState();
   return S;
+}
+/* Grocery ticks used to be keyed by week number on this device ("w5") and by the week's start
+   date when synced, so turning sync on or off in the middle of a shop lost every tick. One
+   scheme now, the start date, matching what the server already stores. Weeks that are no longer
+   in the plan are dropped at the same time so the map can't grow inside the state blob. */
+function migrateGrocery() {
+  const g = S.grocery; if (!g || typeof g !== 'object') return;
+  const dates = planDates(); if (!dates.length) return;
+  const starts = dates.filter((d, i) => i % 7 === 0);
+  Object.keys(g).forEach(k => {
+    const m = /^w(\d+)$/.exec(k); if (!m) return;
+    const d = starts[+m[1] - 1];
+    if (d) g[d] = Object.assign({}, g[d], g[k]);
+    delete g[k];
+  });
+  const keep = new Set(starts);
+  Object.keys(g).forEach(k => { if (!keep.has(k)) delete g[k]; });
 }
 function saveState() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) { /* cache only when signed in; storage may be full */ } invalidate(); if (typeof onStateSaved === 'function') onStateSaved(); }
 
@@ -166,6 +184,8 @@ const BASE_SEQ = {
   snack2_rest: ['jerky_apple', 'boiled_eggs', 'turkey_rollups', 'protein_bar']
 };
 const SEQ_CAT = { breakfast: 'breakfast', lunch: 'lunch', dinner: 'dinner', snack1_train: 'snack', snack2_train: 'snack', snack1_rest: 'snack', snack2_rest: 'snack' };
+/* v1.2 widened the rotation; the original entries stay at the front of each list. */
+if (typeof R2_SEQ === 'object') Object.keys(R2_SEQ).forEach(k => { if (BASE_SEQ[k]) BASE_SEQ[k] = BASE_SEQ[k].concat(R2_SEQ[k].filter(id => !BASE_SEQ[k].includes(id))); });
 /* Joint planning for synced meal plans: PLAN_CTX narrows recipes to ones both people can eat, adds the partner's favorites,
    and cooks multi-serving recipes for two (a 4-serving batch covers 2 days instead of 4). */
 let PLAN_CTX = null;
@@ -309,6 +329,60 @@ function shoppingStats(mealsByDate) {
 function makeQueue(list) { let i = 0, q = []; return () => { if (!list.length) return null; if (!q.length) { const id = list[i % list.length]; i++; const r = id && RECIPE[id]; const y = r ? r.yield : 1; for (let k = 0; k < y; k++) q.push(id); } return q.shift(); }; }
 // Assign sessions to training days: each phase runs its Push/Pull/Legs sequence in a rolling order that continues across
 // weeks (so any number of training days works) and restarts when a new phase begins.
+/* ---------- training styles ----------
+   Three switches: strength, hypertrophy, cardio. With both lifting styles on, the program is
+   exactly what it has always been — the S and H rows in each template stand as written. Turn one
+   off and the rows that used the other style are re-prescribed rather than dropped, so the
+   session still covers the same movements, at reps and rests that match what you asked for. */
+const styles = () => Object.assign({ strength: true, hypertrophy: true, cardio: false }, (S && S.settings && S.settings.styles) || {});
+function liftStyles() { const st = styles(); const s = st.strength !== false, h = st.hypertrophy !== false; return s || h ? { s, h } : { s: true, h: true }; }
+const liftingOn = () => { const st = styles(); return st.strength !== false || st.hypertrophy !== false; };
+const cardioOn = () => styles().cardio === true;
+/* Reps and rest are shifted by the same rule for every row, so a session reads consistently
+   instead of mixing a 5-rep row with a 15-rep row when only one style is on. */
+function styleRow(type, sets, reps, rest) {
+  const { s, h } = liftStyles();
+  if (type === 'T' || (s && h)) return { type, sets, reps, rest };
+  const want = s ? 'S' : 'H';
+  if (want === type) return { type, sets, reps, rest };
+  const rr = repRange(reps);   // declared further down; always returns a [lo, hi] pair
+  if (want === 'S') { const lo = clamp(Math.round(rr[0] * 0.55), 3, 8); return { type: 'S', sets, reps: `${lo}–${lo + 2}`, rest: Math.max(rest, 150) }; }
+  const lo = clamp(Math.round(rr[0] * 1.6), 8, 15); return { type: 'H', sets, reps: `${lo}–${lo + 4}`, rest: Math.min(rest, 90) };
+}
+/* ---------- cardio ----------
+   kcal/min = MET x 3.5 x kg / 200. An estimate from body weight and the clock, nothing more. */
+function cardioKcal(kind, minutes, lb) {
+  const c = CARDIO[kind]; if (!c) return 0;
+  const w = +lb > 0 ? +lb : (S && S.settings ? S.settings.startWeight : 180);
+  return Math.round(c.met * 3.5 * (w * 0.45359237) / 200 * (+minutes || 0));
+}
+const cardioPlan = () => Object.assign({ perWeek: 3, minutes: 30, types: CARDIO_DEFAULT.slice() }, (S && S.settings && S.settings.cardio) || {});
+function cardioTypes() { const t = (cardioPlan().types || []).filter(k => CARDIO[k]); return t.length ? t : CARDIO_DEFAULT.slice(); }
+/* Cardio goes on the days without a lifting session, so the lifting week is untouched. If a week
+   has fewer free days than sessions asked for, the remainder doubles up on lifting days — the
+   day holds both, and the macros still only count the lifting session. */
+function assignCardio(plan, settings, dates, fromDate, overwrite) {
+  const on = cardioOn(); const cp = cardioPlan(); const kinds = cardioTypes();
+  let n = 0;
+  for (let wk = 1; wk <= Math.ceil(dates.length / 7); wk++) {
+    const wkDates = dates.slice((wk - 1) * 7, wk * 7);
+    const free = wkDates.filter(d => plan[d] && !plan[d].w);
+    const busy = wkDates.filter(d => plan[d] && plan[d].w);
+    const want = on ? clamp(Math.round(+cp.perWeek || 0), 0, 7) : 0;
+    const spread = a => { const out = []; if (!a.length || !want) return out; const step = a.length / Math.min(want, a.length); for (let i = 0; i < Math.min(want, a.length); i++) out.push(a[Math.floor(i * step)]); return out; };
+    const pick = spread(free).concat(busy.slice(0, Math.max(0, want - free.length)));
+    wkDates.forEach(d => {
+      if (d < fromDate || !plan[d]) return;
+      const keep = !overwrite && plan[d].c && plan[d].c.by === 'user';
+      if (keep) { n++; return; }
+      if (pick.includes(d)) plan[d].c = { k: kinds[n++ % kinds.length], min: clamp(Math.round(+cp.minutes || 30), 5, 180) };
+      else if (plan[d].c && plan[d].c.by !== 'user') delete plan[d].c;
+      else if (!on && plan[d].c) delete plan[d].c;
+    });
+  }
+}
+const dayCardio = e => (e && e.c && CARDIO[e.c.k]) ? e.c : null;
+const dayHasWork = e => !!(e && (e.w || dayCardio(e)));
 function assignWorkouts(plan, settings, dates, fromDate, overwrite) {
   const days = settings.trainDays || [];
   let ptr = 0, curKey = null;
@@ -321,11 +395,12 @@ function assignWorkouts(plan, settings, dates, fromDate, overwrite) {
     wkDates.forEach(d => {
       if (d < fromDate) return;
       const i = tr.indexOf(d);
-      const w = i < 0 ? null : { t: seq[(ph.key === 'test' ? i : ptr + i) % seq.length], wk };
+      const w = (i < 0 || !liftingOn()) ? null : { t: seq[(ph.key === 'test' ? i : ptr + i) % seq.length], wk };
       if (!plan[d]) plan[d] = { w, m: {} }; else if (overwrite) plan[d].w = w;
     });
     if (ph.key !== 'test') ptr += tr.length;
   }
+  assignCardio(plan, settings, dates, fromDate, overwrite);
 }
 // Re-plan workouts from a date forward (e.g. training days changed). Snacks follow the new training/rest pattern.
 function rescheduleWorkouts(fromDate) {
@@ -424,14 +499,23 @@ function sessionRows(inst) {
   if (!inst) return [];
   const t = TEMPLATES[inst.t]; const wk = inst.wk || 1; const wip = weekInPhase(wk);
   const used = new Set(); const daySw = inst.sw || {}; const wStart = planWeekStart(wk);
-  return t.rows.map(([slot, type, sets, reps, rest, off, note], i) => {
-    const vars = slotVars(slot, wk); let vi = ((wk - 1 + (off || 0)) % vars.length + vars.length) % vars.length;
+  return t.rows.map(([slot, type, sets, reps, rest, off, note, pin], i) => {
+    const vars = slotVars(slot, wk);
+    /* A PR test only means something if it measures the same lift every cycle. Rotating by week
+       number did not do that: test week lands on a different week each cycle, so the number you
+       compared against was often a different exercise. Test rows hold still instead — on the
+       pinned barbell lift where the library has it switched on, otherwise on the first variation
+       in the slot, which is stable for as long as the rotation is. */
+    const pi = type === 'T' && pin && EX[pin] ? vars.indexOf(pin) : -1;
+    let vi = pi >= 0 ? pi : type === 'T' ? 0 : ((wk - 1 + (off || 0)) % vars.length + vars.length) % vars.length;
     for (let k = 0; k < vars.length && used.has(vars[vi]); k++) vi = (vi + 1) % vars.length;   // don't repeat an exercise within a session
     used.add(vars[vi]); const planned = EX[vars[vi]];
     const ex = daySw[i] && EX[daySw[i]] ? EX[daySw[i]] : planned;   // swapped for this day only
     const prog = S.slotSwap ? slotSwapsOn(slot, wStart).find(x => x[1] === planned.id) : null;
-    const rir = type === 'T' ? 'Top set @ 1 RIR' : (t.phase === 4 ? '3–4' : RIR[type][wip - 1]);
-    return { i, slot, ex, planned, daySwap: ex !== planned, progSwap: prog ? prog[0] : null, type, sets, reps, rest, note: note || '', rir, vi, nv: vars.length };
+    const sr = styleRow(type, sets, reps, rest);
+    const rir = sr.type === 'T' ? 'Top set @ 1 RIR' : (t.phase === 4 ? '3–4' : RIR[sr.type][wip - 1]);
+    return { i, slot, ex, planned, daySwap: ex !== planned, progSwap: prog ? prog[0] : null, type: sr.type, styled: sr.type !== type,
+      sets: sr.sets, reps: sr.reps, rest: sr.rest, note: note || '', rir, vi, nv: vars.length };
   });
 }
 function sessionSetCount(inst) { return sessionRows(inst).reduce((a, r) => a + r.sets, 0); }
@@ -536,14 +620,14 @@ function computeDay(date) {
   const st = statsOn(date);
   const tg = targetsFor(st.w, st.bf, isTrain);
   const meals = [];
-  MEAL_SLOTS.forEach(slot => { const id = entry.m && entry.m[slot]; if (id && RECIPE[id]) meals.push({ slot, r: RECIPE[id] }); });
+  DAY_SLOTS.forEach(slot => { const id = entry.m && entry.m[slot]; if (id && RECIPE[id]) meals.push({ slot, r: RECIPE[id] }); });
   const lines = [];
   meals.forEach((m, mi) => m.r.ing.forEach(([id, amt]) => {
     const role = roleOf(m.r, id);
     lines.push({ mi, id, base: amt / m.r.yield, role, unit: !!ING[id].u && (role === 'P' || role === 'C' || role === 'F') });
   }));
   // quick-added extras (a scanned snack, a bar…) count as fixed food, so the planned portions make room for them
-  const extras = (entry.x || []).map((x, i) => x && ING[x.id] && +x.amt > 0 ? { i, id: x.id, amt: +x.amt, slot: MEAL_SLOTS.includes(x.slot) ? x.slot : 'snack1', m: ingMacros(x.id, +x.amt) } : null).filter(Boolean);
+  const extras = (entry.x || []).map((x, i) => x && ING[x.id] && +x.amt > 0 ? { i, id: x.id, amt: +x.amt, slot: DAY_SLOTS.includes(x.slot) ? x.slot : 'snack1', m: ingMacros(x.id, +x.amt) } : null).filter(Boolean);
   const exM = extras.reduce((a, x) => addM(a, x.m), zeroM());
   const factor = (role, pF, cF) => role === 'P' ? pF : (role === 'C' || role === 'F') ? cF : 1;
   const roundUnit = (base, a) => { const step = base % 1 ? 0.5 : 1; return Math.max(step, Math.round(a / step) * step); };
@@ -601,7 +685,7 @@ function keepDays(r) { if (r.keep) return r.keep; if (r.id === 'boiled_eggs') re
 function computeBatches(days) {
   const occ = {}; // recipeId -> [{date, slot}]
   Object.keys(days).sort().forEach(d => {
-    days[d].meals.forEach((m, i) => { if (m.r.yield > 1) (occ[m.r.id] = occ[m.r.id] || []).push({ date: d, slot: m.slot, order: MEAL_SLOTS.indexOf(m.slot), n: m.partner ? 2 : 1 }); });
+    days[d].meals.forEach((m, i) => { if (m.r.yield > 1) (occ[m.r.id] = occ[m.r.id] || []).push({ date: d, slot: m.slot, order: DAY_SLOTS.indexOf(m.slot), n: m.partner ? 2 : 1 }); });
   });
   const info = {}; const list = [];
   Object.entries(occ).forEach(([rid, arr]) => {

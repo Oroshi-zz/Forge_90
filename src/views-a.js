@@ -9,6 +9,14 @@ function woChip(date, e, extraCls = '') {
   const t = TEMPLATES[e.w.t];
   return `<div class="chip wo ${extraCls}" style="--k:${KIND_VAR(t.kind)}" draggable="true" data-drag="workout" data-date="${date}" data-tip-wo="${date}">${icon(t.icon)}<span class="nm">${esc(t.short)}</span></div>`;
 }
+/* A day can hold both a lifting session and a cardio one. The cardio chip sits beside the
+   lifting chip rather than replacing it, and a day with neither is the rest day. */
+function cdChip(date, e, extraCls = '') {
+  const c = dayCardio(e); if (!c) return '';
+  const k = CARDIO[c.k];
+  return `<div class="chip cd ${extraCls}" data-tip="${esc(k.name)} · ${c.min} min · about ${fmt(cardioKcal(c.k, c.min, statsOn(date).w))} kcal">${icon('heart')}<span class="nm">${esc(k.name)}</span><small>${c.min}m</small></div>`;
+}
+const dayChips = (date, e) => (e.w ? woChip(date, e) : '') + cdChip(date, e);
 function batchBadge(b, compact) {
   if (!b) return '';
   if (b.role === 'cook') return `<span class="bd cook">${compact ? '' : 'COOK '}×${b.batch.size}</span>`;
@@ -54,7 +62,7 @@ function viewDashboard() {
   const meals = day.meals.map(m => { const b = A.batches.info[focus + '|' + m.slot];
     return `<div class="row" style="padding:7px 0;border-top:1px solid var(--line)" data-tip-meal="${focus}|${m.slot}"><span style="font-size:20px;width:26px;text-align:center">${esc(m.r.emoji)}</span><div style="flex:1;min-width:0"><div class="tiny muted" style="text-transform:uppercase;letter-spacing:.08em;font-weight:700">${SLOT_LABEL[m.slot]}</div><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(m.r.name)} ${batchBadge(b)}${shareBadge(focus, m.slot)}</div></div><span class="num small"><b>${fmt(m.m.k)}</b> kcal · <span style="color:var(--prot)">${fmt(m.m.p)}P</span></span><button class="btn icon ghost qe-pen" data-act="qe" data-d="${focus}" data-f="meal:${m.slot}" title="Swap this meal" aria-label="Swap ${SLOT_LABEL[m.slot].toLowerCase()}">${icon('edit')}</button></div>`; }).join('');
   const kfrac = day.totals.k / day.tg.kcal;
-  const todayCard = `<div class="card"><div class="card-h"><h2>${focus === today ? 'Today' : fmtDate(focus, { weekday: 'long', month: 'short', day: 'numeric' })}</h2><span class="pill ${day.isTrain ? 'acc' : ''}">${day.isTrain ? 'Training day' : 'Rest day'}</span>${syncBtnHTML('sm')}<a class="btn sm ghost" href="#/day/${focus}">Open day ${icon('right')}</a></div>
+  const todayCard = `<div class="card"><div class="card-h"><h2>${focus === today ? 'Today' : fmtDate(focus, { weekday: 'long', month: 'short', day: 'numeric' })}</h2><span class="pill ${day.isTrain ? 'acc' : ''}">${day.isTrain ? 'Training day' : 'Rest day'}</span>${dayCardio(day.entry) ? `<span class="pill cd-pill">${icon('heart')}Cardio</span>` : ''}${syncBtnHTML('sm')}<a class="btn sm ghost" href="#/day/${focus}">Open day ${icon('right')}</a></div>
     <div class="qe-links"><button class="btn sm" data-act="qe" data-d="${focus}" data-f="wo">${icon('dumbbell')}Edit workout</button><button class="btn sm" data-act="qe" data-d="${focus}" data-f="meals">${icon('food')}Edit meals</button>${focus === today ? scanBtnHTML('today', 'sm') + addFoodBtnHTML('', 'sm') : ''}${day.entry.w ? `<button class="btn sm primary" data-act="wo-open" data-d="${focus}" title="One exercise at a time, with the rest timer">${icon('play')}Workout mode</button>` : ''}<a class="btn sm ghost" href="#/workouts">${icon('grip')}Workout plan</a><a class="btn sm ghost" href="#/foods">${icon('book')}Recipes</a></div>
     ${wo}<hr class="sep"><div class="grid ring-row" style="grid-template-columns:auto 1fr;gap:20px;align-items:center">
       <div class="ring">${ringSVG(kfrac, 'var(--kcal)')}<div class="c"><b>${fmt(day.totals.k)}</b><span>of ${fmt(day.tg.kcal)} kcal</span></div></div>
@@ -75,7 +83,7 @@ function viewDashboard() {
   const days7 = Array.from({ length: 7 }, (_, i) => addDays(focus, i)).filter(inPlan);
   const strip = `<div class="card"><div class="card-h"><h2>Next 7 days</h2><a class="btn sm ghost" href="#/calendar">Calendar ${icon('right')}</a></div><div class="strip7">
     ${days7.map(d => { const x = A.days[d]; return `<a href="#/day/${d}" class="cell ${x.isTrain ? 'train' : ''} ${d === today ? 'today' : ''}" style="min-height:0;text-decoration:none"><div class="cell-head"><span class="dn">${parseISO(d).getDate()}</span><span class="dt">${DOW[parseISO(d).getDay()]}</span></div>
-      ${x.entry.w ? woChip(d, x.entry).replace('draggable="true"', '') : '<div class="rest-lbl">Rest</div>'}<div class="cell-foot"><div class="k">${fmt(x.totals.k)}<span>kcal</span></div></div></a>`; }).join('')}</div></div>`;
+      ${dayHasWork(x.entry) ? dayChips(d, x.entry).replace('draggable="true"', '') : '<div class="rest-lbl">Rest</div>'}<div class="cell-foot"><div class="k">${fmt(x.totals.k)}<span>kcal</span></div></div></a>`; }).join('')}</div></div>`;
 
   // PRs
   const prs = recentPRs(6);
@@ -119,8 +127,8 @@ function cellHTML(date, A, big, monthNum) {
   const outMonth = monthNum != null && dd.getMonth() + 1 !== monthNum;
   if (!inPlan(date)) return `<div class="cell out" style="${outMonth ? 'opacity:.3' : ''}"><div class="cell-head"><span class="dn">${dd.getDate()}</span>${big ? `<span class="dt">${DOW[dd.getDay()]}</span>` : ''}</div><div class="tiny muted" style="margin:auto;text-align:center">Outside plan</div></div>`;
   const day = A.days[date] || { meals: [] }; const e = planCell(date); const today = date === todayISO();
-  const wo = e.w ? woChip(date, e) : `<div class="rest-lbl">Rest</div>`;
-  const meals = MEAL_SLOTS.map(slot => {
+  const wo = dayHasWork(e) ? dayChips(date, e) : `<div class="rest-lbl">Rest</div>`;
+  const meals = DAY_SLOTS.map(slot => {
     const rid = e.m[slot]; const lbl = big ? `<div class="slot-l">${SLOT_LABEL[slot]}</div>` : '';
     if (!rid || !RECIPE[rid]) return lbl + `<div class="slot-empty" data-drop="slot" data-date="${date}" data-slot="${slot}">+ ${SLOT_LABEL[slot]}</div>`;
     const r = RECIPE[rid]; const m = (day.meals || []).find(x => x.slot === slot); const b = A.batches.info[date + '|' + slot];
@@ -130,7 +138,7 @@ function cellHTML(date, A, big, monthNum) {
   }).join('');
   const kf = Math.min(1.1, day.totals.k / day.tg.kcal);
   const off = Math.abs(day.totals.k - day.tg.kcal) > 120;
-  return `<div class="cell ${e.w ? 'train' : ''} ${today ? 'today' : ''}" data-drop="cell" data-date="${date}" data-go="${date}">
+  return `<div class="cell ${e.w ? 'train' : ''} ${dayCardio(e) ? 'cardio' : ''} ${today ? 'today' : ''}" data-drop="cell" data-date="${date}" data-go="${date}">
     <div class="cell-head"><span class="dn">${dd.getDate()}</span><span class="dt">${big ? DOW[dd.getDay()] + ' · ' : ''}D${planIndex(date) + 1}</span>${S.done[date] ? `<span class="ck" data-tip="Workout completed">${icon('check')}</span>` : ''}</div>
     ${wo}${meals}
     <div class="cell-foot"><div class="k">${fmt(day.totals.k)}<span>/ ${fmt(day.tg.kcal)} kcal</span></div><div class="mini"><i style="width:${kf * 100 / 1.1}%;${off ? 'background:var(--warn)' : ''}"></i></div>
@@ -145,7 +153,7 @@ function calIsCompact() {
 function agendaHTML(dates, A) {
   const rows = dates.filter(inPlan).map(date => {
     const dd = parseISO(date); const day = A.days[date] || { meals: [] }; const e = planCell(date); const today = date === todayISO();
-    const meals = MEAL_SLOTS.map(slot => {
+    const meals = DAY_SLOTS.map(slot => {
       const rid = e.m[slot];
       if (!rid || !RECIPE[rid]) return `<div class="slot-empty" data-drop="slot" data-date="${date}" data-slot="${slot}" style="display:block">+ ${SLOT_LABEL[slot]}</div>`;
       const r = RECIPE[rid]; const m = (day.meals || []).find(x => x.slot === slot); const b = A.batches.info[date + '|' + slot];
@@ -153,7 +161,7 @@ function agendaHTML(dates, A) {
     }).join('');
     return `<div class="ag-day ${e.w ? 'train' : ''} ${today ? 'today' : ''}" data-drop="cell" data-date="${date}" data-go="${date}">
       <div class="ag-date"><span class="dw">${DOW[dd.getDay()]}</span><b>${dd.getDate()}</b><span class="dx">D${planIndex(date) + 1}</span></div>
-      <div style="min-width:0"><div class="ag-top">${e.w ? woChip(date, e) : '<span class="rest-lbl">Rest day</span>'}${S.done[date] ? `<span class="pill acc">${icon('check').replace('<svg', '<svg style="width:12px;height:12px"')}Done</span>` : ''}<span class="ag-k">${fmt(day.totals.k)} <span>/ ${fmt(day.tg.kcal)} kcal</span></span></div>
+      <div style="min-width:0"><div class="ag-top">${dayHasWork(e) ? dayChips(date, e) : '<span class="rest-lbl">Rest day</span>'}${S.done[date] ? `<span class="pill acc">${icon('check').replace('<svg', '<svg style="width:12px;height:12px"')}Done</span>` : ''}<span class="ag-k">${fmt(day.totals.k)} <span>/ ${fmt(day.tg.kcal)} kcal</span></span></div>
         <div class="ag-meals">${meals}</div>
         <div class="pcf"><span class="p"><b>${fmt(day.totals.p)}</b>g protein</span><span class="c"><b>${fmt(day.totals.c)}</b>g carbs</span><span class="f"><b>${fmt(day.totals.f)}</b>g fat</span></div></div></div>`;
   }).join('');
@@ -209,7 +217,7 @@ function libraryHTML() {
     if (hidden) list += `<a class="tiny muted" href="#/foods" style="padding:4px 2px">${hidden} recipe${hidden === 1 ? '' : 's'} hidden by your food preferences →</a>`;
   }
   return `<aside class="card lib"><div class="row"><h3 style="flex:1">Library</h3><div class="seg"><button class="${UI.libTab === 'workouts' ? 'on' : ''}" data-act="lib-tab" data-v="workouts">Workouts</button><button class="${UI.libTab === 'meals' ? 'on' : ''}" data-act="lib-tab" data-v="meals">Meals</button></div></div>
-    ${UI.libTab === 'meals' ? `<div class="filters" style="margin-top:10px">${['all', 'breakfast', 'lunch', 'dinner', 'snack'].map(f => `<button class="${UI.libFilter === f ? 'on' : ''}" data-act="lib-filter" data-v="${f}">${f[0].toUpperCase() + f.slice(1)}</button>`).join('')}</div>
+    ${UI.libTab === 'meals' ? `<div class="filters" style="margin-top:10px">${['all'].concat(RECIPE_CATS).map(f => `<button class="${UI.libFilter === f ? 'on' : ''}" data-act="lib-filter" data-v="${f}">${f[0].toUpperCase() + f.slice(1)}</button>`).join('')}</div>
       <input class="inp" style="margin-top:8px;height:32px" placeholder="Search meals…" data-input="libq" value="${esc(UI.libQ)}">` : '<div class="tiny muted" style="margin-top:8px">Drop a session on any day. Exercise variations follow that day’s week in the rotation.</div>'}
     <div class="lib-list">${list}</div><div class="trash" data-drop="trash">${icon('trash')}Drag here to remove</div></aside>`;
 }
@@ -277,6 +285,38 @@ function applyDrop(d, type, tDate, tSlot, copy) {
 }
 
 /* ---------------- DAY DETAIL ---------------- */
+/* Dessert is the one slot the planner never fills. It stays out of the way until you add one,
+   and once it is there the day's other portions resize around it like any other food. */
+const dayHasExtras = (day, slot) => (day.extras || []).some(x => x.slot === slot);
+function mealSelectHTML(date, slot, m) {
+  const cats = slot === 'dessert' ? RECIPE_CATS.slice().sort((a, b) => (a === 'dessert' ? -1 : 0) - (b === 'dessert' ? -1 : 0)) : PLAN_CATS;
+  return `<select class="inp" data-input="day-meal" data-date="${date}" data-slot="${slot}" style="height:30px;font-size:12px;max-width:190px"><option value="">— none —</option>${cats.map(c => { const rs = RECIPES.filter(r => r.cat === c && (recipeAllowed(r) || (m && m.r.id === r.id))); return rs.length ? `<optgroup label="${c[0].toUpperCase() + c.slice(1)}">${rs.map(r => `<option value="${r.id}" ${m && m.r.id === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</optgroup>` : ''; }).join('')}</select>`;
+}
+function dessertAddHTML(date, day) {
+  if (day.meals.some(m => m.slot === 'dessert') || dayHasExtras(day, 'dessert')) return '';
+  const n = RECIPES.filter(r => r.cat === 'dessert' && recipeAllowed(r)).length;
+  return `<div class="dessert-add"><button type="button" class="btn sm ghost" data-act="dessert-add" data-d="${date}">${icon('plus')}Add a dessert</button>
+    <span class="tiny muted">Desserts are never planned for you. Add one and the rest of the day resizes to fit it.${n ? '' : ' No dessert recipes yet — add one under Foods &amp; recipes.'}</span></div>`;
+}
+/* The cardio card is its own thing: no sets, no RIR, just what it is, how long, and the way in
+   to the stopwatch. A day can show this next to a lifting card, or on its own. */
+function cardioCardHTML(date, e) {
+  const c = dayCardio(e); const t0 = todayISO();
+  if (!c) return cardioOn() && date >= t0 ? `<div class="card cd-card empty"><div class="card-h"><h2>Cardio</h2></div>
+      <div class="row wrap"><span class="small sub" style="flex:1">No cardio on this day.</span><button class="btn sm" data-act="cd-add" data-d="${date}">${icon('plus')}Add cardio</button></div></div>` : '';
+  const k = CARDIO[c.k]; const kc = cardioKcal(c.k, c.min, statsOn(date).w);
+  const opts = CARDIO_GROUPS.map(g => { const list = CARDIO_IDS.filter(id => CARDIO[id].group === g);
+    return `<optgroup label="${esc(g)}">${list.map(id => `<option value="${id}" ${id === c.k ? 'selected' : ''}>${esc(CARDIO[id].name)}</option>`).join('')}</optgroup>`; }).join('');
+  return `<div class="card cd-card"><div class="card-h"><span class="pill cd-pill">${icon('heart')}Cardio</span><div class="spacer"></div>${c.doneMin ? `<span class="pill acc">${icon('check')}${c.doneMin} min logged</span>` : ''}</div>
+    <h2 style="margin-top:6px">${esc(k.name)}</h2><div class="sub small" style="margin-top:2px">${esc(k.how)}</div>
+    <div class="cd-meta"><div><span class="tiny muted">Planned</span><b class="num">${c.min} min</b></div>
+      <div><span class="tiny muted">Estimated burn</span><b class="num">${fmt(kc)} kcal</b></div>
+      <div><span class="tiny muted">Calorie target</span><b>Unchanged</b></div></div>
+    <div class="row wrap" style="margin-top:12px"><select class="inp" data-input="day-cardio" data-date="${date}" style="max-width:260px"><option value="">— No cardio —</option>${opts}</select>
+      <div class="cd-min"><button type="button" class="btn icon" data-act="cd-min" data-d="${date}" data-v="-5" aria-label="Five minutes less">${icon('minus')}</button><b class="num">${c.min}m</b><button type="button" class="btn icon" data-act="cd-min" data-d="${date}" data-v="5" aria-label="Five minutes more">${icon('plus')}</button></div>
+      <button class="btn primary" data-act="cw-open" data-d="${date}">${icon('stopwatch')}Start cardio</button></div>
+    <div class="note" style="margin-top:12px">${icon('info')}<span>The burn is estimated from your body weight and the clock, not measured, so treat it as a ballpark. Cardio does not change the day's calorie target — only a lifting session does that.</span></div></div>`;
+}
 function viewDay(date) {
   if (!date || !inPlan(date)) return `<div class="card empty-state">${icon('cal')}<h2 style="margin:8px 0">That day isn’t in the plan</h2><a class="btn" href="#/calendar">Back to calendar</a></div>`;
   const A = computeAll(); const day = A.days[date] || { meals: [] }; const e = planCell(date);
@@ -284,7 +324,7 @@ function viewDay(date) {
   const prev = inPlan(addDays(date, -1)) ? addDays(date, -1) : null, next = inPlan(addDays(date, 1)) ? addDays(date, 1) : null;
   const head = `<div class="day-head"><a class="btn icon" href="#/calendar" data-tip="Back to calendar">${icon('cal')}</a>
     <div class="date"><div class="muted small" style="font-weight:600">${idx < LAUNCH_DAYS ? `Day ${idx + 1} of 90 · Week ${wk}` : `Day ${idx + 1} · Cycle ${phaseForWeek(wk).cycle}, week ${phaseForWeek(wk).wic} of 13`}</div><h1>${fmtDate(date, { weekday: 'long', month: 'long', day: 'numeric' })}</h1></div>
-    <div class="row wrap">${phasePill(wk)}<span class="pill ${day.isTrain ? 'acc' : ''}">${day.isTrain ? 'Training day' : 'Rest day'}</span></div><div class="spacer"></div>${syncBtnHTML()}
+    <div class="row wrap">${phasePill(wk)}<span class="pill ${day.isTrain ? 'acc' : ''}">${day.isTrain ? 'Training day' : 'Rest day'}</span>${dayCardio(e) ? `<span class="pill cd-pill">${icon('heart')}Cardio</span>` : ''}</div><div class="spacer"></div>${syncBtnHTML()}
     <a class="btn icon ${prev ? '' : 'hidden'}" href="#/day/${prev}">${icon('left')}</a><a class="btn icon ${next ? '' : 'hidden'}" href="#/day/${next}">${icon('right')}</a></div>`;
 
   // workout
@@ -297,20 +337,23 @@ function viewDay(date) {
         <h2 style="margin-top:8px">${esc(t.name)}</h2><div class="sub small" style="margin-top:2px">${esc(t.focus)}</div></div>
         ${muscleMap(prim, sec).replace('class="mm"', 'class="mm" style="width:110px;height:110px;flex:none"')}</div>
       <div class="row wrap" style="margin-bottom:12px"><select class="inp" data-input="day-wo" data-date="${date}" style="max-width:280px">${opts}</select>
-        <button class="btn ${S.done[date] ? 'primary' : ''}" data-act="toggle-done" data-date="${date}">${icon('check')}${S.done[date] ? 'Completed' : 'Mark complete'}</button><button class="btn primary" data-act="wo-open" data-d="${date}" title="One exercise at a time, with the rest timer">${icon('play')}Workout mode</button></div>
+        <button class="btn ${S.done[date] ? 'primary' : ''}" data-act="toggle-done" data-date="${date}">${icon('check')}${S.done[date] ? 'Completed' : 'Mark complete'}</button><button class="btn primary" data-act="wo-open" data-d="${date}" title="One exercise at a time, with the rest timer">${icon('play')}Workout mode</button><button class="btn" data-act="print-wo" data-d="${date}" title="Print this session with space to write your sets">${icon('print')}Print</button></div>
       <div class="scroll-x"><table class="ex-table"><thead><tr><th>#</th><th>Exercise</th><th>Target</th><th>Log sets (lb × reps)</th></tr></thead><tbody>
       ${rows.map((r, i) => exRowHTML(date, r, i)).join('')}</tbody></table></div>
       <div class="note" style="margin-top:12px">${icon('info')}<span><b>RIR</b> = reps in reserve (how many more clean reps you could do). Strength sets <span class="type-s">S</span>: rest 2–3 min. Hypertrophy sets <span class="type-h">H</span>: rest 60–120 s. Hover any exercise for step-by-step form.</span></div></div>`;
   } else {
-    woCard = `<div class="card"><div class="card-h"><h2>Rest &amp; recover</h2></div><div class="note acc">${icon('info')}<span>No lifting today. Walk 8–10k steps, get 7–9 h of sleep and keep protein on target. Today’s calorie target is ${fmt(S.settings.sessionKcal)} kcal lower than a training day, and portions are resized to match.</span></div>
+    woCard = `<div class="card"><div class="card-h"><h2>${dayCardio(e) ? 'No lifting today' : 'Rest &amp; recover'}</h2></div><div class="note acc">${icon('info')}<span>No lifting today. Walk 8–10k steps, get 7–9 h of sleep and keep protein on target. Today’s calorie target is ${fmt(S.settings.sessionKcal)} kcal lower than a training day, and portions are resized to match.</span></div>
       <div class="row wrap" style="margin-top:14px"><span class="small sub">Add a session:</span><select class="inp" data-input="day-wo" data-date="${date}" style="max-width:280px">${opts}</select></div></div>`;
   }
 
+  const cdCard = cardioCardHTML(date, e);
+
   // nutrition
   const st = day.stats; const tg = day.tg;
-  const mealsHTML = MEAL_SLOTS.map(slot => {
+  const mealsHTML = DAY_SLOTS.map(slot => {
     const m = day.meals.find(x => x.slot === slot);
-    const sel = `<select class="inp" data-input="day-meal" data-date="${date}" data-slot="${slot}" style="height:30px;font-size:12px;max-width:190px"><option value="">— none —</option>${['breakfast', 'lunch', 'dinner', 'snack'].map(c => `<optgroup label="${c[0].toUpperCase() + c.slice(1)}">${RECIPES.filter(r => r.cat === c && (recipeAllowed(r) || (m && m.r.id === r.id))).map(r => `<option value="${r.id}" ${m && m.r.id === r.id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</optgroup>`).join('')}</select>`;
+    const sel = mealSelectHTML(date, slot, m);
+    if (!m && slot === 'dessert' && !dayHasExtras(day, slot)) return '';   // never planned for you; it shows once you add one
     if (!m) return `<div class="dmeal empty"><span class="em">+</span><div class="dmeal-t"><span class="slot">${SLOT_LABEL[slot]}</span><span class="muted small">Nothing planned</span></div>${sel}${extrasHTML(day, slot)}</div>`;
     const b = A.batches.info[date + '|' + slot];
     let bnote = '';
@@ -328,8 +371,8 @@ function viewDay(date) {
   const nutCard = `<div class="card"><div class="card-h"><h2>Nutrition</h2><span class="pill">${day.isTrain ? 'Training' : 'Rest'} target</span><div class="spacer"></div>${scanBtnHTML('today', 'sm', date)}${addFoodBtnHTML(date, 'sm')}</div>
     <div class="grid" style="grid-template-columns:auto 1fr;gap:18px;align-items:center"><div class="ring">${ringSVG(day.totals.k / tg.kcal, 'var(--kcal)')}<div class="c"><b>${fmt(day.totals.k)}</b><span>of ${fmt(tg.kcal)} kcal</span></div></div><div>${macroBars(day.totals, tg)}</div></div>
     <div class="note" style="margin-top:12px">${icon('scale')}<span>Portions sized from <b>${fmt(st.w, 1)} lb · ${fmt(st.bf, 1)}% BF${st.est ? ' (est.)' : ''}</b> ${st.src === 'start' ? '(starting stats)' : '(weigh-in ' + fmtDate(st.src) + ')'}: protein sources ×${day.pF.toFixed(2)}, carb &amp; fat sources ×${day.cF.toFixed(2)}. <span class="scaled-up" style="color:var(--good)">Green</span> amounts are scaled up, <span style="color:var(--kcal)">orange</span> scaled down.</span></div>
-    <div class="dmeals">${mealsHTML}</div><div class="tiny muted" style="margin-top:4px">Tap a meal for the full recipe. Amounts above are today’s portions${(day.extras || []).length ? ', already made smaller to fit the foods you added' : ''}.</div></div>`;
-  return head + `<div class="day-grid"><div>${woCard}</div><div>${nutCard}</div></div>`;
+    <div class="dmeals">${mealsHTML}</div>${dessertAddHTML(date, day)}<div class="tiny muted" style="margin-top:4px">Tap a meal for the full recipe. Amounts above are today’s portions${(day.extras || []).length ? ', already made smaller to fit the foods you added' : ''}.</div></div>`;
+  return head + `<div class="day-grid"><div>${woCard}${cdCard ? '<div style="height:16px"></div>' + cdCard : ''}</div><div>${nutCard}</div></div>`;
 }
 function exRowHTML(date, r, i) {
   const sug = suggestion(r.ex.id, r.reps, date);

@@ -206,6 +206,7 @@ function syncTake(next) {
 }
 function syncRerender() {
   const h = location.hash; invalidate(); if (typeof pantrySyncReconcile === 'function') pantrySyncReconcile();
+  if (typeof grocerySyncReconcile === 'function') grocerySyncReconcile();
   if (($('#view')) && (/^#\/(calendar|day|diet|grocery|pantry)(\/|$)/.test(h) || h === '' || h === '#/' || h === '#')) {
     const ae = document.activeElement; if (ae && ae.closest && ae.closest('#view input, #view select, #view textarea')) SY.needRender = true; else render();
   }
@@ -305,7 +306,7 @@ function cleanFood(f) {
     u: f.u ? cleanStr(f.u, 20) : null, g: f.u ? cleanNum(f.g, 1, 5000, 100) : null, ml: !f.u && !!f.ml };
 }
 function cleanRecipe(r, id) {
-  const cats = ['breakfast', 'lunch', 'dinner', 'snack'];
+  const cats = PLAN_CATS.slice();
   return { id, custom: true, name: cleanStr(r.name, 80) || 'Shared recipe', emoji: cleanStr(r.emoji, 8) || '🍽️', cat: cats.includes(r.cat) ? r.cat : 'dinner', yield: Math.round(cleanNum(r.yield, 1, 12, 1)),
     storage: ['fridge', 'freezer', 'none'].includes(r.storage) ? r.storage : 'fridge', time: cleanNum(r.time, 0, 600, 0), fixed: !!r.fixed, rotate: false,
     tags: (Array.isArray(r.tags) ? r.tags : []).slice(0, 12).map(t => cleanStr(t, 30)).filter(Boolean),
