@@ -187,9 +187,10 @@ function viewFoods() {
   const words = String(UI.recQ || '').toLowerCase().split(/\s+/).filter(Boolean);
   const hay = r => [r.name, r.cat, (r.tags || []).join(' '), r.ing.map(([id]) => ING[id] ? ING[id].n : '').join(' ')].join(' ').toLowerCase();
   const rs = sortRecipes(RECIPES.filter(r => (f === 'all' || (f === 'fav' ? isFav(r.id) : r.cat === f)) && (!words.length || words.every(w => hay(r).includes(w)))));
-  const cards = rs.map(r => { const m = RPS(r.id); const ok = recipeAllowed(r); const bl = blockedBy(r); const g = RECIPE_GRAD[r.cat];
+  const just = UI.recJust; if (just) { UI.recJust = null; saveUI(); }
+  const cards = rs.map(r => { const m = RPS(r.id); const ok = recipeAllowed(r); const bl = blockedBy(r); const g = RECIPE_GRAD[r.cat] || RECIPE_GRAD.dinner;
     const badges = [r.custom ? '<span class="pill acc">Custom</span>' : '', r.edited ? '<span class="pill">Edited</span>' : '', S.recipeOff[r.id] ? '<span class="pill">Turned off</span>' : '', bl.length ? `<span class="pill warn-pill" data-tip="Blocked by food preferences: ${esc(bl.join(', '))}">Blocked · ${esc(bl[0])}${bl.length > 1 ? ' +' + (bl.length - 1) : ''}</span>` : ''].join('');
-    return `<div class="card recipe-row clickable ${ok ? '' : 'dim'} ${isFav(r.id) ? 'is-fav' : ''}" data-act="recipe" data-rid="${r.id}" title="Show recipe details"><div class="art sm" style="--g1:${g[0]};--g2:${g[1]}">${esc(r.emoji || '🍽️')}</div>
+    return `<div class="card recipe-row clickable ${ok ? '' : 'dim'} ${isFav(r.id) ? 'is-fav' : ''} ${just === r.id ? 'just-saved' : ''}" id="rec-${esc(r.id)}" data-act="recipe" data-rid="${r.id}" title="Show recipe details"><div class="art sm" style="--g1:${g[0]};--g2:${g[1]}">${esc(r.emoji || '🍽️')}</div>
       <div class="rr-t" style="flex:1;min-width:0"><div class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.08em">${r.cat} · makes ${r.yield}</div><b>${esc(r.name)}</b>
         <div class="mac small"><span><b>${fmt(m.k)}</b> kcal</span> <span style="color:var(--prot)">${fmt(m.p)}P</span> <span style="color:var(--carb)">${fmt(m.c)}C</span> <span style="color:var(--fat)">${fmt(m.f)}F</span></div>
         ${linkChipsHTML(r)}<div class="row wrap" style="gap:4px;margin-top:4px">${badges}</div></div>
@@ -320,6 +321,26 @@ function reOpen() {
   else renderRecipeEditor();
 }
 function reLeave() { const back = UI.reReturn || '#/foods'; RE = null; UI.reReturn = null; saveUI(); if (location.hash === back) render(); else location.hash = back; }
+/* Saving used to drop you back wherever you came from, which for a new recipe is a 40-card
+   list it sits at the bottom of — and a leftover search, filter or the Foods & macros tab
+   could hide it outright. Land on the recipe itself, with anything that would hide it cleared. */
+function reGoToSaved(rid) {
+  const r = RECIPE[rid]; const back = UI.reReturn || '#/foods';
+  RE = null; UI.reReturn = null;
+  const onRecipePage = back.replace(/^#\/?/, '').split('/')[0] === 'recipe';
+  if (r && !onRecipePage) {
+    UI.foodsTab = 'recipes';
+    const f = UI.recFilter || 'all';
+    if (f !== 'all' && !(f === 'fav' ? isFav(rid) : r.cat === f)) UI.recFilter = 'all';
+    const words = String(UI.recQ || '').toLowerCase().split(/\s+/).filter(Boolean);
+    const hay = [r.name, r.cat, (r.tags || []).join(' '), r.ing.map(([id]) => ING[id] ? ING[id].n : '').join(' ')].join(' ').toLowerCase();
+    if (words.length && !words.every(w => hay.includes(w))) UI.recQ = '';
+    UI.recJust = rid; UI._scrollTo = 'rec-' + rid;
+  }
+  saveUI();
+  const to = r && !onRecipePage ? '#/foods' : back;
+  if (location.hash === to) render(); else location.hash = to;
+}
 function reResume() { const d = reDraft(); if (!d) { toast('That draft is gone'); render(); return; } RE = d; reOpen(); }
 function reDiscard() { RE = null; reClearDraft(); const back = UI.reReturn || '#/foods'; UI.reReturn = null; saveUI(); if (location.hash === back) render(); else location.hash = back; }
 window.addEventListener('beforeunload', ev => { if (RE && !RE._saving) { ev.preventDefault(); ev.returnValue = ''; } });
@@ -338,7 +359,8 @@ function emojiPickerHTML(cur) {
       <div class="emo-groups">${FOOD_EMOJI.map(([g, list]) => `<div class="emo-g"><div class="emo-h">${esc(g)}</div><div class="emo-grid">${list.map(([em, name]) => `<button type="button" class="emo ${em === cur ? 'on' : ''}" data-act="emo-pick" data-e="${em}" data-n="${esc(name)}" title="${esc(name)}">${em}</button>`).join('')}</div></div>`).join('')}
       <div class="emo-none tiny muted">No food emoji match.</div></div></div>`;
 }
-function emoClose() { const p = $('#modal .emo-pop.open'); if (p) { p.classList.remove('open'); const b = $('#modal .emo-btn'); if (b) b.setAttribute('aria-expanded', 'false'); } }
+/* The recipe editor is a page now, so none of this lives under #modal any more. */
+function emoClose() { const p = $('.emo-pop.open'); if (p) { p.classList.remove('open'); const b = p.parentElement.querySelector('.emo-btn'); if (b) b.setAttribute('aria-expanded', 'false'); } }
 /* tags already used by any recipe, most common first */
 function usedTags() { const c = {}; RECIPES.forEach(r => (r.tags || []).forEach(t => { t = String(t).trim(); if (!t) return; const k = Object.keys(c).find(x => x.toLowerCase() === t.toLowerCase()) || t; c[k] = (c[k] || 0) + 1; })); return Object.entries(c).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])); }
 const reTagList = () => (RE ? RE.tags : '').split(',').map(t => t.trim()).filter(Boolean);
@@ -424,11 +446,12 @@ function saveRecipe() {
   const cl = cleanLinks(e.links);
   const rec = { links: cl.links, name, emoji: e.emoji || '🍽️', cat: e.cat, yield: Math.max(1, Math.round(+e.yield || 1)), storage: e.storage, time: +e.time || 0,
     tags: (() => { const known = usedTags().map(([t]) => t); const out = []; e.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(t => { t = known.find(k => k.toLowerCase() === t.toLowerCase()) || t; if (!out.some(o => o.toLowerCase() === t.toLowerCase())) out.push(t); }); return out; })(), fixed: !!e.fixed, rotate: !!e.rotate, ing, steps: e.steps.split('\n').map(s => s.trim()).filter(Boolean) };
+  let rid = e.id;
   if (e.id && e.base) S.recipeOverrides[e.id] = rec;
-  else { const id = e.id || 'cr_' + Date.now().toString(36) + (e.imp ? Math.random().toString(36).slice(2, 5) : ''); S.customRecipes[id] = Object.assign(rec, { id }); }
+  else { const id = e.id || 'cr_' + Date.now().toString(36) + (e.imp ? Math.random().toString(36).slice(2, 5) : ''); rid = id; S.customRecipes[id] = Object.assign(rec, { id }); }
   reClearDraft();
-  if (e.imp) { impRemember(); rebuildCatalog(); saveState(); if (IMPQ) { IMPQ.done++; toast(`${name} imported`); impNext(); return; } reLeave(); toast(`${name} imported — find it in Foods & recipes and the calendar library`); return; }
-  rebuildCatalog(); saveState(); reLeave(); toast(`${name} saved — find it in the calendar library${cl.bad ? ` · skipped ${cl.bad} link${cl.bad > 1 ? 's' : ''} that ${cl.bad > 1 ? 'aren’t web addresses' : 'isn’t a web address'}` : ''}`);
+  if (e.imp) { impRemember(); rebuildCatalog(); saveState(); if (IMPQ) { IMPQ.done++; toast(`${name} imported`); impNext(); return; } reGoToSaved(rid); toast(`${name} imported — find it in Foods & recipes and the calendar library`); return; }
+  rebuildCatalog(); saveState(); reGoToSaved(rid); toast(`${name} saved — find it in the calendar library${cl.bad ? ` · skipped ${cl.bad} link${cl.bad > 1 ? 's' : ''} that ${cl.bad > 1 ? 'aren’t web addresses' : 'isn’t a web address'}` : ''}`);
 }
 /* cat/yld are passed in because the recipe may already be gone from the catalog by now.
    A null substitute leaves the meal alone rather than blanking the day. */
@@ -446,8 +469,9 @@ document.addEventListener('input', e => {
   const t = e.target;
   if (t.dataset && t.dataset.input === 'emoq') {
     const q = t.value.trim().toLowerCase(); let any = 0;
-    $$('#modal .emo-g').forEach(g => { let vis = 0; g.querySelectorAll('.emo').forEach(b => { const m = !q || b.dataset.n.includes(q); b.style.display = m ? '' : 'none'; if (m) vis++; }); g.style.display = vis ? '' : 'none'; any += vis; });
-    const none = $('#modal .emo-none'); if (none) none.style.display = any ? 'none' : 'block'; return;
+    const pop = t.closest('.emo-pop') || document;
+    $$('.emo-g', pop).forEach(g => { let vis = 0; g.querySelectorAll('.emo').forEach(b => { const m = !q || b.dataset.n.includes(q); b.style.display = m ? '' : 'none'; if (m) vis++; }); g.style.display = vis ? '' : 'none'; any += vis; });
+    const none = pop.querySelector('.emo-none'); if (none) none.style.display = any ? 'none' : 'block'; return;
   }
   if (t.closest && t.closest('#modal form[data-form="food"]')) { feSuggest(); feDefHints(); }
   if (!t.dataset || !t.dataset.re || !RE) return;
@@ -501,7 +525,7 @@ Object.assign(ACT, {
   're-link-add': () => { RE.links.push({ title: '', url: '', site: '' }); const w = $('#re-links'); if (w) { w.innerHTML = reLinksHTML(); const ins = w.querySelectorAll('[data-re="link-url"]'); if (ins.length) ins[ins.length - 1].focus(); } },
   're-link-rm': el => { RE.links.splice(+el.dataset.i, 1); const w = $('#re-links'); if (w) w.innerHTML = reLinksHTML(); },
   'emo-toggle': el => { const p = el.parentElement.querySelector('.emo-pop'); const open = !p.classList.contains('open'); p.classList.toggle('open', open); el.setAttribute('aria-expanded', String(open)); if (open) { const q = p.querySelector('input'); q.value = ''; q.dispatchEvent(new Event('input', { bubbles: true })); q.focus(); const on = p.querySelector('.emo.on'); if (on) on.scrollIntoView({ block: 'nearest' }); } },
-  'emo-pick': el => { if (!RE) return; RE.emoji = el.dataset.e; const c = $('#modal .emo-cur'); if (c) c.textContent = RE.emoji; $$('#modal .emo').forEach(b => b.classList.toggle('on', b === el)); emoClose(); },
+  'emo-pick': el => { if (!RE) return; RE.emoji = el.dataset.e; const fld = el.closest('.emo-field') || document; const c = fld.querySelector('.emo-cur'); if (c) c.textContent = RE.emoji; $$('.emo', fld).forEach(b => b.classList.toggle('on', b === el)); emoClose(); },
   're-tag': el => { const t = el.dataset.t; const list = reTagList(); const i = list.findIndex(x => x.toLowerCase() === t.toLowerCase()); if (i >= 0) list.splice(i, 1); else list.push(t);
     RE.tags = list.join(', '); const inp = $('[data-re="tags"]'); if (inp) inp.value = RE.tags; refreshTagChips(); reSaveDraft(); },
   're-add': () => { RE.ing.push(['chicken_breast', 100]); renderRecipeEditor(); },
@@ -524,6 +548,6 @@ Object.assign(ACT, {
 });
 document.addEventListener('submit', e => { if (e.target.dataset && e.target.dataset.form === 'food') { e.preventDefault(); saveFood(e.target); } });
 
-document.addEventListener('mousedown', e => { if ($('#modal .emo-pop.open') && !e.target.closest('.emo-field')) emoClose(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#modal .emo-pop.open')) { e.stopImmediatePropagation(); emoClose(); } }, true);
+document.addEventListener('mousedown', e => { if ($('.emo-pop.open') && !e.target.closest('.emo-field')) emoClose(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('.emo-pop.open')) { e.stopImmediatePropagation(); emoClose(); } }, true);
 document.addEventListener('change', e => { const t = e.target; if (t && t.dataset && t.dataset.input === 'rec-sort') { UI.recSort = t.value; UI.recDir = t.value === 'name' ? 'asc' : 'desc'; saveUI(); render(); } });

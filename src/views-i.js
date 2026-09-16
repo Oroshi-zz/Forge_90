@@ -363,13 +363,38 @@ function quickPick(date) {
     <div class="qp-list" id="qp-list">${qpListHTML('')}</div></div>`, 'qp-modal');
   const q = $('#qp-q'); if (q && window.matchMedia && matchMedia('(pointer: fine)').matches) q.focus();
 }
+/* The group label is searchable so "stone fruit" finds a plum, but a label hit must never
+   outrank a name hit: searching "pear" used to list every apple in the same subgroup first. */
+const rxEsc = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function qpWordScore(w, n, br, lbl) {
+  if (n === w) return 100;
+  if (n.startsWith(w)) return 80;
+  if (new RegExp('\\b' + rxEsc(w)).test(n)) return 64;
+  if (n.includes(w)) return 40;
+  if (br.startsWith(w)) return 26;
+  if (br.includes(w)) return 20;
+  if (lbl.includes(w)) return 4;
+  return 0;
+}
+function qpRelevance(g, q, words) {
+  if (!words.length) return 0;
+  const n = g.n.toLowerCase(), br = (g.brand || '').toLowerCase(), lbl = ((SUB_LABEL[g.sub] || '') + ' ' + (g.a || '')).toLowerCase();
+  if (/^\d{6,}$/.test(q) && g.gtin && (g.gtin === q || String(g.gtin).endsWith(q))) return 1000;
+  let s = 0; words.forEach(w => { s += qpWordScore(w, n, br, lbl); });
+  s = s / words.length;
+  if (words.length > 1 && n.includes(q)) s += 30;         // the whole phrase, in order, in the name
+  return s;
+}
 function qpListHTML(q, act, d) {
   act = act || 'qa-food'; d = d == null ? (QP ? QP.d : '') : d;
-  const words = String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const qs = String(q || '').trim().toLowerCase();
+  const words = qs.split(/\s+/).filter(Boolean);
   const recent = {}; Object.keys(S.plan || {}).sort().slice(-60).forEach((d, i) => ((S.plan[d] || {}).x || []).forEach(x => { recent[x.id] = i + 1; }));
   const hay = g => (g.n + ' ' + (g.brand || '') + ' ' + (SUB_LABEL[g.sub] || '') + ' ' + (g.gtin || '')).toLowerCase();
   const rank = g => (isFavFood(g.id) ? 4 : 0) + (recent[g.id] ? 2 : 0) + (g.shared ? 1 : 0);
-  const list = Object.values(ING).filter(g => words.every(w => hay(g).includes(w))).sort((a, b) => rank(b) - rank(a) || (recent[b.id] || 0) - (recent[a.id] || 0) || a.n.localeCompare(b.n));
+  const rel = {}; Object.values(ING).forEach(g => { rel[g.id] = qpRelevance(g, qs, words); });
+  const list = Object.values(ING).filter(g => words.every(w => hay(g).includes(w)))
+    .sort((a, b) => rel[b.id] - rel[a.id] || rank(b) - rank(a) || (recent[b.id] || 0) - (recent[a.id] || 0) || a.n.length - b.n.length || a.n.localeCompare(b.n));
   const top = list.slice(0, 50);
   return top.map(g => `<button type="button" class="qp-opt" data-act="${act}" data-id="${g.id}" data-d="${esc(d)}"><span class="qp-t"><b>${esc(g.n)}</b><small>${esc([g.brand, SUB_LABEL[g.sub]].filter(Boolean).join(' · '))}</small></span>
       <span class="qp-p">${isFavFood(g.id) ? `<span class="qp-star" title="Favorite">${icon('star')}</span>` : ''}${recent[g.id] ? '<span class="pill">Recent</span>' : ''}${g.shared ? '<span class="pill acc">Scanned</span>' : ''}<span class="tiny muted num">${fmt(g.k)} kcal / ${g.u ? esc(g.u) : g.ml ? '100 ml' : '100 g'}</span></span></button>`).join('')

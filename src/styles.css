@@ -696,6 +696,9 @@ select.inp option, select.inp optgroup { background: var(--solid); color: var(--
 @media (max-width: 600px) { .re-link { grid-template-columns: 28px minmax(0, 1fr) auto auto; } .re-link input[data-re="link-url"] { grid-column: 2 / 3; grid-row: 2; } .sortbar { margin-left: 0; } }
 
 /* clickable recipe rows, quick edit, money saver, food editor defaults */
+.recipe-row.just-saved { border-color: var(--accent-2); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-2) 35%, transparent); animation: justSaved 2.4s ease-out 1 forwards; }
+@keyframes justSaved { 0%, 55% { background: color-mix(in srgb, var(--accent-2) 16%, transparent); } 100% { background: none; } }
+@media (prefers-reduced-motion: reduce) { .recipe-row.just-saved { animation: none; } }
 .recipe-row.clickable { cursor: pointer; transition: border-color .15s, transform .12s; }
 .recipe-row.clickable:hover { border-color: color-mix(in srgb, var(--accent-2) 45%, transparent); transform: translateY(-1px); }
 .qe-links { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 14px; }
