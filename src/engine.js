@@ -630,7 +630,10 @@ function computeDay(date) {
   const extras = (entry.x || []).map((x, i) => x && ING[x.id] && +x.amt > 0 ? { i, id: x.id, amt: +x.amt, slot: DAY_SLOTS.includes(x.slot) ? x.slot : 'snack1', m: ingMacros(x.id, +x.amt) } : null).filter(Boolean);
   const exM = extras.reduce((a, x) => addM(a, x.m), zeroM());
   const factor = (role, pF, cF) => role === 'P' ? pF : (role === 'C' || role === 'F') ? cF : 1;
-  const roundUnit = (base, a) => { const step = base % 1 ? 0.5 : 1; return Math.max(step, Math.round(a / step) * step); };
+  // snap count-based items (eggs, pears, tortillas…) to a practical fraction. the step follows the recipe's own
+  // per-serving amount, so a quarter-pear serving stays a quarter and is never floored up to a half.
+  const unitStep = base => [1, 0.5, 0.25, 0.125].find(s => Math.abs(base / s - Math.round(base / s)) < 1e-9) || (base < 1 ? base : 0.25);
+  const roundUnit = (base, a) => { const step = unitStep(base); return Math.max(step, Math.round(a / step) * step); };
   // solve protein factor (pF) and carb/fat factor (cF); pass 2 locks count-based items (eggs, tortillas…) to whole units
   function solve(unitAmt) {
     const sum = { P: zeroM(), CF: zeroM(), V: zeroM(), X: addM(zeroM(), exM) };
@@ -719,15 +722,26 @@ function computeBatches(days) {
 /* ---------- friendly amounts ---------- */
 const TBSP = { olive_oil: 13.5, sesame_oil: 13.6, honey: 21, pb: 16, light_mayo: 15, soy_sauce: 16, chia: 12, cocoa: 5.4, pb2: 6.5, sriracha: 6, ketchup: 17, cornstarch: 8, parmesan: 5, teriyaki: 18, syrup_sf: 15 };
 const CUP = { greek_yogurt: 245, cottage: 226, rice: 158, sushi_rice: 160, quinoa: 185, berries: 140, oats: 80, granola: 60, marinara: 250, crushed_tomatoes: 240, salsa: 260, fairlife: 240, egg_whites: 243, black_beans: 172, kidney_beans: 177, corn: 145, edamame: 155, pineapple: 165, spinach: 30, broccoli: 90, stir_fry_veg: 130, cheese_shred: 113, feta: 150, cherry_tomato: 150, carrots: 128, romaine: 47, green_beans: 110, cucumber: 120 };
-function fracStr(x) {
-  const w = Math.floor(x + 1e-6); const f = x - w; const fr = [[0, ''], [0.25, '¼'], [0.33, '⅓'], [0.5, '½'], [0.67, '⅔'], [0.75, '¾'], [1, '']];
+// measuring-cup fractions: what a kitchen measure actually reads
+const FRAC_CUP = [[0, ''], [0.25, '¼'], [0.33, '⅓'], [0.5, '½'], [0.67, '⅔'], [0.75, '¾'], [1, '']];
+// count fractions: a serving is (units ÷ yield), so every denominator up to 8 needs a glyph or the text
+// rounds away from the macros it is printed beside
+const FRAC_UNIT = [[0, ''], [0.125, '⅛'], [0.167, '⅙'], [0.2, '⅕'], [0.25, '¼'], [0.33, '⅓'], [0.375, '⅜'], [0.4, '⅖'], [0.5, '½'], [0.6, '⅗'], [0.625, '⅝'], [0.67, '⅔'], [0.75, '¾'], [0.8, '⅘'], [0.833, '⅚'], [0.875, '⅞'], [1, '']];
+function fracStr(x, fr = FRAC_CUP) {
+  const w = Math.floor(x + 1e-6); const f = x - w;
   let best = fr[0], bd = 9; fr.forEach(q => { const dd = Math.abs(f - q[0]); if (dd < bd) { bd = dd; best = q; } });
   const whole = best[0] === 1 ? w + 1 : w; const s = (whole ? whole : '') + best[1];
   return s || '0';
 }
 function amountText(id, amt) {
   const g = ING[id];
-  if (g.u) { const n = Math.max(0.5, Math.round(amt * 2) / 2); const lab = n <= 1 ? g.u : g.u + (g.u.endsWith('ch') ? 'es' : 's'); return { main: (n % 1 ? fracStr(n) : n) + ' ' + lab, sub: '' }; }
+  if (g.u) {
+    // let fracStr pick the nearest fraction it can actually render, so the text matches the macros beside it.
+    // the old half-unit floor showed a quarter-pear serving as "½ pear" while charging it a quarter's macros.
+    const n = Math.max(0.125, amt);
+    const lab = n <= 1 ? g.u : g.u + (g.u.endsWith('ch') ? 'es' : 's');
+    return { main: fracStr(n, FRAC_UNIT) + ' ' + lab, sub: '' };
+  }
   let grams = amt >= 60 ? Math.round(amt / 5) * 5 : Math.round(amt);
   const unit = g.ml ? 'ml' : 'g';
   let sub = '';
