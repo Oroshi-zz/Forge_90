@@ -255,11 +255,12 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
 /* ---------- hero ---------- */
 .hero {
   position: relative; overflow: hidden; border-radius: 18px; padding: 26px 28px; color: #f5f8f2;
-  background: radial-gradient(600px 300px at 90% 0%, rgba(181, 242, 61, .35), transparent 60%), linear-gradient(135deg, #0f1f12 0%, #13202e 55%, #0e1420 100%);
+  --hero-accent: color-mix(in srgb, var(--accent) 80%, #fff);
+  background: radial-gradient(600px 300px at 90% 0%, color-mix(in srgb, var(--accent) 35%, transparent), transparent 60%), linear-gradient(135deg, #101821 0%, #13202e 55%, #0e1420 100%);
   border: 1px solid rgba(255, 255, 255, .06); box-shadow: var(--shadow-lg);
 }
 .hero h1 { font-size: 34px; color: #fff; }
-.hero .eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: 11px; color: #b5f23d; font-weight: 700; }
+.hero .eyebrow { text-transform: uppercase; letter-spacing: .14em; font-size: 11px; color: var(--hero-accent); font-weight: 700; }
 .hero p { color: #eef2f6; margin: 6px 0 0; max-width: 560px; }
 .hero .art { position: absolute; right: -10px; top: -10px; width: 360px; height: 220px; opacity: .9; pointer-events: none; }
 .weekbar { display: grid; grid-template-columns: repeat(13, 1fr); gap: 4px; margin-top: 20px; max-width: 720px; position: relative; }
@@ -267,7 +268,7 @@ hr.sep { border: 0; border-top: 1px solid var(--line); margin: 14px 0; }
 .weekbar i.p1 { background: rgba(57, 135, 229, .55); } .weekbar i.p2 { background: rgba(25, 158, 112, .6); }
 .weekbar i.p3 { background: rgba(144, 133, 233, .65); } .weekbar i.p4 { background: rgba(201, 133, 0, .7); }
 .weekbar i.done { opacity: .35; }
-.weekbar i.now { outline: 2px solid #b5f23d; outline-offset: 2px; }
+.weekbar i.now { outline: 2px solid var(--hero-accent); outline-offset: 2px; }
 .weekbar-l { display: flex; justify-content: space-between; max-width: 720px; font-size: 11px; color: #e6ebf1; margin-top: 7px; }
 
 /* ---------- macro bars / rings ---------- */
@@ -587,7 +588,10 @@ details ol li { margin: 3px 0; }
 .stack { background: transparent; }
 .inp, select.inp, textarea.inp { background: var(--surface-2); }
 select.inp option, select.inp optgroup { background: var(--solid); color: var(--text); }
-.hero { background: linear-gradient(135deg, rgba(12, 30, 16, .74) 0%, rgba(16, 28, 44, .55) 60%, rgba(12, 16, 26, .45) 100%); border-color: rgba(255, 255, 255, .1); }
+/* The hero is a dark panel in both themes, so its accent is lifted toward white to stay legible
+   whichever accent is picked. The phase bar keeps its own colours: they identify the phase. */
+.hero { --hero-accent: color-mix(in srgb, var(--accent) 80%, #fff);
+  background: radial-gradient(620px 320px at 88% -12%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 62%), linear-gradient(135deg, rgba(14, 22, 30, .74) 0%, rgba(16, 28, 44, .55) 60%, rgba(12, 16, 26, .45) 100%); border-color: rgba(255, 255, 255, .1); }
 .page-head h1 { text-shadow: 0 2px 18px rgba(var(--tint), .7); }
 .page-head p { color: var(--text); opacity: .88; text-shadow: 0 1px 10px rgba(var(--tint), .8); }
 .lib-item, .meal-card, .ex-card, .prep-row .d { background: var(--surface-2); }
@@ -1481,6 +1485,10 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
 .eqz i { width: 3px; height: 6px; border-radius: 2px; background: currentColor; animation: eqb .55s ease-in-out infinite alternate; }
 .eqz i:nth-child(2) { animation-delay: -.18s; } .eqz i:nth-child(3) { animation-delay: -.36s; }
 @keyframes eqb { to { height: 18px; } }
+/* Settings cards sit in a 2-column grid, which stretches every card to its row's height. The gym card
+   pairs with the much taller rest timer card, so left stretching it was mostly empty space. */
+#gym-cards { align-self: start; }
+.rs-alarm { justify-content: flex-start; margin-bottom: 6px; }
 .rs-vol { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; color: var(--muted); }
 .rs-vol input { flex: 1; accent-color: var(--accent-2); }
 .modal.rest-modal { width: min(460px, 100%); }

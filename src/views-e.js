@@ -75,7 +75,7 @@ async function startApp() {
   }
   enterApp();
 }
-function enterApp() { shell(); render(); setSync('ok'); afterStart(); if (typeof syncStart === 'function') syncStart(); if (typeof loadSharedFoods === 'function') loadSharedFoods().then(() => pantryCatchUp()); }
+function enterApp() { shell(); render(); setSync('ok'); afterStart(); if (typeof syncStart === 'function') syncStart(); if (typeof loadSharedFoods === 'function') loadSharedFoods().then(() => pantryCatchUp()); if (typeof loadSharedRecipes === 'function') loadSharedRecipes(); }
 function afterStart() {
   if (AUTH.mode !== 'server' && typeof pantryCatchUp === 'function') pantryCatchUp();
   if (S._sharingIntro) { delete S._sharingIntro; saveState(); setTimeout(() => toast(`New: meals from ${fmtDate(nextPlanWeekStart())} on were re-planned to share ingredients (fewer packages to buy). This week and hand-picked meals weren’t touched — see Grocery & prep → Money saver.`), 600); }

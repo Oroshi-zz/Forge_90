@@ -139,7 +139,7 @@ function recipeModal(rid) {
     <h3 style="margin-top:16px">Method</h3>${x.steps}
     ${linksBlockHTML(r)}${x.scaling}
     <div class="row wrap" style="justify-content:flex-end;margin-top:14px;gap:6px">${x.blocked ? `<span style="margin-right:auto">${x.blocked}</span>` : ''}
-      <button class="btn" data-act="recipe-dup" data-rid="${rid}">Duplicate</button><button class="btn primary" data-act="recipe-edit" data-rid="${rid}">${icon('edit')}Edit recipe</button></div>`);
+      <button class="btn" data-act="recipe-dup" data-rid="${rid}">Duplicate</button>${recipeMayEdit(r) ? `<button class="btn primary" data-act="recipe-edit" data-rid="${rid}">${icon('edit')}Edit recipe</button>` : ''}</div>`);
 }
 let REC_FROM = '';                        // where "Back" goes from the full-page recipe
 function viewRecipe(rid) {
@@ -148,7 +148,7 @@ function viewRecipe(rid) {
   const r = x.r;
   return `<div class="page-head rec-head"><div class="t"><a class="rec-back" href="${esc(REC_FROM || '#/foods')}">${icon('left')}Back</a>
       <div class="tiny muted rec-kicker">${x.meta}</div><h1><span class="rec-emo">${esc(r.emoji)}</span>${esc(r.name)}</h1>${x.tags ? `<div class="row wrap" style="margin-top:8px">${x.tags}</div>` : ''}</div>
-    <div class="row wrap">${x.blocked}${favBtnHTML(rid)}<button class="btn" data-act="recipe-print" data-rid="${rid}">${icon('print')}Print</button><button class="btn" data-act="recipe-dup" data-rid="${rid}">Duplicate</button><button class="btn primary" data-act="recipe-edit" data-rid="${rid}">${icon('edit')}Edit recipe</button></div></div>
+    <div class="row wrap">${x.blocked}${favBtnHTML(rid)}<button class="btn" data-act="recipe-print" data-rid="${rid}">${icon('print')}Print</button><button class="btn" data-act="recipe-dup" data-rid="${rid}">Duplicate</button>${recipeMayEdit(r) ? `<button class="btn primary" data-act="recipe-edit" data-rid="${rid}">${icon('edit')}Edit recipe</button>` : ''}</div></div>
     <div class="grid g4" style="gap:10px;margin-bottom:16px">${x.macros}</div>
     <div class="grid ${r.yield > 1 ? 'g2' : ''}" style="margin-bottom:16px"><div class="card"><div class="card-h"><h2>Per standard serving</h2></div><div class="ing-list">${x.list(x.per)}</div></div>
       ${r.yield > 1 ? `<div class="card"><div class="card-h"><h2>Full batch</h2><span class="pill">${r.yield} servings</span></div><div class="ing-list">${x.list(x.batch)}</div></div>` : ''}</div>

@@ -122,6 +122,7 @@ function saveState() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S));
 
 /* ---------- food catalog (built-in + overrides + custom) ---------- */
 let SHARED_FOODS = {};        // products everyone on the server can use (barcode scans), loaded from /api/foods/shared
+let SHARED_RECIPES = {};      // the shared recipe book, loaded from /api/recipes/shared; empty in local mode
 function rebuildCatalog() {
   Object.keys(ING).forEach(k => delete ING[k]);
   Object.entries(BASE_ING).forEach(([id, g]) => { const o = (S.foodOverrides || {})[id]; ING[id] = Object.assign({ id, sub: BASE_SUB[id] || 'sauces', base: true }, g, o || {}, { edited: !!o }); });
@@ -129,7 +130,10 @@ function rebuildCatalog() {
   Object.entries(S.customFoods || {}).forEach(([id, g]) => { ING[id] = Object.assign({ sub: 'sauces', a: 'Pantry', r: 'V' }, g, { id, custom: true }); });
   RECIPES.length = 0;
   BASE_RECIPES.forEach(r => { const o = (S.recipeOverrides || {})[r.id]; const x = Object.assign({}, r, o || {}, { id: r.id, base: true, edited: !!o }); x.links = ((o && o.links) || r.links || []).map(l => Object.assign({}, l)); RECIPES.push(x); });
-  Object.values(S.customRecipes || {}).forEach(r => RECIPES.push(Object.assign({ tags: [], steps: [], links: [], storage: 'fridge', time: 0 }, r, { custom: true })));
+  /* The shared book first, then anything still held privately. A recipe that has been migrated up
+     is skipped here so the server's copy (with its author and edit rights) is the one that wins. */
+  Object.values(SHARED_RECIPES || {}).forEach(r => { if (r) RECIPES.push(Object.assign({ tags: [], steps: [], links: [], storage: 'fridge', time: 0 }, r, { custom: true, shared: true })); });
+  Object.values(S.customRecipes || {}).forEach(r => { if (r && !SHARED_RECIPES[r.id]) RECIPES.push(Object.assign({ tags: [], steps: [], links: [], storage: 'fridge', time: 0 }, r, { custom: true })); });
   Object.keys(RECIPE).forEach(k => delete RECIPE[k]);
   RECIPES.forEach(r => { r.ing = (r.ing || []).filter(([id]) => ING[id]); RECIPE[r.id] = r; });
   Object.keys(_rps).forEach(k => delete _rps[k]);

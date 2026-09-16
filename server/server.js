@@ -661,7 +661,19 @@ const PROD = require('./lib/products');
 const FOODS_FILE = path.join(DATA, 'foods.json');
 let sharedFoods = { rev: 0, foods: {} };
 try { if (fs.existsSync(FOODS_FILE)) sharedFoods = Object.assign({ rev: 0, foods: {} }, JSON.parse(fs.readFileSync(FOODS_FILE, 'utf8'))); } catch (e) { console.error('Could not read', FOODS_FILE, e.message); }
-let foodsT = null; const saveFoods = () => { clearTimeout(foodsT); foodsT = setTimeout(() => writeAtomic(FOODS_FILE, JSON.stringify(sharedFoods, null, 1)), 100); };
+/* Debounced, but never starved: back-to-back writes used to keep pushing the timer out, so a busy
+   stretch could end at a kill with nothing on disk. Past maxAge the next call writes straight away. */
+function debouncedSave(file, get) {
+  let t = null, since = 0;
+  return now => {
+    const flush = () => { clearTimeout(t); t = null; since = 0; writeAtomic(file, JSON.stringify(get(), null, 1)); };
+    if (now) return flush();
+    if (!since) since = Date.now();
+    if (Date.now() - since >= 2000) return flush();
+    clearTimeout(t); t = setTimeout(flush, 100);
+  };
+}
+const saveFoods = debouncedSave(FOODS_FILE, () => sharedFoods);
 const SUB_RE = /^[a-z_]{2,30}$/;
 const AISLE_OK = ['Meat & Seafood', 'Dairy & Eggs', 'Produce', 'Grains & Bread', 'Frozen', 'Pantry', 'Snacks', 'Beverages', 'Deli & Prepared'];
 function cleanSharedFood(b, cur) {
@@ -719,6 +731,77 @@ route('DELETE', '/api/foods/shared/:id', { admin: true }, async (req, res, ctx) 
   delete sharedFoods.foods[cur.id]; sharedFoods.rev++; saveFoods();
   audit('product_deleted', { userId: ctx.me.u.id, actorId: ctx.me.u.id, ip: clientIp(req), detail: cur.n });
   send(res, 200, { ok: true, rev: sharedFoods.rev });
+});
+
+/* ---------- shared recipe book (every recipe anyone writes is visible to everyone) ----------
+   Recipes used to live inside each user's own plan blob, so nobody could see anyone else's.
+   They now sit here, stamped with who wrote them: the author or an administrator may change or
+   remove one, everyone else gets a read-only copy merged into their catalog. */
+const RECIPES_FILE = path.join(DATA, 'recipes.json');
+let sharedRecipes = { rev: 0, recipes: {} };
+try { if (fs.existsSync(RECIPES_FILE)) sharedRecipes = Object.assign({ rev: 0, recipes: {} }, JSON.parse(fs.readFileSync(RECIPES_FILE, 'utf8'))); } catch (e) { console.error('Could not read', RECIPES_FILE, e.message); }
+const saveRecipes = debouncedSave(RECIPES_FILE, () => sharedRecipes);
+const RECIPE_CATS_OK = ['breakfast', 'lunch', 'dinner', 'snack', 'dessert'];
+const RID_RE = /^[A-Za-z0-9_-]{1,80}$/;
+const MAX_RECIPES = 5000;
+function cleanSharedRecipe(b) {
+  const name = String(b.name || '').replace(/\s+/g, ' ').trim().slice(0, 90); if (!name) err(400, 'Give the recipe a name.');
+  const ing = (Array.isArray(b.ing) ? b.ing : []).slice(0, 40)
+    .map(x => Array.isArray(x) && RID_RE.test(String(x[0])) && +x[1] > 0 ? [String(x[0]), Math.round(+x[1] * 100) / 100] : null).filter(Boolean);
+  if (!ing.length) err(400, 'Add at least one ingredient.');
+  const links = (Array.isArray(b.links) ? b.links : []).slice(0, 4)
+    .map(l => l && /^https?:\/\//i.test(String(l.url || '')) ? { title: String(l.title || '').trim().slice(0, 80), url: String(l.url).slice(0, 500), site: String(l.site || '').trim().slice(0, 60) } : null).filter(Boolean);
+  return { name, emoji: String(b.emoji || '🍽️').slice(0, 8), cat: RECIPE_CATS_OK.includes(b.cat) ? b.cat : 'dinner',
+    yield: Math.max(1, Math.min(60, Math.round(+b.yield || 1))), storage: ['fridge', 'freezer', 'none'].includes(b.storage) ? b.storage : 'fridge',
+    time: Math.max(0, Math.min(1440, Math.round(+b.time || 0))),
+    tags: (Array.isArray(b.tags) ? b.tags : []).slice(0, 12).map(t => String(t).trim().slice(0, 24)).filter(Boolean),
+    fixed: !!b.fixed, rotate: !!b.rotate, ing, steps: (Array.isArray(b.steps) ? b.steps : []).slice(0, 30).map(s => String(s).trim().slice(0, 500)).filter(Boolean), links };
+}
+const mayEditRecipe = (cur, u) => cur.by === u.id || u.role === 'admin';
+route('GET', '/api/recipes/shared', { auth: true }, async (req, res) => send(res, 200, sharedRecipes));
+route('POST', '/api/recipes/shared', { auth: true }, async (req, res, ctx) => {
+  if (limited('recipeadd:' + ctx.me.u.id, 300, 60 * 60000)) err(429, 'Too many new recipes in an hour.');
+  if (Object.keys(sharedRecipes.recipes).length >= MAX_RECIPES) err(400, 'The recipe book is full.');
+  /* Keep the id the client already uses where we can, so plans that point at it still resolve.
+     Only a clash with someone else's recipe forces a new one, and the client is told about it. */
+  const want = String(ctx.body.id || ''); const taken = sharedRecipes.recipes[want];
+  const id = RID_RE.test(want) && (!taken || taken.by === ctx.me.u.id) ? want : 'sr_' + uid().replace(/[^A-Za-z0-9]/g, '');
+  const rec = Object.assign(cleanSharedRecipe(ctx.body), { id, by: ctx.me.u.id, byName: ctx.me.u.name, at: now() });
+  sharedRecipes.recipes[id] = rec; sharedRecipes.rev++; saveRecipes();
+  audit('recipe_added', { userId: ctx.me.u.id, ip: clientIp(req), detail: rec.name });
+  send(res, 200, { recipe: rec, rev: sharedRecipes.rev, wasId: want && want !== id ? want : null });
+});
+route('PATCH', '/api/recipes/shared/:id', { auth: true }, async (req, res, ctx) => {
+  const cur = sharedRecipes.recipes[ctx.params.id]; if (!cur) err(404, 'Recipe not found.');
+  if (!mayEditRecipe(cur, ctx.me.u)) err(403, 'Only the person who wrote this recipe or an administrator can change it.');
+  const rec = Object.assign(cleanSharedRecipe(Object.assign({}, cur, ctx.body)), { id: cur.id, by: cur.by, byName: cur.byName, at: cur.at, editedAt: now(), editedBy: ctx.me.u.name });
+  sharedRecipes.recipes[cur.id] = rec; sharedRecipes.rev++; saveRecipes();
+  audit('recipe_edited', { userId: ctx.me.u.id, ip: clientIp(req), detail: rec.name });
+  send(res, 200, { recipe: rec, rev: sharedRecipes.rev });
+});
+route('DELETE', '/api/recipes/shared/:id', { auth: true }, async (req, res, ctx) => {
+  const cur = sharedRecipes.recipes[ctx.params.id]; if (!cur) err(404, 'Recipe not found.');
+  if (!mayEditRecipe(cur, ctx.me.u)) err(403, 'Only the person who wrote this recipe or an administrator can remove it.');
+  delete sharedRecipes.recipes[cur.id]; sharedRecipes.rev++; saveRecipes();
+  audit('recipe_deleted', { userId: ctx.me.u.id, ip: clientIp(req), detail: cur.name });
+  send(res, 200, { ok: true, rev: sharedRecipes.rev });
+});
+/* One-time lift of a user's private recipes into the book, sent by the client on first load
+   after the update. Ids are preserved where free so the sender's own plan keeps resolving. */
+route('POST', '/api/recipes/migrate', { auth: true }, async (req, res, ctx) => {
+  const list = (Array.isArray(ctx.body.recipes) ? ctx.body.recipes : []).slice(0, 500);
+  const map = {}; let added = 0;
+  list.forEach(r => {
+    let rec; try { rec = cleanSharedRecipe(r); } catch (e) { return; }          // skip anything malformed, migrate the rest
+    if (Object.keys(sharedRecipes.recipes).length >= MAX_RECIPES) return;
+    const want = String(r.id || ''); const taken = sharedRecipes.recipes[want];
+    if (taken && taken.by === ctx.me.u.id) { map[want] = want; return; }        // already migrated: don't duplicate
+    const id = RID_RE.test(want) && !taken ? want : 'sr_' + uid().replace(/[^A-Za-z0-9]/g, '');
+    sharedRecipes.recipes[id] = Object.assign(rec, { id, by: ctx.me.u.id, byName: ctx.me.u.name, at: +r.at || now() });
+    map[want] = id; added++;
+  });
+  if (added) { sharedRecipes.rev++; saveRecipes(); audit('recipes_migrated', { userId: ctx.me.u.id, ip: clientIp(req), detail: `${added} recipe${added === 1 ? '' : 's'}` }); }
+  send(res, 200, { map, added, rev: sharedRecipes.rev });
 });
 
 /* ---------- recipe import: web links and Mealie ---------- */
@@ -901,7 +984,7 @@ route('GET', '/api/admin/stats', { admin: true }, async (req, res) => {
     emails24: a.filter(x => x.type === 'reset_email_sent').length, emailFail24: a.filter(x => /email_failed|reset_email_failed/.test(x.type)).length, dataBytes: bytes, dataDir: DATA, node: process.version, version: VERSION, uptime: Math.round(process.uptime()) });
 });
 route('GET', '/api/admin/backup', { admin: true }, async (req, res, ctx) => {
-  const out = { app: 'FORGE 90', exportedAt: new Date().toISOString(), settings: adminSettingsView(), invites: db.invites.map(inviteRow), users: db.users.map(u => Object.assign(pubUser(u), { state: readState(u.id) })), sharedFoods: sharedFoods.foods };
+  const out = { app: 'FORGE 90', exportedAt: new Date().toISOString(), settings: adminSettingsView(), invites: db.invites.map(inviteRow), users: db.users.map(u => Object.assign(pubUser(u), { state: readState(u.id) })), sharedFoods: sharedFoods.foods, sharedRecipes: sharedRecipes.recipes };
   audit('backup_downloaded', { actorId: ctx.me.u.id, ip: clientIp(req) });
   send(res, 200, out, { 'Content-Disposition': `attachment; filename="forge90-backup-${new Date().toISOString().slice(0, 10)}.json"` });
 });
@@ -975,6 +1058,6 @@ async function cli() {
     console.log(`  Data folder: ${DATA}`);
     console.log(`  Email: ${emailReady() ? `${mailConfig().host}:${mailConfig().port} as ${mailConfig().user || mailConfig().fromEmail}` : 'not configured (Admin → Email)'}\n`);
   });
-  const stop = () => { saveDb(true); process.exit(0); };
+  const stop = () => { saveDb(true); saveFoods(true); saveRecipes(true); process.exit(0); };
   process.on('SIGINT', stop); process.on('SIGTERM', stop);
 })();

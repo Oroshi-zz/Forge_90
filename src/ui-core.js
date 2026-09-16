@@ -88,16 +88,19 @@ const icon = (n, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="non
 // Logo: “Anvil Bar + Spark” (option 3B-3) — lime anvil, hammer spark, barbell across the base
 const LOGO = `<svg class="logo" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FORGE 90"><defs><linearGradient id="fgt" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#27321c"/><stop offset="1" stop-color="#0b0f09"/></linearGradient><linearGradient id="fgf" x1=".5" y1="0" x2=".5" y2="1"><stop offset="0" stop-color="#f2ff9e"/><stop offset=".45" stop-color="#b5f23d"/><stop offset="1" stop-color="#4d8a0a"/></linearGradient></defs><rect width="48" height="48" rx="13" fill="url(#fgt)"/><rect x=".6" y=".6" width="46.8" height="46.8" rx="12.4" fill="none" stroke="#b5f23d" stroke-opacity=".28" stroke-width="1.2"/><path d="M24 12.4V6.800000000000001M18.8 13 15.9 8.8M29.2 13 32.1 8.8" stroke="#d9f99d" stroke-width="2.2" stroke-linecap="round"/><path transform="translate(24 23.8) scale(0.84) translate(-24 -24)" d="M6.5 19.5H38.8Q42.4 19.5 42.4 23.2V24.4H35.6L31.8 29.2V32.6H36.2V37.6H13.8V32.6H18.2V29.2L15.2 25.6Q9.2 25.1 6.5 19.5Z" fill="url(#fgf)"/><g fill="#f7fbe9" stroke="#0f1a02" stroke-width="1.3" paint-order="stroke"><rect x="5.8" y="28.4" width="4.2" height="12" rx="1.8900000000000001"/><rect x="10.4" y="30.68" width="3.2760000000000002" height="7.4399999999999995" rx="1.4742000000000002"/><rect x="38" y="28.4" width="4.2" height="12" rx="1.8900000000000001"/><rect x="34.324" y="30.68" width="3.2760000000000002" height="7.4399999999999995" rx="1.4742000000000002"/><rect x="13.676" y="33.1" width="20.648000000000003" height="2.6" rx="1.3"/></g></svg>`;
 function heroArt() {
-  let lines = ''; for (let i = 0; i < 9; i++) lines += `<path d="M${-20 + i * 40} 220 L${140 + i * 40} 0" stroke="rgba(181,242,61,${0.05 + i * 0.012})" stroke-width="1"/>`;
+  /* Colours come from --hero-accent / --accent-2 so the art follows the accent setting. CSS variables
+     do not resolve in SVG presentation attributes, so each one is set through a style attribute. */
+  const A = 'style="fill:var(--hero-accent)"', AS = 'style="stroke:var(--hero-accent)"';
+  let lines = ''; for (let i = 0; i < 9; i++) lines += `<path d="M${-20 + i * 40} 220 L${140 + i * 40} 0" ${AS} stroke-opacity="${(0.05 + i * 0.012).toFixed(3)}" stroke-width="1"/>`;
   return `<svg class="art" viewBox="0 0 360 220" fill="none"><defs>
-    <linearGradient id="ha1" x1="0" x2="1"><stop offset="0" stop-color="#b5f23d" stop-opacity="0"/><stop offset="1" stop-color="#b5f23d" stop-opacity=".9"/></linearGradient>
-    <radialGradient id="ha2" cx=".7" cy=".3" r=".6"><stop offset="0" stop-color="#3987e5" stop-opacity=".45"/><stop offset="1" stop-color="#3987e5" stop-opacity="0"/></radialGradient></defs>
+    <linearGradient id="ha1" x1="0" x2="1"><stop offset="0" style="stop-color:var(--hero-accent)" stop-opacity="0"/><stop offset="1" style="stop-color:var(--hero-accent)" stop-opacity=".9"/></linearGradient>
+    <radialGradient id="ha2" cx=".7" cy=".3" r=".6"><stop offset="0" style="stop-color:var(--hero-accent)" stop-opacity=".22"/><stop offset="1" style="stop-color:var(--hero-accent)" stop-opacity="0"/></radialGradient></defs>
     <rect width="360" height="220" fill="url(#ha2)"/>${lines}
     <path d="M30 190 C 90 170, 120 150, 160 120 S 240 70, 330 40" stroke="url(#ha1)" stroke-width="3" stroke-linecap="round"/>
-    <circle cx="330" cy="40" r="6" fill="#b5f23d"/><circle cx="330" cy="40" r="14" stroke="#b5f23d" stroke-opacity=".35" stroke-width="2"/>
+    <circle cx="330" cy="40" r="6" ${A}/><circle cx="330" cy="40" r="14" ${AS} stroke-opacity=".35" stroke-width="2"/>
     <g transform="translate(210 120) rotate(-28)" opacity=".85"><rect x="-58" y="-4" width="116" height="8" rx="4" fill="#dfe7f1"/>
-      <rect x="-50" y="-26" width="14" height="52" rx="4" fill="#b5f23d"/><rect x="-66" y="-18" width="12" height="36" rx="4" fill="#8fbf2f"/>
-      <rect x="36" y="-26" width="14" height="52" rx="4" fill="#b5f23d"/><rect x="54" y="-18" width="12" height="36" rx="4" fill="#8fbf2f"/></g></svg>`;
+      <rect x="-50" y="-26" width="14" height="52" rx="4" ${A}/><rect x="-66" y="-18" width="12" height="36" rx="4" style="fill:var(--accent-2)"/>
+      <rect x="36" y="-26" width="14" height="52" rx="4" ${A}/><rect x="54" y="-18" width="12" height="36" rx="4" style="fill:var(--accent-2)"/></g></svg>`;
 }
 const RECIPE_GRAD = { breakfast: ['#fde68a', '#f59e0b'], lunch: ['#a7f3d0', '#10b981'], dinner: ['#fecaca', '#ef4444'], snack: ['#c7d2fe', '#6366f1'], dessert: ['#f5d0fe', '#c026d3'] };
 

@@ -142,6 +142,41 @@ async function loadSharedFoods() {
   }
 }
 function sharedAdd(food) { SHARED_FOODS[food.id] = food; rebuildCatalog(); }
+
+/* ---------- the shared recipe book ---------- */
+let SREC_REV = 0, SREC_LOADED = false, SREC_TRY = 0, SREC_T = null, SREC_WARNED = false;
+const recipeMine = r => !!r && !!r.shared && !!AUTH.user && r.by === AUTH.user.id;
+const recipeMayEdit = r => !r ? false : r.shared ? (recipeMine(r) || isAdmin()) : true;   // a recipe still held privately is always yours
+async function loadSharedRecipes() {
+  if (AUTH.mode !== 'server') { SREC_LOADED = true; return; }
+  try {
+    const r = await api('GET', '/api/recipes/shared');
+    SHARED_RECIPES = r.recipes || {}; SREC_REV = r.rev || 0; SREC_LOADED = true; SREC_TRY = 0;
+    if (S) { await migrateRecipesUp(); rebuildCatalog(); render(); }
+  } catch (e) {
+    if (SREC_TRY < 6) { const wait = Math.min(30000, 1000 * Math.pow(2, SREC_TRY++)); clearTimeout(SREC_T); SREC_T = setTimeout(loadSharedRecipes, wait); }
+    else if (!SREC_WARNED) { SREC_WARNED = true; toast('Couldn’t load the shared recipes. Reload to try again.'); }
+  }
+}
+/* Recipes written before the book existed live in this user's own plan data. Lift them up once,
+   then rewrite anything that pointed at an id the server had to change. */
+async function migrateRecipesUp() {
+  if (AUTH.mode !== 'server' || S.recipesShared) return;
+  const mine = Object.values(S.customRecipes || {}).filter(r => r && r.id && !SHARED_RECIPES[r.id]);
+  if (!mine.length) { S.recipesShared = 1; saveState(); return; }
+  let r; try { r = await api('POST', '/api/recipes/migrate', { recipes: mine }); } catch (e) { return; }   // try again next load
+  const map = r.map || {};
+  Object.entries(map).forEach(([oldId, newId]) => { if (newId !== oldId) remapRecipeId(oldId, newId); });
+  try { const f = await api('GET', '/api/recipes/shared'); SHARED_RECIPES = f.recipes || {}; SREC_REV = f.rev || 0; } catch (e) { /* the POST landed; the list refreshes next load */ }
+  S.customRecipes = {}; S.recipesShared = 1; rebuildCatalog(); saveState();
+  if (r.added) toast(`${r.added} recipe${r.added === 1 ? '' : 's'} shared with everyone on this server`);
+}
+/* Every place a recipe id is held in this user's own data. */
+function remapRecipeId(oldId, newId) {
+  Object.values(S.plan || {}).forEach(e => { if (e && e.m) Object.keys(e.m).forEach(sl => { if (e.m[sl] === oldId) e.m[sl] = newId; }); });
+  [S.favRecipes, S.recipeOff].forEach(o => { if (o && o[oldId] != null) { o[newId] = o[oldId]; delete o[oldId]; } });
+  Object.keys(S.importMap || {}).forEach(k => { if (S.importMap[k] === oldId) S.importMap[k] = newId; });
+}
 const foodLabel = id => { const g = ING[id]; return g ? g.n + (g.brand ? ' · ' + g.brand : '') : id; };
 const pantryName = id => { const g = ING[id]; return !g ? 'Removed food' : g.dry ? g.dryName : g.n; };   // rice & co. are kept and shown uncooked
 const canScan = () => AUTH.mode === 'server';

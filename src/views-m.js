@@ -77,9 +77,12 @@ document.addEventListener('pointerdown', () => { if (!AC || AC.state === 'suspen
 const RT = { d: null, dur: 90, left: 90000, run: false, paused: false, endAt: 0, cued: false, flash: false };
 let rtT = null;
 /* When the rest ends the alarm repeats until it's stopped — one chime is easy to miss
-   mid-set. The cap is a backstop for a phone left in a bag, not a feature. */
+   mid-set. How long it keeps going is a setting: 0 means sound once and stop, anything
+   else is how long it may repeat before giving up on its own (a phone left in a bag). */
 let rtAlarmT = null, rtAlarmAt = 0;
-const RT_ALARM_MAX = 120000;
+const RT_ALARM_OPTS = [[0, 'Once'], [15, '15s'], [30, '30s'], [60, '1 min'], [120, '2 min']];
+const RT_ALARM_LABEL = { 15: '15 seconds', 30: '30 seconds', 60: '1 minute', 120: '2 minutes' };
+function restAlarmSec() { const v = S.settings.restAlarmSec; return RT_ALARM_OPTS.some(([x]) => x === +v) ? +v : 120; }
 function rtAlarmStop() {
   if (!rtAlarmT) return;
   clearInterval(rtAlarmT); rtAlarmT = null; soundStop();
@@ -88,15 +91,17 @@ function rtAlarmStop() {
 function rtAlarmGo() {
   rtAlarmStop(); rtAlarmAt = performance.now();
   const x = restSoundOf(restSoundId());
+  const cap = restAlarmSec() * 1000;
   let first = true;
   const beat = () => {
     if (!RT.flash) { rtAlarmStop(); return; }
-    if (performance.now() - rtAlarmAt > RT_ALARM_MAX) { rtIdle(); rtPaint(true); return; }
+    if (cap && performance.now() - rtAlarmAt > cap) { rtIdle(); rtPaint(true); return; }
     if (x.play && !(first && RT.cued)) soundPlay(x.id, 0);      // a lead-in sound is already ringing on the first beat
     buzz([220, 120, 220]); first = false;
   };
   beat();
-  rtAlarmT = setInterval(beat, Math.max(1500, ((x.dur || 0) + 0.9) * 1000));
+  // "Once" still leaves the timer flashing so it can be acknowledged on screen; only the repeat stops.
+  if (cap) rtAlarmT = setInterval(beat, Math.max(1500, ((x.dur || 0) + 0.9) * 1000));
 }
 function mmss(ms) { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
 const RT_MIN = 15;                                   // shortest rest the timer will hold, in seconds
@@ -280,17 +285,20 @@ function woList() {
 
 /* ---------------- rest timer settings (Settings page and the clock in workout mode) ---------------- */
 function restSettingsHTML(inModal) {
-  const st = S.settings, def = +st.restDef || 90, snd = restSoundId();
+  const st = S.settings, def = +st.restDef || 90, snd = restSoundId(), alm = restAlarmSec();
   const tog = (k, title, sub) => `<div class="set-tog"><span><b class="small">${title}</b><span class="tiny muted">${sub}</span></span>${sw(st[k] !== false, 'rest-tog', k)}</div>`;
   const body = `<div class="rs-def"><span class="tiny muted rs-lbl">Default rest</span><div class="big-num"><button type="button" data-act="rest-def" data-v="-15" aria-label="15 seconds less">−</button><b class="num">${mmss(def * 1000)}</b><button type="button" data-act="rest-def" data-v="15" aria-label="15 seconds more">+</button></div>
       <div class="row wrap rs-chips">${[60, 90, 120, 180].map(v => `<button type="button" class="btn sm ${def === v ? 'primary' : ''}" data-act="rest-def-set" data-v="${v}">${mmss(v * 1000)}</button>`).join('')}</div></div>
     ${tog('restPlan', 'Use each exercise’s suggested rest', st.restPlan !== false ? `On: heavy compound sets rest 2–3 min, isolation 60–90 s. Exercises without a suggestion use ${mmss(def * 1000)}.` : `Off: every exercise rests ${mmss(def * 1000)}.`)}
     ${tog('restAuto', 'Start after each logged set', st.restAuto !== false ? 'On: logging a set starts the timer.' : 'Off: start it yourself with ▶.')}
     ${tog('restVib', 'Vibrate when rest is over', 'Works on Android phones. iPhone browsers don’t allow it.')}
+    <div class="tiny muted rs-lbl" style="margin-top:14px">Keep sounding for</div>
+    <div class="row wrap rs-chips rs-alarm">${RT_ALARM_OPTS.map(([v, l]) => `<button type="button" class="btn sm ${alm === v ? 'primary' : ''}" data-act="rest-alarm" data-v="${v}">${l}</button>`).join('')}</div>
+    <div class="tiny muted">${alm ? `The alarm repeats until you stop it, giving up after ${RT_ALARM_LABEL[alm]}.` : 'The alarm sounds once and stops on its own.'}</div>
     <div class="tiny muted rs-lbl" style="margin-top:14px">Sound · tap one to hear it</div>
     <div class="rs-snds">${REST_SOUNDS.map(x => { const on = snd === x.id, pl = REST_PLAYING === x.id;
       return `<button type="button" class="rs-snd ${on ? 'on' : ''}" data-act="rest-snd" data-v="${x.id}" aria-pressed="${on}"><span class="ic">${pl ? '<span class="eqz" aria-hidden="true"><i></i><i></i><i></i></span>' : icon(x.id === 'none' ? 'mute' : 'bell')}</span><span class="t"><b>${esc(x.n)}</b><small>${esc(x.d)}</small></span>${on ? `<span class="ok">${icon('check')}</span>` : ''}</button>`; }).join('')}</div>
-    <div class="rs-vol">${icon('vol')}<input type="range" min="0" max="1" step="0.05" value="${restVol()}" data-input="rest-vol" aria-label="Timer volume"></div>
+    <div class="rs-vol"><input type="range" min="0" max="1" step="0.05" value="${restVol()}" data-input="rest-vol" aria-label="Timer volume"></div>
     <div class="tiny muted">The sound plays when a rest ends, even with the workout screen closed. Phones pause web pages that aren’t on screen, so keep FORGE 90 open (workout mode keeps the screen on). On iPhone the silent switch mutes it.</div>`;
   if (inModal) return `<div class="rest-m" id="rest-card"><div class="row"><h2 style="flex:1">Rest timer</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>${body}</div>`;
   return `<div class="card" id="rest-card"><div class="card-h"><h2>${icon('clock')}Rest timer</h2><span class="pill">${mmss(def * 1000)} · ${esc(restSoundOf(snd).n)}</span></div>${body}</div>`;
@@ -321,6 +329,7 @@ Object.assign(ACT, {
   'rest-set': () => modal(restSettingsHTML(true), 'sm rest-modal'),
   'rest-def': el => { S.settings.restDef = Math.max(15, Math.min(600, (+S.settings.restDef || 90) + +el.dataset.v)); restChanged(); },
   'rest-def-set': el => { S.settings.restDef = +el.dataset.v; restChanged(); },
+  'rest-alarm': el => { S.settings.restAlarmSec = +el.dataset.v; restChanged(); },
   'rest-tog': el => { const k = el.dataset.k; S.settings[k] = S.settings[k] === false; restChanged(); if (k === 'restVib' && S.settings.restVib) buzz(120); },
   'rest-snd': el => { const id = el.dataset.v; S.settings.restSound = id; const d = id === 'none' ? 0 : soundPlay(id); if (id === 'none') buzz([220, 120, 220]);
     REST_PLAYING = d ? id : null; clearTimeout(restPlayT); if (d) restPlayT = setTimeout(() => { REST_PLAYING = null; restCardRefresh(); }, d * 1000); restChanged(); }

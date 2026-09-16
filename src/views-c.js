@@ -231,14 +231,15 @@ function viewFoods() {
   const rs = sortRecipes(RECIPES.filter(r => (f === 'all' || (f === 'fav' ? isFav(r.id) : r.cat === f)) && (!words.length || words.every(w => hay(r).includes(w)))));
   const just = UI.recJust; if (just) { UI.recJust = null; saveUI(); }
   const cards = rs.map(r => { const m = RPS(r.id); const ok = recipeAllowed(r); const bl = blockedBy(r); const g = RECIPE_GRAD[r.cat] || RECIPE_GRAD.dinner;
-    const badges = [r.custom ? '<span class="pill acc">Custom</span>' : '', r.edited ? '<span class="pill">Edited</span>' : '', S.recipeOff[r.id] ? '<span class="pill">Turned off</span>' : '', bl.length ? `<span class="pill warn-pill" data-tip="Blocked by food preferences: ${esc(bl.join(', '))}">Blocked · ${esc(bl[0])}${bl.length > 1 ? ' +' + (bl.length - 1) : ''}</span>` : ''].join('');
+    const mayEd = recipeMayEdit(r);
+    const badges = [r.custom ? `<span class="pill acc">${r.shared ? (recipeMine(r) ? 'Mine' : 'By ' + esc(r.byName || 'someone')) : 'Custom'}</span>` : '', r.edited ? '<span class="pill">Edited</span>' : '', S.recipeOff[r.id] ? '<span class="pill">Turned off</span>' : '', bl.length ? `<span class="pill warn-pill" data-tip="Blocked by food preferences: ${esc(bl.join(', '))}">Blocked · ${esc(bl[0])}${bl.length > 1 ? ' +' + (bl.length - 1) : ''}</span>` : ''].join('');
     return `<div class="card recipe-row clickable ${ok ? '' : 'dim'} ${isFav(r.id) ? 'is-fav' : ''} ${just === r.id ? 'just-saved' : ''}" id="rec-${esc(r.id)}" data-act="recipe" data-rid="${r.id}" title="Show recipe details"><div class="art sm" style="--g1:${g[0]};--g2:${g[1]}">${esc(r.emoji || '🍽️')}</div>
       <div class="rr-t" style="flex:1;min-width:0"><div class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.08em">${r.cat} · makes ${r.yield}</div><b>${esc(r.name)}</b>
         <div class="mac small"><span><b>${fmt(m.k)}</b> kcal</span> <span style="color:var(--prot)">${fmt(m.p)}P</span> <span style="color:var(--carb)">${fmt(m.c)}C</span> <span style="color:var(--fat)">${fmt(m.f)}F</span></div>
         ${linkChipsHTML(r)}<div class="row wrap" style="gap:4px;margin-top:4px">${badges}</div></div>
       <div class="row rr-acts" style="gap:4px;flex-wrap:wrap;justify-content:flex-end">
-        ${favBtnHTML(r.id)}<button class="btn sm" data-act="recipe-edit" data-rid="${r.id}">Edit</button><button class="btn sm ghost" data-act="recipe-dup" data-rid="${r.id}">Duplicate</button>
-        ${r.custom ? `<button class="btn sm ghost danger" data-act="recipe-del" data-rid="${r.id}">${icon('trash')}</button>` : ''}
+        ${favBtnHTML(r.id)}<button class="btn sm" data-act="recipe-edit" data-rid="${r.id}">${mayEd ? 'Edit' : 'View'}</button><button class="btn sm ghost" data-act="recipe-dup" data-rid="${r.id}">Duplicate</button>
+        ${r.custom && mayEd ? `<button class="btn sm ghost danger" data-act="recipe-del" data-rid="${r.id}">${icon('trash')}</button>` : ''}
         ${r.edited ? `<button class="btn sm ghost" data-act="recipe-reset" data-rid="${r.id}">Reset</button>` : ''}
         ${sw(!S.recipeOff[r.id], 'recipe-off', r.id)}</div></div>`; }).join('');
   const dr = !RE && reDraft();
@@ -488,12 +489,30 @@ function saveRecipe() {
   const cl = cleanLinks(e.links);
   const rec = { links: cl.links, name, emoji: e.emoji || '🍽️', cat: e.cat, yield: Math.max(1, Math.round(+e.yield || 1)), storage: e.storage, time: +e.time || 0,
     tags: (() => { const known = usedTags().map(([t]) => t); const out = []; e.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(t => { t = known.find(k => k.toLowerCase() === t.toLowerCase()) || t; if (!out.some(o => o.toLowerCase() === t.toLowerCase())) out.push(t); }); return out; })(), fixed: !!e.fixed, rotate: !!e.rotate, ing, steps: e.steps.split('\n').map(s => s.trim()).filter(Boolean) };
-  let rid = e.id;
-  if (e.id && e.base) S.recipeOverrides[e.id] = rec;
-  else { const id = e.id || 'cr_' + Date.now().toString(36) + (e.imp ? Math.random().toString(36).slice(2, 5) : ''); rid = id; S.customRecipes[id] = Object.assign(rec, { id }); }
+  if (e.id && e.base) { S.recipeOverrides[e.id] = rec; reSaveDone(e, e.id, name, cl); return; }
+  const id = e.id || 'cr_' + Date.now().toString(36) + (e.imp ? Math.random().toString(36).slice(2, 5) : '');
+  /* On a server the recipe belongs to the shared book, so it goes there and not into this user's
+     own plan data. Offline (the standalone file) there is nobody to share with, so it stays local. */
+  if (AUTH.mode === 'server') { reSaveShared(e, id, rec, name, cl); return; }
+  S.customRecipes[id] = Object.assign(rec, { id });
+  reSaveDone(e, id, name, cl);
+}
+async function reSaveShared(e, id, rec, name, cl) {
+  const cur = SHARED_RECIPES[id];
+  try {
+    const r = cur ? await api('PATCH', '/api/recipes/shared/' + encodeURIComponent(id), rec)
+                  : await api('POST', '/api/recipes/shared', Object.assign({ id }, rec));
+    SHARED_RECIPES[r.recipe.id] = r.recipe; SREC_REV = r.rev || SREC_REV;
+    if (r.wasId && r.wasId !== r.recipe.id) remapRecipeId(r.wasId, r.recipe.id);
+    delete S.customRecipes[id];
+    reSaveDone(e, r.recipe.id, name, cl, cur ? ' · everyone on this server sees the change' : ' · shared with everyone on this server');
+  } catch (err) { e._saving = false; toast(err.message || 'Couldn’t save the recipe'); render(); }
+}
+function reSaveDone(e, rid, name, cl, extra) {
   reClearDraft();
+  const skipped = cl.bad ? ` · skipped ${cl.bad} link${cl.bad > 1 ? 's' : ''} that ${cl.bad > 1 ? 'aren’t web addresses' : 'isn’t a web address'}` : '';
   if (e.imp) { impRemember(); rebuildCatalog(); saveState(); if (IMPQ) { IMPQ.done++; toast(`${name} imported`); impNext(); return; } reGoToSaved(rid); toast(`${name} imported — find it in Foods & recipes and the calendar library`); return; }
-  rebuildCatalog(); saveState(); reGoToSaved(rid); toast(`${name} saved — find it in the calendar library${cl.bad ? ` · skipped ${cl.bad} link${cl.bad > 1 ? 's' : ''} that ${cl.bad > 1 ? 'aren’t web addresses' : 'isn’t a web address'}` : ''}`);
+  rebuildCatalog(); saveState(); reGoToSaved(rid); toast(`${name} saved — find it in the calendar library${extra || ''}${skipped}`);
 }
 /* cat/yld are passed in because the recipe may already be gone from the catalog by now.
    A null substitute leaves the meal alone rather than blanking the day. */
@@ -552,13 +571,17 @@ Object.assign(ACT, {
   'fp-open': el => { const k = el.dataset.k; UI.fpOpen = UI.fpOpen || {}; UI.fpOpen[k] = !fpOpen(k); saveUI(); refreshFoodPrefs(); },
   'fp-all': el => { const v = el.dataset.v === '1'; UI.fpOpen = {}; FOOD_CATS.forEach(c => { UI.fpOpen['cat:' + c.id] = v; c.subs.forEach(([s]) => { UI.fpOpen[s] = v; }); }); saveUI(); refreshFoodPrefs(); },
   'recipe-new': () => recipeEditor(null),
-  'recipe-edit': el => recipeEditor(el.dataset.rid),
+  /* Someone else's shared recipe opens read-only. Duplicate is the way to make it yours. */
+  'recipe-edit': el => { const r = RECIPE[el.dataset.rid]; if (r && !recipeMayEdit(r)) { location.hash = '#/recipe/' + encodeURIComponent(r.id); return; } recipeEditor(el.dataset.rid); },
   'recipe-dup': el => recipeEditor(el.dataset.rid, true),
   'recipe-reset': el => confirmBox('Reset recipe?', `Restore the built-in version of <b>${esc(RECIPE[el.dataset.rid].name)}</b>?`, 'Reset', () => { delete S.recipeOverrides[el.dataset.rid]; rebuildCatalog(); saveState(); render(); toast('Recipe reset'); }),
-  'recipe-del': el => { const r = RECIPE[el.dataset.rid]; const cat = r.cat, yld = r.yield; confirmBox('Delete recipe?', `Delete <b>${esc(r.name)}</b>? Any planned servings are swapped for another ${r.cat} recipe.`, 'Delete', () => {
-    delete S.customRecipes[r.id]; rebuildCatalog();                    // drop it from RECIPES first, or it can be picked as its own replacement
-    const { n, empty } = replaceRecipeEverywhere(r.id, cat, yld); saveState(); render();
-    toast(empty ? `Deleted — no other ${cat} recipe is available, so those days kept it` : `Deleted${n ? ` — swapped ${n} planned meal${n === 1 ? '' : 's'}` : ''}`); }, true); },
+  'recipe-del': el => { const r = RECIPE[el.dataset.rid]; if (!r || !recipeMayEdit(r)) return toast('Only the person who wrote this recipe or an administrator can remove it');
+    const cat = r.cat, yld = r.yield, shared = !!r.shared;
+    confirmBox('Delete recipe?', `Delete <b>${esc(r.name)}</b>?${shared ? ' It comes out of the shared book for everyone.' : ''} Any planned servings are swapped for another ${r.cat} recipe.`, 'Delete', async () => {
+      if (shared) { try { const x = await api('DELETE', '/api/recipes/shared/' + encodeURIComponent(r.id)); SREC_REV = x.rev || SREC_REV; } catch (e) { return toast(e.message); } delete SHARED_RECIPES[r.id]; }
+      delete S.customRecipes[r.id]; rebuildCatalog();                  // drop it from RECIPES first, or it can be picked as its own replacement
+      const { n, empty } = replaceRecipeEverywhere(r.id, cat, yld); saveState(); render();
+      toast(empty ? `Deleted — no other ${cat} recipe is available, so those days kept it` : `Deleted${n ? ` — swapped ${n} planned meal${n === 1 ? '' : 's'}` : ''}`); }, true); },
   'recipe-off': el => { const id = el.dataset.k; if (S.recipeOff[id]) delete S.recipeOff[id]; else S.recipeOff[id] = true; invalidate();
     const sub = S.recipeOff[id] ? substitutePlan(maxISO(todayISO(), S.settings.startDate)) : { n: 0, empty: [] }; saveState(); render();
     toast(sub.empty.length ? `${RECIPE[id].name} turned off — nothing is left for ${sub.empty.join(' and ')}, so those meals were kept` : `${RECIPE[id].name} ${S.recipeOff[id] ? 'turned off' : 'turned on'}${sub.n ? ` — swapped ${sub.n} upcoming meal${sub.n === 1 ? '' : 's'}` : ''}`); },
