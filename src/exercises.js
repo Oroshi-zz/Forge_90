@@ -801,6 +801,140 @@ RX('core', 'An ab machine is easy to load progressively, so the abs can be train
    'Crunch forward, curling your ribs toward your hips.', 'Return slowly until the abs are stretched.'],
   ['Round the spine', 'Exhale as you crunch'], 'Pulling with the arms to move the stack.');
 // switched-on extras join the rotation for their slot
+
+/* ---- filling the gaps: traps, erectors, adductors, forearms and obliques had no direct work,
+        the three barbell staples were missing, and two slots had nothing a home gym could do ---- */
+
+RX('back_row', 'The traps had no direct loading anywhere in the library — face pulls and Y-raises only reach them as helpers. A heavy shrug is the simplest fix, and the upper traps respond well to it.',
+  'db_shrug', 'Dumbbell Shrug', 'Back', 'Dumbbells', ['traps'], ['upperBack', 'forearms'], false,
+  ['Stand tall with a dumbbell in each hand, arms straight at your sides.',
+   'Shrug straight up, as if trying to touch your shoulders to your ears. No rolling.',
+   'Hold the top for a full second.',
+   'Lower under control until you feel the weight pull the shoulders down.'],
+  ['Straight up and down, never in a circle', 'Pause hard at the top'],
+  'Bending the elbows, which turns it into a short upright row.');
+
+RX('back_row', 'A bar lets you load the traps far heavier than dumbbells allow, and the straps-optional grip makes it a forearm builder too.',
+  'barbell_shrug', 'Barbell Shrug', 'Back', 'Barbell (or Smith machine)', ['traps'], ['upperBack', 'forearms'], false,
+  ['Hold the bar at arm’s length in front of your thighs, hands just outside your hips.',
+   'Brace your core and shrug the bar straight up.',
+   'Squeeze at the top for a second, then lower slowly.'],
+  ['Chin tucked, neck neutral', 'Let the bar travel up your thighs, close to the body'],
+  'Leaning back to heave the weight up.');
+
+RX('ham_hinge', 'The 45° extensions in the library are set up for the hamstrings and glutes, so the spinal erectors were never a primary target. Rounding and re-extending under light load trains them directly.',
+  'back_ext_erector', '45° Back Extension (Erector Bias)', 'Hamstrings', '45° hyperextension bench', ['lowerBack'], ['glutes', 'hamstrings'], false,
+  ['Set the pad just below your hip bones so your hips can move freely.',
+   'Start with your torso hanging down and your back gently rounded.',
+   'Roll up one vertebra at a time until your body is straight. Do not arch past straight.',
+   'Lower slowly and let the back round again at the bottom.'],
+  ['Light weight, slow tempo', 'Chin tucked the whole way'],
+  'Yanking up into a big arch at the top, which loads the joints instead of the muscle.');
+
+RX('glute', 'Both hip machines already in the library are abduction. Adduction was the one hip action with nothing training it, and the adductors are a large part of inner-thigh size.',
+  'machine_hip_adduction', 'Seated Hip Adduction', 'Glutes', 'Hip adduction machine', ['adductors'], ['glutes'], false,
+  ['Sit with the pads on the inside of your knees and your feet flat on the rests.',
+   'Let the pads open until you feel a stretch through your inner thighs.',
+   'Squeeze your knees together, pause for a second at the finish.',
+   'Open back up slowly rather than letting the stack pull you apart.'],
+  ['Sit tall, back against the pad', 'Control the stretch, that is where the growth is'],
+  'Slamming the knees together and letting them fly open on the way back.');
+
+RX('quad_uni', 'A loaded lateral squat trains the adductors through a long range and doubles as hip mobility work, which the plan had nothing else covering.',
+  'cossack_squat', 'Cossack Squat', 'Quads', 'Bodyweight or a light dumbbell/kettlebell', ['adductors'], ['quads', 'glutes'], true,
+  ['Stand wide, toes turned slightly out. Hold a weight at your chest for balance if you have one.',
+   'Shift your weight onto one leg and sit down into that hip, keeping the other leg straight.',
+   'Let the straight leg’s toes point up as you descend.',
+   'Push back up to the middle and repeat on the other side.'],
+  ['Heel of the working leg stays down', 'Chest up, do not fold forward'],
+  'Rushing down and bouncing out of the bottom.');
+
+RX('biceps_b', 'Grip is what fails first on rows and RDLs for most people, and the forearms had almost no direct work in the library.',
+  'wrist_curl', 'Seated Wrist Curl & Extension', 'Biceps', 'Dumbbells or EZ bar + bench', ['forearms'], [], false,
+  ['Sit and rest your forearms on your thighs, palms up, wrists just past your knees.',
+   'Let the weight roll down to your fingertips, then curl it back up as far as it goes.',
+   'Do the set, then flip to palms down and do the same number of reps lifting the back of the hand.'],
+  ['Forearms stay flat on the thighs', 'Full range, including the finger roll'],
+  'Using the elbows to help, which takes the forearms out of it.');
+
+RX('core', 'A one-sided carry is the cleanest oblique exercise there is: they work to stop you bending sideways. It trains grip and traps at the same time.',
+  'suitcase_carry', 'Suitcase Carry', 'Core', 'One heavy dumbbell or kettlebell', ['obliques'], ['forearms', 'traps', 'abs'], true,
+  ['Pick up one heavy weight in one hand, nothing in the other.',
+   'Stand tall, shoulders level, and walk in a straight line for 30 to 40 seconds.',
+   'Swap hands and repeat for the same distance.'],
+  ['Do not lean away from the weight', 'Shoulders square, ribs down'],
+  'Letting the loaded side sag, which turns off the muscles you are there to train.');
+
+RX('chest_press', 'The bench press was missing from a library that already includes barbell RDLs. It is the lift most people want to test and compare, and the one with the most useful strength carryover.',
+  'barbell_bench', 'Barbell Bench Press', 'Chest', 'Barbell + flat bench + rack', ['chest'], ['frontDelt', 'triceps'], true,
+  ['Lie back with your eyes under the bar. Pull your shoulder blades back and down and keep them there.',
+   'Grip a little wider than shoulder width. Unrack and bring the bar over your lower chest.',
+   'Lower under control until the bar touches your chest, elbows about 45° from your torso.',
+   'Press back up and slightly toward your face.'],
+  ['Feet planted, upper back tight', 'Use a spotter or safety pins near failure'],
+  'Bouncing the bar off the chest and flaring the elbows straight out to the sides.');
+
+RX('quad_main', 'Every option in this slot needed a machine, so a home gym could not fill it at all. The back squat also gives the plan a barbell lift worth testing in PR week.',
+  'barbell_back_squat', 'Barbell Back Squat', 'Quads', 'Barbell + squat rack', ['quads'], ['glutes', 'hamstrings', 'lowerBack'], true,
+  ['Set the bar on your upper back, not your neck. Step out with feet about shoulder width, toes slightly out.',
+   'Take a big breath and brace your core hard.',
+   'Sit down and back, knees tracking over your toes, until your hip crease passes your knee.',
+   'Drive up through the whole foot, keeping your chest where it started.'],
+  ['Set the safety pins at depth before you start', 'Same bar path down and up'],
+  'Letting the hips shoot up first, which turns it into a good morning.');
+
+RX('quad_main', 'A front-loaded squat keeps the torso upright and puts more of the work on the quads, and it needs nothing but dumbbells.',
+  'db_front_squat', 'Dumbbell Front Squat', 'Quads', 'Dumbbells', ['quads'], ['glutes', 'abs'], true,
+  ['Hold a dumbbell on each shoulder, elbows pointing forward.',
+   'Feet about shoulder width, toes slightly out.',
+   'Sit straight down, keeping your torso as upright as you can, until your thighs pass parallel.',
+   'Drive back up without letting the elbows drop.'],
+  ['Elbows high the whole set', 'Heels flat, weight through the mid-foot'],
+  'Letting the chest fall forward, which shifts the work to the hips.');
+
+RX('ham_hinge', 'The plan had no deadlift at all. A trap bar keeps the load closer to the body and is far easier on the lower back than a straight bar, which suits a general program.',
+  'trap_bar_deadlift', 'Trap-Bar Deadlift', 'Hamstrings', 'Trap bar (or barbell)', ['hamstrings'], ['glutes', 'quads', 'lowerBack', 'traps', 'forearms'], true,
+  ['Stand in the middle of the bar, feet about hip width.',
+   'Push your hips back and take the handles with straight arms, chest up and back flat.',
+   'Take the slack out of the bar, then push the floor away and stand up tall.',
+   'Lower by pushing your hips back first, letting the bar travel close to your legs.'],
+  ['Back stays flat from start to finish', 'Reset your brace between reps'],
+  'Jerking the bar off the floor with a rounded back.');
+
+RX('delt_press', 'A standing press is the fourth barbell lift worth testing, and it loads the core and upper back in a way the seated machine versions do not.',
+  'standing_ohp', 'Standing Barbell Overhead Press', 'Shoulders', 'Barbell + rack', ['frontDelt'], ['sideDelt', 'triceps', 'abs', 'upperBack'], true,
+  ['Take the bar at collarbone height, hands just outside your shoulders, elbows slightly in front of the bar.',
+   'Squeeze your glutes and brace hard so your ribs stay down.',
+   'Press the bar straight up, moving your head back out of the way, then back under at the top.',
+   'Finish with the bar over the middle of your feet, arms locked. Lower under control.'],
+  ['No leg drive, this is a strict press', 'Glutes and abs tight, no leaning back'],
+  'Arching the lower back to get the bar up, which turns it into a standing incline press.');
+
+RX('triceps_b', 'Every other option in this slot needed a cable or a machine, so a home gym could not train this pattern at all.',
+  'bench_dip', 'Bench Dip', 'Triceps', 'Bench (add a plate on the lap to load it)', ['triceps'], ['frontDelt', 'chest'], true,
+  ['Sit on the edge of a bench, hands next to your hips, and slide your weight forward off the edge.',
+   'Put your heels on the floor, legs straight, or on a second bench to make it harder.',
+   'Lower until your upper arms are about parallel with the floor.',
+   'Press back up to just short of lockout.'],
+  ['Keep your back close to the bench', 'Elbows point straight back, not out'],
+  'Dropping so deep that the shoulders roll forward under load.');
+
+RX('back_iso', 'The lat isolation slot had only four options, the fewest in the plan, so it repeated every four weeks. An incline pullover also gives the lats a longer stretch than the flat version.',
+  'incline_db_pullover', 'Incline Dumbbell Pullover', 'Back', 'Dumbbell + incline bench', ['lats'], ['chest', 'triceps'], false,
+  ['Set the bench to about 45° and lie back against it holding one dumbbell over your chest with both hands.',
+   'Keep a slight bend in the elbows and reach the weight back over your head.',
+   'Go until you feel a strong stretch down the sides of your back.',
+   'Pull it back over your chest using your lats, not your arms.'],
+  ['Ribs down, do not let the back arch', 'Think about pulling with the armpits'],
+  'Bending and straightening the elbows, which makes it a triceps exercise.');
+
+RX('biceps_a', 'The biceps A slot also had only four options. A straight bar puts the wrists in more supination than an EZ bar, which the biceps are partly responsible for.',
+  'barbell_curl', 'Straight-Bar Barbell Curl', 'Biceps', 'Barbell', ['biceps'], ['forearms'], false,
+  ['Hold the bar at shoulder width, palms fully up, arms hanging straight.',
+   'Curl up without letting your elbows drift forward.',
+   'Squeeze at the top, then lower over about three seconds until the arms are straight.'],
+  ['Elbows pinned at your sides', 'Full stretch at the bottom every rep'],
+  'Swinging the hips to start the rep.');
 EXTRA_EX.forEach(id => { const s = SLOTS[EX[id].slot]; if (s && !s.vars.includes(id)) s.vars.push(id); });
 
 
@@ -999,8 +1133,8 @@ TPL('BPB', 'Push B — Hypertrophy', 'Push B · Hypertrophy', 'push', 2, 'Modera
   ['chest_press', 'H', 3, '8–12', 120, 1], ['delt_press', 'H', 3, '10–12', 90, 1], ['chest_fly', 'H', 3, '12–15', 60, 1], ['side_delt', 'H', 4, '12–20', 60, 1], ['triceps_b', 'H', 3, '10–15', 60, 1], ['triceps_a', 'H', 2, '12–15', 60, 1]]);
 TPL('BLB', 'Pull B — Hypertrophy', 'Pull B · Hypertrophy', 'pull', 2, 'Moderate loads and more reps for back, rear delts and biceps.', [
   ['back_row', 'H', 3, '8–12', 90, 1], ['back_vertical', 'H', 3, '10–12', 90, 1], ['back_iso', 'H', 3, '12–15', 60, 1], ['rear_delt', 'H', 3, '15–20', 60, 1], ['biceps_b', 'H', 3, '10–15', 60, 1], ['biceps_a', 'H', 2, '12–15', 60, 1]]);
-TPL('BGB', 'Legs B — Hypertrophy', 'Legs B · Hypertrophy', 'legs', 2, 'Leg extensions first, then moderate-load pressing, curls, glutes, calves and core.', [
-  ['quad_iso', 'H', 3, '12–15', 75, 0], ['quad_main', 'H', 3, '10–12', 120, 1], ['ham_curl', 'H', 3, '12–15', 75, 1], ['glute', 'H', 3, '12–15', 60, 1], ['calves', 'H', 3, '12–15', 60, 1], ['core', 'H', 3, '10–15', 60, 0]]);
+TPL('BGB', 'Legs B — Hypertrophy', 'Legs B · Hypertrophy', 'legs', 2, 'Leg extensions first, then moderate-load pressing, a hinge, curls, glutes, calves and core.', [
+  ['quad_iso', 'H', 3, '12–15', 75, 0], ['quad_main', 'H', 3, '10–12', 120, 1], ['ham_hinge', 'H', 3, '8–12', 120, 1], ['ham_curl', 'H', 3, '12–15', 75, 1], ['glute', 'H', 3, '12–15', 60, 1], ['calves', 'H', 3, '12–15', 60, 1], ['core', 'H', 3, '10–15', 60, 0]]);
 // Intensify
 TPL('IPA', 'Push — Heavy', 'Push · Heavy', 'push', 3, 'Lowest reps of the program on the presses; intensity techniques on the isolation finishers.', [
   ['chest_press', 'S', 5, '4–6', 180, 0], ['delt_press', 'S', 4, '5–7', 150, 0], ['chest_fly', 'H', 3, '12–15', 75, 0, NOTE_DS], ['side_delt', 'H', 4, '12–15', 60, 0, NOTE_MYO], ['triceps_b', 'H', 3, '10–12', 60, 0]]);
@@ -1012,15 +1146,15 @@ TPL('IPB', 'Push — Pump', 'Push · Pump', 'push', 3, 'Moderate loads, short re
   ['delt_press', 'H', 3, '8–12', 90, 1], ['chest_press', 'H', 3, '10–12', 90, 2], ['chest_fly', 'H', 3, '12–15', 60, 2], ['side_delt', 'H', 3, '15–20', 45, 1], ['triceps_a', 'H', 3, '10–12', 45, 1], ['triceps_b', 'H', 2, '12–15', 45, 2]]);
 TPL('ILB', 'Pull — Pump', 'Pull · Pump', 'pull', 3, 'Moderate loads, short rests and plenty of quality volume for back, rear delts and biceps.', [
   ['back_vertical', 'H', 3, '10–12', 90, 2], ['back_row', 'H', 3, '10–12', 90, 2], ['back_iso', 'H', 3, '12–15', 60, 2], ['rear_delt', 'H', 3, '15–20', 45, 1], ['biceps_b', 'H', 3, '10–12', 45, 1], ['biceps_a', 'H', 2, '12–15', 45, 2]]);
-TPL('IGB', 'Legs — Pump', 'Legs · Pump', 'legs', 3, 'Higher-rep leg day with short rests.', [
-  ['quad_iso', 'H', 3, '12–15', 75, 1], ['quad_main', 'H', 3, '10–12', 120, 2], ['ham_curl', 'H', 3, '12–15', 75, 2], ['glute', 'H', 3, '12–15', 60, 2], ['calves', 'H', 3, '12–20', 45, 2], ['core', 'H', 3, '10–15', 60, 1]]);
+TPL('IGB', 'Legs — Pump', 'Legs · Pump', 'legs', 3, 'Higher-rep leg day with short rests, hinging as well as curling for the hamstrings.', [
+  ['quad_iso', 'H', 3, '12–15', 75, 1], ['quad_main', 'H', 3, '10–12', 120, 2], ['ham_hinge', 'H', 3, '10–12', 90, 2], ['ham_curl', 'H', 3, '12–15', 75, 2], ['glute', 'H', 3, '12–15', 60, 2], ['calves', 'H', 3, '12–20', 45, 2], ['core', 'H', 3, '10–15', 60, 1]]);
 // Volume (cycle 2+)
 TPL('VP', 'Push — Volume', 'Push · Volume', 'push', 5, 'Higher reps and shorter rests for chest, delts and triceps.', [
   ['chest_press', 'H', 3, '10–12', 90, 1], ['chest_fly', 'H', 3, '12–15', 60, 2], ['delt_press', 'H', 3, '10–12', 90, 2], ['side_delt', 'H', 4, '15–20', 45, 2, 'Last set: drop set'], ['triceps_a', 'H', 3, '12–15', 45, 0], ['triceps_b', 'H', 3, '12–15', 45, 2]]);
 TPL('VL', 'Pull — Volume', 'Pull · Volume', 'pull', 5, 'Higher reps and shorter rests for back, rear delts and biceps.', [
   ['back_vertical', 'H', 4, '10–12', 90, 1], ['back_row', 'H', 3, '12–15', 75, 2], ['back_iso', 'H', 3, '12–15', 60, 1], ['rear_delt', 'H', 3, '15–20', 45, 2], ['biceps_a', 'H', 3, '12–15', 45, 0], ['biceps_b', 'H', 3, '10–12', 45, 2]]);
 TPL('VG', 'Legs — Volume', 'Legs · Volume', 'legs', 5, 'Quads pre-exhausted with extensions, then moderate-load pressing, curls, glutes and calves for reps.', [
-  ['quad_iso', 'H', 3, '15–20', 60, 1, 'Pre-exhaust — controlled 3 s lowering'], ['quad_main', 'H', 3, '10–15', 120, 1], ['ham_curl', 'H', 4, '10–15', 75, 2], ['quad_uni', 'H', 3, '10–12 / leg', 75, 1], ['glute', 'H', 3, '12–15', 60, 1], ['calves', 'H', 4, '12–20', 45, 1], ['core', 'H', 3, '12–15', 45, 2]]);
+  ['quad_iso', 'H', 3, '15–20', 60, 1, 'Pre-exhaust — controlled 3 s lowering'], ['quad_main', 'H', 3, '10–15', 120, 1], ['ham_hinge', 'H', 3, '10–12', 90, 1], ['ham_curl', 'H', 3, '10–15', 75, 2], ['quad_uni', 'H', 3, '10–12 / leg', 75, 1], ['glute', 'H', 3, '12–15', 60, 1], ['calves', 'H', 4, '12–20', 45, 1], ['core', 'H', 3, '12–15', 45, 2]]);
 // Deload & test week
 TPL('DLPUSH', 'Deload — Push', 'Deload · Push', 'deload', 4, 'Half the sets at ~60% of your recent working weights.', [
   ['chest_press', 'H', 2, '8–10', 90, 0, NOTE_60], ['delt_press', 'H', 2, '8–10', 90, 0, NOTE_60], ['side_delt', 'H', 2, '12–15', 60, 0], ['triceps_b', 'H', 2, '12', 45, 0]]);

@@ -36,7 +36,7 @@ async function pushState() {
   try { const r = await api('PUT', '/api/state', { baseRev: AUTH.rev, state: S }); AUTH.rev = r.rev; AUTH.savedAt = r.updatedAt; if (!AUTH.pending) setSync('ok'); }
   catch (e) {
     if (e.status === 409 && e.data) { AUTH.rev = e.data.rev; AUTH.booting = true; loadState(e.data.state); AUTH.booting = false; applyTheme(); render(); setSync('ok'); toast('Your plan was changed on another device — showing the latest version.'); }
-    else if (e.status === 401) { AUTH.user = null; showAuth('login', { info: 'Your session ended. Sign in again — your latest changes are kept on this device until you do.' }); }
+    else if (e.status === 401) { AUTH.user = null; showAuth('login', { info: 'Your session ended. Sign in again to keep saving — anything you change until then may not stick.' }); }
     else { AUTH.pending = true; setSync('offline'); clearTimeout(AUTH.syncT); AUTH.syncT = setTimeout(pushState, 5000); }
   } finally { AUTH.inflight = false; }
 }
@@ -60,6 +60,7 @@ async function startApp() {
   let st; try { st = await api('GET', '/api/state'); } catch (e) { if (e.status === 401) return showAuth('login'); if (e.data && e.data.mustChange) return showAuth('first'); return showAuth('down'); }
   AUTH.rev = st.rev || 0; AUTH.savedAt = st.updatedAt; STORE_KEY = 'forge90.v1:' + AUTH.user.id;
   let legacy = null; if (!st.state) { try { legacy = localStorage.getItem('forge90.v1'); } catch (e) { /* ignore */ } }
+  loadUI();                                          // UI state is per account, not per browser
   AUTH.booting = true; loadState(st.state || null); AUTH.booting = false;
   if (!st.state) pushState();                       // first save for a brand-new account
   if (location.pathname !== '/') history.replaceState(null, '', '/' + location.hash);

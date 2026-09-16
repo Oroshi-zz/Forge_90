@@ -10,7 +10,7 @@ if (PHONE_MQ && PHONE_MQ.addEventListener) PHONE_MQ.addEventListener('change', (
 
 /* ---------------- bottom tabs and the Plan / Kitchen tabs ---------------- */
 const HUBS = { plan: [['calendar', 'Calendar'], ['workouts', 'Training'], ['diet', 'Nutrition']], kitchen: [['grocery', 'List'], ['pantry', 'Pantry'], ['foods', 'Recipes'], ['prep', 'Prep']] };
-function hubOf(page) { if (['calendar', 'workouts', 'diet'].includes(page)) return 'plan'; if (['grocery', 'pantry', 'foods', 'recipe', 'prep'].includes(page)) return 'kitchen'; return null; }
+function hubOf(page) { if (['calendar', 'workouts', 'diet'].includes(page)) return 'plan'; if (['grocery', 'pantry', 'foods', 'recipe', 'recipe-edit', 'prep'].includes(page)) return 'kitchen'; return null; }
 function phoneTab(page) { if (!page || page === 'day') return 'today'; return hubOf(page) || 'you'; }
 function hubSegHTML(page) {
   const hub = hubOf(page); const cur = page === 'recipe' ? 'foods' : page;
@@ -142,7 +142,7 @@ function todayWorkoutHTML(date) {
     <h2>${esc(t.name)}</h2>${groups.length ? `<div class="row wrap" style="gap:6px">${groups.map(g => `<span class="pill">${esc(g)}</span>`).join('')}</div>` : ''}
     <div class="ph-prog"><div class="track"><i style="width:${c.total ? c.done / c.total * 100 : 0}%"></i></div><span class="num small muted">${c.done}/${c.total} sets</span></div>
     <button type="button" class="btn primary block big" data-act="wo-open" data-d="${date}">${icon('play')}${lbl}</button>
-    <div class="row wrap ph-wo-links"><button type="button" class="btn sm ghost" data-act="qe" data-d="${date}" data-f="wo">${icon('edit')}Change session</button>${date <= t0 && !S.done[date] && c.done ? `<button type="button" class="btn sm ghost" data-act="toggle-done" data-date="${date}">${icon('check')}Mark complete</button>` : ''}</div></div>`;
+    <div class="row wrap ph-wo-links"><button type="button" class="btn sm ghost" data-act="qe" data-d="${date}" data-f="wo">${icon('edit')}Change session</button>${date < t0 ? `<button type="button" class="btn sm ghost" data-act="wo-open" data-d="${date}">${icon('edit')}Log or fix sets</button>` : ''}${date <= t0 && !S.done[date] && c.done ? `<button type="button" class="btn sm ghost" data-act="toggle-done" data-date="${date}">${icon('check')}Mark complete</button>` : ''}</div></div>`;
 }
 // the summary on Today and You — one tap to the Progress page
 function progressCardHTML() {
@@ -161,7 +161,7 @@ function progressCardHTML() {
   return `<a class="card pcard" href="#/progress" aria-label="Progress: ${fmt(cur.w, 1)} lb${hasW ? `, ${sign(dW)} lb since the start` : ''}. Open the progress page">
     <span class="pc-top"><span class="h">Progress</span><span class="see">See all${icon('right')}</span></span>
     <span class="pc-main"><span><small>Weight</small><b class="num">${fmt(cur.w, 1)} <span>lb</span></b><small class="num ${hasW ? (dW <= 0 ? 'good' : '') : ''}">${hasW ? `${sign(dW)} lb since the start` : 'Log a weigh-in to start the trend'}</small></span>${spark}</span>
-    <span class="pc-mini"><span><small>Body fat</small><b class="num">${fmt(cur.bf, 1)}<span class="u">%${cur.est ? ' est.' : ''}</span></b></span><span><small>Trend</small><b class="num">${trend ? sign(-trend.rate, 2) : '—'}<span class="u"> lb/wk</span></b></span><span><small>To goal</small><b class="num">${fmt(Math.max(0, cur.w - st.goalWeight), 1)}<span class="u"> lb</span></b></span></span>
+    <span class="pc-mini"><span><small>Body fat</small><b class="num">${fmt(cur.bf, 1)}<span class="u">%${cur.est ? ' est.' : ''}</span></b></span><span><small>Trend</small><b class="num">${trend && trend.rate != null ? sign(-trend.rate, 2) : '—'}<span class="u"> lb/wk</span></b></span><span><small>To goal</small><b class="num">${fmt(Math.max(0, cur.w - st.goalWeight), 1)}<span class="u"> lb</span></b></span></span>
     <span class="pc-foot"><span class="pc-pr">${icon('trophy')}<span>${pr ? `${esc(EX[pr.ex].name)} ${fmt(+pr.set.w || 0, (+pr.set.w || 0) % 1 ? 1 : 0)} × ${pr.set.r} · ${esc(fmtDate(pr.d, { weekday: 'short' }))}` : 'Log sets to start your PR board'}</span></span>${wk.length ? `<span class="wkdots">${wk.map(d => `<i class="${S.done[d] ? 'done' : ''}"></i>`).join('')}<span class="num">${done}/${wk.length} this week</span></span>` : ''}</span></a>`;
 }
 function todayMacroHTML(day) {

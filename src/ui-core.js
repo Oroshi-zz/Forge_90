@@ -14,8 +14,20 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = (n, d = 0) => (n == null || isNaN(n)) ? '—' : Number(n).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
 const UI = { calView: 'month', calMonth: null, calWeek: null, libTab: 'workouts', libFilter: 'all', libQ: '', dietFilter: 'all', groWeek: null, prEx: null, planPhase: 1, showLib: true };
-try { Object.assign(UI, JSON.parse(localStorage.getItem('forge90.ui') || '{}')); } catch (e) { }
-function saveUI() { try { localStorage.setItem('forge90.ui', JSON.stringify(UI)); } catch (e) { } }
+/* Per-account, because two people on one machine were inheriting each other's grocery week,
+   calendar position, searches and theme. The bare key stays for signed-out (local) use. */
+const UI_DEFAULTS = JSON.parse(JSON.stringify(UI));
+// AUTH is declared later in the bundle, so at this point it is in the temporal dead zone and
+// even `typeof AUTH` throws. Catch it rather than silently falling back to an unmerged UI.
+function uiUser() { try { return (AUTH && AUTH.user) || null; } catch (e) { return null; } }
+const uiKey = () => { const u = uiUser(); return u ? 'forge90.ui:' + u.id : 'forge90.ui'; };
+function loadUI() {
+  Object.keys(UI).forEach(k => { delete UI[k]; });
+  Object.assign(UI, JSON.parse(JSON.stringify(UI_DEFAULTS)));
+  try { Object.assign(UI, JSON.parse(localStorage.getItem(uiKey()) || '{}')); } catch (e) { }
+}
+loadUI();
+function saveUI() { try { localStorage.setItem(uiKey(), JSON.stringify(UI)); } catch (e) { } }
 
 /* ---------- icons (24px stroke) ---------- */
 const IC = {
@@ -173,21 +185,41 @@ function hideTip() { tipEl().classList.remove('on'); tipTarget = null; }
 // touch screens have no hover: a tap only opens the exercise form tips (on what was actually tapped), and the next tap closes it
 let tipPtr = 'mouse', tipTap = null;
 document.addEventListener('pointerdown', e => { tipPtr = e.pointerType || 'mouse'; tipTap = e.target; if (tipPtr !== 'mouse' && tipTarget && !(e.target.closest && e.target.closest('#tip'))) hideTip(); }, true);
+const TIP_SEL = '[data-tip-ex],[data-tip-wo],[data-tip-meal],[data-tip-tpl],[data-tip]';
+function tipHTMLFor(el) {
+  if (el.dataset.tipEx) return exTipHTML(el.dataset.tipEx, el.dataset.tipExtra ? `<div class="note acc" style="margin:4px 0 2px">${esc(el.dataset.tipExtra)}</div>` : '');
+  if (el.dataset.tipWo) return woTipHTML(el.dataset.tipWo);
+  if (el.dataset.tipMeal) return mealTipHTML(el.dataset.tipMeal);
+  if (el.dataset.tipTpl) return tplTipHTML(el.dataset.tipTpl);
+  return `<div class="small">${esc(el.dataset.tip)}</div>`;
+}
+function openTip(el) { if (!el) return; if (el === tipTarget) return; tipTarget = el; const html = tipHTMLFor(el); if (html) showTip(el, html); else hideTip(); }
 document.addEventListener('mouseover', e => {
   if (document.body.classList.contains('dragging')) return;
-  const el = e.target.closest('[data-tip-ex],[data-tip-wo],[data-tip-meal],[data-tip-tpl],[data-tip]');
-  if (tipPtr !== 'mouse' && el && (!el.dataset.tipEx || !tipTap || !el.contains(tipTap))) return;
+  const el = e.target.closest(TIP_SEL);
+  if (tipPtr !== 'mouse' && el) return;                // touch is handled on tap below
   if (!el) { if (tipTarget) hideTip(); return; }
-  if (el === tipTarget) return; tipTarget = el;
-  let html = '';
-  if (el.dataset.tipEx) html = exTipHTML(el.dataset.tipEx, el.dataset.tipExtra ? `<div class="note acc" style="margin:4px 0 2px">${esc(el.dataset.tipExtra)}</div>` : '');
-  else if (el.dataset.tipWo) html = woTipHTML(el.dataset.tipWo);
-  else if (el.dataset.tipMeal) html = mealTipHTML(el.dataset.tipMeal);
-  else if (el.dataset.tipTpl) html = tplTipHTML(el.dataset.tipTpl);
-  else html = `<div class="small">${esc(el.dataset.tip)}</div>`;
-  if (html) showTip(el, html); else hideTip();
+  openTip(el);
+});
+/* Keyboard users had no way to reach any of this, and on touch everything except the exercise
+   tips was unreachable too. Tabbing to a tip target opens it; a tap toggles it. */
+document.addEventListener('focusin', e => { const el = e.target.closest && e.target.closest(TIP_SEL); if (el) openTip(el); else if (tipTarget) hideTip(); });
+document.addEventListener('focusout', e => { if (tipTarget && e.target === tipTarget) hideTip(); });
+document.addEventListener('click', e => {
+  if (tipPtr === 'mouse') return;
+  const el = e.target.closest && e.target.closest(TIP_SEL);
+  if (!el) return;
+  if (el === tipTarget) { hideTip(); return; }
+  openTip(el);
 });
 document.addEventListener('scroll', hideTip, true);
+/* A tip target that isn't already a button or a link can't be tabbed to, so give it a stop. */
+function tipA11y(root) {
+  $$(TIP_SEL, root || document).forEach(el => {
+    if (el.hasAttribute('tabindex') || /^(A|BUTTON|INPUT|SELECT|TEXTAREA)$/.test(el.tagName) || el.closest('button, a')) return;
+    el.tabIndex = 0;
+  });
+}
 
 /* ---------- charts ---------- */
 function niceTicks(min, max, n = 5) {
@@ -312,10 +344,16 @@ function confirmBox(title, text, okLabel, onOk, danger) {
 
 /* ---------- undo ---------- */
 const undoStack = [];
-function pushUndo(label) { undoStack.push({ plan: JSON.stringify(S.plan), fav: JSON.stringify(S.favRecipes || {}), share: S.settings.shareIngredients !== false, swap: JSON.stringify(S.slotSwap || {}), gym: JSON.stringify({ c: S.gymCards || [], a: S.gymActive || null }), label }); if (undoStack.length > 40) undoStack.shift(); }
+/* `extra` carries anything outside S.plan that the action is about to change. A rebuild moves
+   the start date, and restoring the old plan without it left the app enumerating dates the
+   plan no longer had. */
+function pushUndo(label, extra) { undoStack.push({ plan: JSON.stringify(S.plan), fav: JSON.stringify(S.favRecipes || {}), share: S.settings.shareIngredients !== false, swap: JSON.stringify(S.slotSwap || {}), gym: JSON.stringify({ c: S.gymCards || [], a: S.gymActive || null }), extra: extra ? JSON.parse(JSON.stringify(extra)) : null, label }); if (undoStack.length > 40) undoStack.shift(); }
 function undo() {
   const u = undoStack.pop(); if (!u) { toast('Nothing to undo'); return; }
-  S.plan = JSON.parse(u.plan); if (u.fav) S.favRecipes = JSON.parse(u.fav); if (u.swap) S.slotSwap = JSON.parse(u.swap); if (u.gym) { const g = JSON.parse(u.gym); S.gymCards = g.c; S.gymActive = g.a; } if (u.share != null) S.settings.shareIngredients = u.share; invalidate(); saveState(); render(); refreshFavButtons();
+  S.plan = JSON.parse(u.plan); if (u.fav) S.favRecipes = JSON.parse(u.fav); if (u.swap) S.slotSwap = JSON.parse(u.swap); if (u.gym) { const g = JSON.parse(u.gym); S.gymCards = g.c; S.gymActive = g.a; } if (u.share != null) S.settings.shareIngredients = u.share;
+  if (u.extra) { if (u.extra.startDate) S.settings.startDate = u.extra.startDate; if ('planEnd' in u.extra) S.planEnd = u.extra.planEnd; }
+  if (typeof simInvalidate === 'function') simInvalidate();
+  invalidate(); saveState(); render(); refreshFavButtons();
   if (typeof renderQuickEdit === 'function' && QE && $('#modal .qe-sec')) renderQuickEdit();
   toast('Undid: ' + u.label);
 }

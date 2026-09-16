@@ -44,7 +44,7 @@ FORGE 90 is a multi-user, self-hosted, weight training and meal-planning app inc
 - Sessions rotate Push, Pull and Legs across however many training days you pick.
 - Each session mixes heavy strength sets with hypertrophy work, using reps-in-reserve (RIR) targets.
 - The app tells you when to add weight so you're encouraged to get stronger.
-- The customizable workout programs include an exercise library with over 100 exercises across 11 major muscle groups, each with form steps and cues. Around half are research-backed alternatives, each with a note on why it's there. Exercises rotate weekly within their movement slot, and you can switch them on or off whenever you like.
+- The customizable workout programs include an exercise library with over 130 exercises across 11 major muscle groups, each with form steps and cues. Around half are research-backed alternatives, each with a note on why it's there. Exercises rotate weekly within their movement slot, and you can switch them on or off whenever you like.
 
 ![Workout plan](docs/screenshots/workout-plan.png)
 

@@ -147,6 +147,18 @@ input, select, textarea { font: inherit; color: var(--text); }
 input[type=range] { accent-color: var(--accent-2); width: 100%; }
 .pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 600; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
 .pill.acc { background: var(--accent-soft); color: var(--accent-text); }
+/* recipe editor as a page */
+.re-page .card { max-width: 980px; }
+.re-page .page-head { align-items: flex-start; }
+.re-food { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.re-food-b { display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer; width: 100%; }
+.re-food-b .re-food-n { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.re-food-b svg { width: 15px; height: 15px; flex: none; opacity: .6; }
+.re-food-b.empty .re-food-n { color: var(--text-2); }
+.re-food-b:hover { border-color: color-mix(in srgb, var(--accent-2) 45%, transparent); }
+.re-sugg { display: flex; flex-wrap: wrap; gap: 4px; }
+.re-sugg .btn { font-size: 11.5px; padding: 3px 8px; min-height: 0; }
+@media (max-width: 860px) { .re-row { flex-wrap: wrap; } .re-food { flex: 1 1 100%; } }
 .seg-goal { display: flex; flex-wrap: wrap; }
 .seg-goal button { flex: 1 1 auto; min-width: 96px; }
 .pill.own { background: color-mix(in srgb, var(--good) 22%, transparent); color: var(--good); border-color: color-mix(in srgb, var(--good) 40%, transparent); font-weight: 800; }
@@ -1328,6 +1340,12 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
 .rt.done { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .rt.done small { color: var(--accent-ink); }
 .rt.done button { background: rgba(15, 26, 2, .12); color: var(--accent-ink); }
+/* while it's going off, the stop button is the obvious target */
+.rt.done .go.stop { background: var(--accent-ink); color: var(--accent); animation: rt-throb 1s ease-in-out infinite; }
+.rt-pill.done { background: var(--accent); color: var(--accent-ink); animation: rt-throb 1s ease-in-out infinite; }
+.rt-pill.done svg { width: 16px; height: 16px; }
+@keyframes rt-throb { 50% { transform: scale(1.06); } }
+@media (prefers-reduced-motion: reduce) { .rt.done .go.stop, .rt-pill.done { animation: none; } }
 .rt-pill { position: fixed; right: 24px; bottom: 24px; z-index: 70; display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 99px; padding: 10px 16px; background: var(--text); color: var(--solid); font-weight: 700; font-size: 13.5px; box-shadow: var(--shadow-lg); cursor: pointer; }
 .rt-pill[hidden] { display: none; }
 .rt-pill b { font-family: 'Space Grotesk', sans-serif; font-size: 16px; }

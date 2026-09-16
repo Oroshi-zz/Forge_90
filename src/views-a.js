@@ -37,7 +37,7 @@ function viewDashboard() {
     ${tile('Body weight', 'scale', fmt(cur.w, 1), 'lb', hasW ? `${sign(dW)} lb since start` : null, goalKind() === 'bulk' ? dW >= 0 : dW <= 0, 'Log your first weigh-in')}
     ${tile('Body fat', 'target', fmt(cur.bf, 1), '%' + (cur.est ? ' est.' : ''), hasW ? `${sign(dBF)} pts` : null, dBF <= 0, 'Goal ' + st.goalBF + '%')}
     ${tile('Lean mass', 'dumbbell', fmt(cur.lbm, 1), 'lb', hasW ? `${sign(dL)} lb` : null, dL >= -1, 'Weight × (1 − BF%)')}
-    ${tile('Weekly trend', 'trend', trend ? fmt(trend.rate, 2) : '—', 'lb/wk', null, true, trend ? (goalKind() === 'maintain' ? 'Target: hold' : `Target ${fmt(Math.abs(planRate(cur.w)), 2)} lb/wk ${goalKind() === 'bulk' ? 'gain' : 'loss'}`) : 'Needs ~1 week of weigh-ins')}
+    ${tile('Weekly trend', 'trend', trend && trend.rate != null ? fmt(trend.rate, 2) : '—', 'lb/wk', null, true, !trend ? 'Needs ~1 week of weigh-ins' : trend.stale ? `No weigh-in for ${trend.days} days` : goalKind() === 'maintain' ? 'Target: hold' : `Target ${fmt(Math.abs(planRate(cur.w)), 2)} lb/wk ${goalKind() === 'bulk' ? 'gain' : 'loss'}`)}
     ${tile('To goal', 'flame', fmt(Math.abs(cur.w - st.goalWeight), 1), 'lb', null, true, goalKind() === 'maintain' ? 'Holding at maintenance' : `≈ ${fmt(pj.weeks, 0)} weeks at ${fmt(Math.abs(planRate(cur.w)), 2)} lb/wk ${goalKind() === 'bulk' ? 'gain' : 'loss'}`)}
   </div>`;
 
@@ -110,18 +110,22 @@ function monthGrid(ym) {
   const out = []; for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) out.push(iso(d)); return out;
 }
 function mondayOf(date) { const d = parseISO(date); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return iso(d); }
+/* A plan date with no entry (undo after a rebuild, a sparse imported backup, a deleted recipe)
+   used to throw here and take the whole render down with it, leaving the app frozen until a
+   reload. Hand back an empty day instead and let the UI draw it as blank. */
+function planCell(date) { const e = S.plan[date]; return e && typeof e === 'object' ? (e.m ? e : Object.assign({ m: {} }, e)) : { m: {} }; }
 function cellHTML(date, A, big, monthNum) {
   const dd = parseISO(date);
   const outMonth = monthNum != null && dd.getMonth() + 1 !== monthNum;
   if (!inPlan(date)) return `<div class="cell out" style="${outMonth ? 'opacity:.3' : ''}"><div class="cell-head"><span class="dn">${dd.getDate()}</span>${big ? `<span class="dt">${DOW[dd.getDay()]}</span>` : ''}</div><div class="tiny muted" style="margin:auto;text-align:center">Outside plan</div></div>`;
-  const day = A.days[date]; const e = S.plan[date]; const today = date === todayISO();
+  const day = A.days[date] || { meals: [] }; const e = planCell(date); const today = date === todayISO();
   const wo = e.w ? woChip(date, e) : `<div class="rest-lbl">Rest</div>`;
   const meals = MEAL_SLOTS.map(slot => {
     const rid = e.m[slot]; const lbl = big ? `<div class="slot-l">${SLOT_LABEL[slot]}</div>` : '';
-    if (!rid) return lbl + `<div class="slot-empty" data-drop="slot" data-date="${date}" data-slot="${slot}">+ ${SLOT_LABEL[slot]}</div>`;
-    const r = RECIPE[rid]; const m = day.meals.find(x => x.slot === slot); const b = A.batches.info[date + '|' + slot];
+    if (!rid || !RECIPE[rid]) return lbl + `<div class="slot-empty" data-drop="slot" data-date="${date}" data-slot="${slot}">+ ${SLOT_LABEL[slot]}</div>`;
+    const r = RECIPE[rid]; const m = (day.meals || []).find(x => x.slot === slot); const b = A.batches.info[date + '|' + slot];
     const attrs = `class="chip meal" draggable="true" data-drag="meal" data-drop="slot" data-date="${date}" data-slot="${slot}" data-tip-meal="${date}|${slot}"`;
-    if (big) return lbl + `<div ${attrs}><div class="l1"><span class="em">${esc(r.emoji)}</span><span class="nm">${esc(r.name)}</span></div><div class="l2"><span class="mk">${fmt(m.m.k)} kcal · ${fmt(m.m.p)}P</span>${batchBadge(b, true)}${shareBadge(date, slot, true)}</div></div>`;
+    if (big) return lbl + `<div ${attrs}><div class="l1"><span class="em">${esc(r.emoji)}</span><span class="nm">${esc(r.name)}</span></div><div class="l2"><span class="mk">${m ? `${fmt(m.m.k)} kcal · ${fmt(m.m.p)}P` : ''}</span>${batchBadge(b, true)}${shareBadge(date, slot, true)}</div></div>`;
     return lbl + `<div ${attrs}><span class="em">${esc(r.emoji)}</span><span class="nm">${esc(r.name)}</span>${batchBadge(b, true)}${shareBadge(date, slot, true)}</div>`;
   }).join('');
   const kf = Math.min(1.1, day.totals.k / day.tg.kcal);
@@ -140,11 +144,11 @@ function calIsCompact() {
 }
 function agendaHTML(dates, A) {
   const rows = dates.filter(inPlan).map(date => {
-    const dd = parseISO(date); const day = A.days[date]; const e = S.plan[date]; const today = date === todayISO();
+    const dd = parseISO(date); const day = A.days[date] || { meals: [] }; const e = planCell(date); const today = date === todayISO();
     const meals = MEAL_SLOTS.map(slot => {
       const rid = e.m[slot];
       if (!rid || !RECIPE[rid]) return `<div class="slot-empty" data-drop="slot" data-date="${date}" data-slot="${slot}" style="display:block">+ ${SLOT_LABEL[slot]}</div>`;
-      const r = RECIPE[rid]; const m = day.meals.find(x => x.slot === slot); const b = A.batches.info[date + '|' + slot];
+      const r = RECIPE[rid]; const m = (day.meals || []).find(x => x.slot === slot); const b = A.batches.info[date + '|' + slot];
       return `<div class="chip meal" draggable="true" data-drag="meal" data-drop="slot" data-date="${date}" data-slot="${slot}" data-tip-meal="${date}|${slot}"><span class="em">${esc(r.emoji)}</span><span class="nm">${esc(r.name)}</span>${batchBadge(b, true)}${shareBadge(date, slot, true)}<span class="mk">${m ? fmt(m.m.k) : ''}</span></div>`;
     }).join('');
     return `<div class="ag-day ${e.w ? 'train' : ''} ${today ? 'today' : ''}" data-drop="cell" data-date="${date}" data-go="${date}">
@@ -253,7 +257,9 @@ function applyDrop(d, type, tDate, tSlot, copy) {
     if (d.from === 'lib') { pushUndo('add workout'); tE.w = { t: d.t, wk: planWeek(tDate) }; commitPlan(`${TEMPLATES[d.t].name} → ${fmtDate(tDate)}`); return; }
     if (d.date === tDate) return;
     pushUndo('move workout'); const src = S.plan[d.date]; const a = src.w, b = tE.w;
-    tE.w = a ? Object.assign({}, a) : null; if (!copy) src.w = b ? Object.assign({}, b) : null;
+    // the session takes on the week it lands in, so RIR targets and variations match the header
+    tE.w = a ? Object.assign({}, a, { wk: planWeek(tDate) }) : null;
+    if (!copy) src.w = b ? Object.assign({}, b, { wk: planWeek(d.date) }) : null;
     commitPlan(copy ? `Copied workout to ${fmtDate(tDate)}` : b ? `Swapped workouts: ${fmtDate(d.date)} ↔ ${fmtDate(tDate)}` : `Moved workout to ${fmtDate(tDate)}`);
     return;
   }
@@ -273,7 +279,7 @@ function applyDrop(d, type, tDate, tSlot, copy) {
 /* ---------------- DAY DETAIL ---------------- */
 function viewDay(date) {
   if (!date || !inPlan(date)) return `<div class="card empty-state">${icon('cal')}<h2 style="margin:8px 0">That day isn’t in the plan</h2><a class="btn" href="#/calendar">Back to calendar</a></div>`;
-  const A = computeAll(); const day = A.days[date]; const e = S.plan[date];
+  const A = computeAll(); const day = A.days[date] || { meals: [] }; const e = planCell(date);
   const idx = planIndex(date), wk = planWeek(date);
   const prev = inPlan(addDays(date, -1)) ? addDays(date, -1) : null, next = inPlan(addDays(date, 1)) ? addDays(date, 1) : null;
   const head = `<div class="day-head"><a class="btn icon" href="#/calendar" data-tip="Back to calendar">${icon('cal')}</a>

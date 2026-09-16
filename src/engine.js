@@ -96,7 +96,7 @@ function loadState(from) {
   if (!S.v || S.v < 3) { rescheduleWorkouts(maxISO(todayISO(), S.settings.startDate)); S.v = 3; }
   if (S.v < 4) { substitutePlan(maxISO(todayISO(), S.settings.startDate)); S.v = 4; }
   if (S.v < 5) { replanMeals(nextPlanWeekStart()); S.v = 5; S._sharingIntro = true; }   // v5: ingredient-sharing planner
-  S.settings.bgDim = 0.7;
+  if (!(+S.settings.bgDim >= 0 && +S.settings.bgDim <= 1)) S.settings.bgDim = 0.7;
   saveState();
   return S;
 }
@@ -403,17 +403,20 @@ function generatePlan(settings, through, existing) {
   return plan;
 }
 // Swap planned meals (from a date onward) that are no longer allowed
+/* Returns { n, empty }: how many meals were swapped, and any category that had no legal
+   recipe left. Callers warn about `empty` — silently nulling a meal loses the day's calories. */
 function substitutePlan(fromDate) {
-  let n = 0; const map = {}; const counters = {};
+  let n = 0; const map = {}; const counters = {}; const empty = {};
   Object.keys(S.plan).sort().forEach(d => {
     if (d < fromDate) return; const m = S.plan[d].m || {};
     MEAL_SLOTS.forEach(slot => {
       const id = m[slot]; if (!id || (RECIPE[id] && recipeAllowed(id))) return;
       if (!(id in map)) { const cat = RECIPE[id] ? RECIPE[id].cat : SLOT_CAT[slot]; counters[cat] = counters[cat] || 0; map[id] = pickSubstitute(cat, RECIPE[id] ? RECIPE[id].yield : 1, counters[cat]++); }
+      if (map[id] == null) { empty[RECIPE[id] ? RECIPE[id].cat : SLOT_CAT[slot]] = true; return; }   // nothing left to swap to: keep the meal rather than blanking the day
       m[slot] = map[id]; n++;
     });
   });
-  return n;
+  return { n, empty: Object.keys(empty) };
 }
 
 /* ---------- workouts ---------- */
@@ -484,15 +487,26 @@ function targetsFor(w, bf, isTrain) {
   const kcal = Math.max(st.minKcal, maint - deficit + surplus + (+st.kcalAdjust || 0));
   const nTrain = st.trainDays.length;
   const weeklyMaint = restMaint + st.sessionKcal * nTrain / 7;
-  const kr = Math.round(kcal / 10) * 10, pr = Math.round(st.proteinPerLb * w);
+  const kr = Math.round(kcal / 10) * 10;
   /* Fat sits lower on a bulk so the extra calories land in carbohydrate, which is what fuels
-     training volume — but never below ~0.3 g/lb, the floor tied to hormone production. */
+     training volume, but never below ~0.3 g/lb, the floor tied to hormone production. */
   const fatPct = bulking ? 0.25 : 0.27;
-  const fat = Math.max(Math.round(0.3 * w), Math.round(kr * fatPct / 9));
+  let pr = Math.round(st.proteinPerLb * w);
+  let fat = Math.max(Math.round(0.3 * w), Math.round(kr * fatPct / 9));
+  /* At a low calorie floor a big lifter's protein and fat minimums can exceed the target on
+     their own. Carbs clamped at zero used to hide that and the macros stopped summing to the
+     number on screen, so trim fat first (down to its floor) and then protein, and flag it. */
+  let over = pr * 4 + fat * 9 - kr;
+  const fatFloor = Math.round(0.3 * w);
+  if (over > 0) { const cut = Math.min(over, Math.max(0, (fat - fatFloor) * 9)); fat -= Math.round(cut / 9); over -= cut; }
+  const protFloor = Math.round(0.5 * w);            // the bottom of the app's own 0.5–1.0 g/lb band
+  if (over > 0) { const cut = Math.min(over, Math.max(0, (pr - protFloor) * 4)); pr -= Math.round(cut / 4); over -= cut; }
+  const macroSqueeze = over > 0;                    // even at both floors the target is unreachable
   const carbs = Math.max(0, Math.round((kr - pr * 4 - fat * 9) / 4));
   return { fat, carbs, lbm, bmr: Math.round(bmr), maint: Math.round(maint), weeklyMaint: Math.round(weeklyMaint), deficit: Math.round(deficit),
            surplus: Math.round(surplus), kind, bulking, bfCap: kind === 'bulk' && bf >= (+st.bulkMaxBF || 20),
-           maintMode, kcal: Math.round(kcal / 10) * 10, protein: Math.round(st.proteinPerLb * w), floorHit: maint - deficit + surplus + (+st.kcalAdjust || 0) < st.minKcal };
+           maintMode, kcal: kr, protein: pr, proteinTrimmed: pr < Math.round(st.proteinPerLb * w), macroSqueeze,
+           floorHit: maint - deficit + surplus + (+st.kcalAdjust || 0) < st.minKcal };
 }
 
 /* ---------- recipes & portions ---------- */
@@ -689,9 +703,12 @@ function suggestion(exId, reps, beforeDate) {
 
 /* ---------- trend & projections ---------- */
 function linreg(pts) { const n = pts.length; if (n < 2) return null; let sx = 0, sy = 0, sxx = 0, sxy = 0; pts.forEach(([x, y]) => { sx += x; sy += y; sxx += x * x; sxy += x * y; }); const den = n * sxx - sx * sx; if (!den) return null; const m = (n * sxy - sx * sy) / den; return { m, b: (sy - m * sx) / n }; }
+const TREND_STALE_DAYS = 10;                        // a trend older than this says nothing about today
 function weightTrend() {
   const ws = sortedWeights(); if (ws.length < 3) return null;
-  const last = ws[ws.length - 1].d; const from = addDays(last, -21);
+  const last = ws[ws.length - 1].d;
+  if (dayDiff(last, todayISO()) > TREND_STALE_DAYS) return { stale: true, since: last, days: dayDiff(last, todayISO()), rate: null, delta: 0, advice: `No weigh-in for ${dayDiff(last, todayISO())} days, so there's no current trend to go on. Log one and the coach picks up again.` };
+  const from = addDays(last, -21);
   const pts = ws.filter(x => x.d >= from).map(x => [dayDiff(from, x.d), x.w]);
   if (pts.length < 3 || pts[pts.length - 1][0] - pts[0][0] < 7) return null;
   const lr = linreg(pts); if (!lr) return null;
@@ -723,11 +740,13 @@ function movingAvg(ws, days = 7) {
 }
 function projection() {
   const st = latestStats(); const kind = goalKind();
+  const ws0 = sortedWeights(); const staleBy = ws0.length ? dayDiff(ws0[ws0.length - 1].d, todayISO()) : null;
   const signed = planRate(st.w);                                  // negative cutting, positive bulking
   const rate = Math.abs(signed) || 0.0001;
   const toGoal = kind === 'bulk' ? Math.max(0, S.settings.goalWeight - st.w) : Math.max(0, st.w - S.settings.goalWeight);
   const weeks = toGoal / rate;
-  const refDate = sortedWeights().length ? sortedWeights().slice(-1)[0].d : S.settings.startDate;
+  // measure forward from today, not from a weigh-in that might be months old
+  const refDate = maxISO(ws0.length ? ws0[ws0.length - 1].d : S.settings.startDate, todayISO());
   const ref = maxISO(maxISO(todayISO(), refDate), S.settings.startDate);
   const launchEnd = addDays(S.settings.startDate, LAUNCH_DAYS - 1);
   const cyc = ref <= launchEnd ? 1 : cycleOfWeek(planWeek(ref));
@@ -737,7 +756,7 @@ function projection() {
   const goalDate = addDays(refDate, Math.round(weeks * 7));
   // weight at goal BF if lean mass is held
   const wAtGoalBF = st.lbm / (1 - S.settings.goalBF / 100);
-  return { weeks, goalDate, endW, endPlan, cyc, wAtGoalBF, lbm: st.lbm, kind, rate: signed, reached: goalReached(st.w, st.bf) };
+  return { weeks, goalDate, endW, endPlan, cyc, wAtGoalBF, lbm: st.lbm, kind, rate: signed, staleBy, stale: staleBy != null && staleBy > TREND_STALE_DAYS, reached: goalReached(st.w, st.bf) };
 }
 
 /* ---------- export for node tests ---------- */

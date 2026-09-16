@@ -93,6 +93,8 @@ function viewDiet() {
       <tr><td>Maintenance — rest / training</td><td class="num">${fmt(tR.maint)} / ${fmt(tT.maint)} kcal</td><td class="muted">BMR × ${st.activity} activity, + ${st.sessionKcal} kcal on lifting days</td></tr>
       <tr><td>${tT.bulking ? 'Surplus' : 'Deficit'}</td><td class="num">${fmt(tT.bulking ? tT.surplus : tT.deficit)} kcal/day</td><td class="muted">${tT.bfCap ? `At ${fmt(cur.bf, 1)}% body fat, at or above the ${st.bulkMaxBF}% ceiling — holding at maintenance` : tT.maintMode ? (goalKind() === 'maintain' ? 'Maintenance calories' : 'Goal reached — eating at maintenance (change in Settings)') : tT.bulking ? `${fmt(bulkLb(cur.w), 2)} lb/week × 3,500 kcal ÷ 7` : st.rate + ' lb/week × 3,500 kcal ÷ 7'}${st.kcalAdjust ? ` · adjustment ${st.kcalAdjust > 0 ? '+' : ''}${st.kcalAdjust} kcal` : ''}</td></tr>
     </tbody></table></div>
+    ${tT.floorHit ? `<div class="note warn" style="margin-top:12px">${icon('info')}<span>Your target hit the <b>${fmt(st.minKcal)} kcal floor</b>, so the deficit shown is smaller than ${goalKind() === 'bulk' ? 'planned' : st.rate + ' lb/week'} would need. Lower the floor in Settings, or accept the slower rate.</span></div>` : ''}
+    ${tT.proteinTrimmed ? `<div class="note warn" style="margin-top:8px">${icon('info')}<span>At this calorie target, ${fmt(st.proteinPerLb, 2)} g/lb of protein plus the fat minimum would not fit, so protein is set to <b>${fmt(tT.protein)} g</b> (${fmt(tT.protein / cur.w, 2)} g/lb). Raise your calories or lower the protein setting.</span></div>` : ''}
     <div class="small muted" style="margin-top:14px">Targets and every portion on the calendar update from your latest weigh-in.</div></div></div>`;
   const portion = (d, lbl) => { if (!d) return ''; const x = A.days[d]; return `<div class="card" style="box-shadow:none;background:var(--surface-2)"><div class="tiny muted" style="font-weight:700;text-transform:uppercase;letter-spacing:.08em">${lbl} · ${fmtDate(d)}</div>
       <div class="row" style="margin-top:8px;gap:18px"><div><div class="tiny muted">Protein sources</div><div style="font-size:24px;font-weight:700" class="num">×${x.pF.toFixed(2)}</div></div><div><div class="tiny muted">Carb & fat sources</div><div style="font-size:24px;font-weight:700" class="num">×${x.cF.toFixed(2)}</div></div><div><div class="tiny muted">Day total</div><div style="font-size:24px;font-weight:700" class="num">${fmt(x.totals.k)}</div></div></div>
@@ -100,7 +102,7 @@ function viewDiet() {
   const portions = `<div class="card"><div class="card-h"><h2>Serving-size suggestions</h2></div>
     <div class="small sub" style="margin:-6px 0 12px">Every recipe is written as a standard 1× serving. Each day, protein ingredients (chicken, eggs, yogurt…) are scaled to land your protein target, then carb & fat ingredients (rice, potatoes, oats, oils…) are scaled to land calories. Training days get more carbs.</div>
     <div class="grid g2" style="gap:12px">${portion(nextT, 'Next training day')}${portion(nextR, 'Next rest day')}</div>
-    ${trend ? `<div class="note ${trend.delta ? 'warn' : 'acc'}" style="margin-top:12px">${icon('trend')}<span>${esc(trend.advice)} ${trend.delta ? `<button class="btn sm" data-act="apply-trend" data-delta="${trend.delta}">Apply ${trend.delta > 0 ? '+' : ''}${trend.delta} kcal</button>` : ''}</span></div>` : `<div class="note" style="margin-top:12px">${icon('info')}<span>After ~1–2 weeks of weigh-ins, the app compares what the scale actually did to your ${goalKind() === 'bulk' ? `${fmt(bulkLb(cur.w), 2)} lb/wk gain` : goalKind() === 'maintain' ? 'maintenance' : `${st.rate} lb/wk loss`} target and suggests a calorie adjustment.</span></div>`}
+    ${trend ? `<div class="note ${trend.stale ? 'warn' : trend.delta ? 'warn' : 'acc'}" style="margin-top:12px">${icon('trend')}<span>${esc(trend.advice)} ${trend.delta ? `<button class="btn sm" data-act="apply-trend" data-delta="${trend.delta}">Apply ${trend.delta > 0 ? '+' : ''}${trend.delta} kcal</button>` : ''}</span></div>` : `<div class="note" style="margin-top:12px">${icon('info')}<span>After ~1–2 weeks of weigh-ins, the app compares what the scale actually did to your ${goalKind() === 'bulk' ? `${fmt(bulkLb(cur.w), 2)} lb/wk gain` : goalKind() === 'maintain' ? 'maintenance' : `${st.rate} lb/wk loss`} target and suggests a calorie adjustment.</span></div>`}
     ${goalKind() === 'maintain' ? '' : `<div class="note" style="margin-top:8px">${icon('target')}<span>At ${goalKind() === 'bulk' ? `${fmt(bulkLb(cur.w), 2)} lb/wk` : `${st.rate} lb/wk`} you’ll be around <b>${fmt(pj.endW, 0)} lb</b> ${pj.cyc === 1 ? 'on Day 90' : 'at the end of cycle ' + pj.cyc}${Math.abs(pj.weeks) > 0.01 ? ` and reach ${st.goalWeight} lb around <b>${fmtDate(pj.goalDate, { month: 'long', year: 'numeric' })}</b>` : ''}. Holding your lean mass, ${st.goalBF}% BF ≈ <b>${fmt(pj.wAtGoalBF, 0)} lb</b>.</span></div>`}</div>`;
   const goalLine = goalKind() === 'bulk' ? `A ${fmt(st.bulkPct, 2)}%/week lean gain with ${fmt(st.proteinPerLb, 2)} g protein per lb, the surplus weighted toward carbohydrate to fuel training.`
     : goalKind() === 'maintain' ? `Maintenance calories with ${fmt(st.proteinPerLb, 2)} g protein per lb.`
@@ -179,7 +181,8 @@ function printRecipe(rid) {
 function groceryWeek() {
   const A = computeAll(); const dates = planDates();
   const cur = inPlan(todayISO()) ? planWeek(todayISO()) : 1;
-  if (!UI.groWeek) UI.groWeek = cur;
+  // the saved week is only a within-visit choice; once the calendar has moved on, follow it
+  if (!UI.groWeek || UI.groWeekFor !== cur) { UI.groWeek = cur; UI.groWeekFor = cur; }
   const wk = Math.min(UI.groWeek, Math.ceil(dates.length / 7)); const wd = dates.slice((wk - 1) * 7, wk * 7);
   const totals = {}; const cooks = []; const singles = [];
   wd.forEach(d => A.days[d].meals.forEach(m => {
@@ -234,10 +237,19 @@ function viewGrocery() {
 }
 
 /* ---------------- money saver: ingredient sharing ---------------- */
+/* simulateMeals replans every date in the plan, so it used to run on every render of this page,
+   every week change and every checkbox tick. Cache it until the plan or the setting changes. */
+let _simCache = null;
+function simCached(off) {
+  const key = off + '|' + Object.keys(S.plan).length + '|' + (S.planEnd || '') + '|' + (S.settings.startDate || '');
+  if (_simCache && _simCache.key === key) return _simCache.sim;
+  const sim = simulateMeals(off); _simCache = { key, sim }; return sim;
+}
+function simInvalidate() { _simCache = null; }
 function moneySaverHTML(wd) {
   const on = S.settings.shareIngredients !== false;
   const pick = M => Object.fromEntries(wd.map(d => [d, M[d] || {}]));
-  const sim = simulateMeals(!on); const real = days => Object.fromEntries(days.map(d => [d, (S.plan[d] || {}).m || {}]));
+  const sim = simCached(!on); const real = days => Object.fromEntries(days.map(d => [d, (S.plan[d] || {}).m || {}]));
   const actual = shoppingStats(real(wd));
   const other = shoppingStats(pick(sim));
   const dPk = other.packs - actual.packs, dIt = other.items - actual.items, dLb = (other.leftG - actual.leftG) / 453.6;
@@ -458,6 +470,7 @@ function appearanceCardHTML() {
   return `<div class="card"><div class="card-h"><h2>Appearance & data</h2></div>
         <div class="field"><label>Theme</label><div class="seg">${['dark', 'light', 'system'].map(t => `<button class="${st.theme === t ? 'on' : ''}" data-act="theme" data-v="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></div>
         <label class="set-tog" style="margin-top:12px"><span><b class="small">Background photos</b><span class="tiny muted">${st.bgPhotos !== false ? 'A fitness photo behind each page.' : 'Off — plain background. Pages load faster and text is easier to read.'}</span></span><input type="checkbox" data-input="bg-photos" ${st.bgPhotos !== false ? 'checked' : ''}><i class="switch ${st.bgPhotos !== false ? 'on' : ''}" aria-hidden="true"><i></i></i></label>
+        ${st.bgPhotos !== false ? `<hr class="sep">${backgroundsHTML()}` : ''}
         <hr class="sep"><div class="row wrap"><button class="btn" data-act="export">${icon('download')}Export backup</button><label class="btn">${icon('upload')}Import backup<input type="file" accept="application/json" data-input="import" hidden></label>
         <button class="btn danger" data-act="reset">${icon('trash')}Reset everything</button></div>
         <div class="tiny muted" style="margin-top:10px">${AUTH.mode === 'server' ? `Your data is saved to your FORGE 90 account on the server and follows you to any device you sign in on. <a href="#/account">Account settings</a>` : 'Data lives in this browser’s local storage for this file. Opening the file in a different browser starts fresh — use Export/Import to move it. Run the FORGE 90 server to get accounts and sign-in.'}</div>
@@ -501,13 +514,14 @@ function render() {
   if (phone && hubOf(page) === 'kitchen' && page !== 'recipe' && UI.lastKit !== page) { UI.lastKit = page; saveUI(); }
   document.body.classList.toggle('compact', !!UI.navCollapsed);
   if (page === 'day' && arg) ensurePlanThrough(arg);
-  const sec = ({ '': 'dashboard', calendar: 'calendar', day: 'day', workouts: 'workouts', diet: 'diet', foods: 'foods', recipe: 'foods', grocery: 'grocery', pantry: 'grocery', prep: 'grocery', progress: 'progress', settings: 'settings', account: 'settings', admin: 'settings', you: 'settings' })[page || ''] || 'dashboard';
+  const sec = ({ '': 'dashboard', calendar: 'calendar', day: 'day', workouts: 'workouts', diet: 'diet', foods: 'foods', recipe: 'foods', 'recipe-edit': 'foods', grocery: 'grocery', pantry: 'grocery', prep: 'grocery', progress: 'progress', settings: 'settings', account: 'settings', admin: 'settings', you: 'settings' })[page || ''] || 'dashboard';
   document.body.dataset.sec = sec; applyBackground(sec);
-  $$('.nav a').forEach(a => a.classList.toggle('on', a.dataset.nav === (page === 'day' ? 'calendar' : page === 'recipe' ? 'foods' : (page || ''))));
+  $$('.nav a').forEach(a => a.classList.toggle('on', a.dataset.nav === (page === 'day' ? 'calendar' : (page === 'recipe' || page === 'recipe-edit') ? 'foods' : (page || ''))));
   const sy = window.scrollY; const same = render._last === h; render._last = h;
   if (page !== 'calendar') UI._calCompact = null;
   let html;
   switch (page) {
+    case 'recipe-edit': if (!RE) { location.replace(UI.reReturn || '#/foods'); return; } html = recipeEditorHTML(); break;
     case 'calendar': html = viewCalendar(); break;
     case 'day': html = phone ? viewToday(arg) : viewDay(arg); break;
     case 'workouts': html = viewWorkouts(); break;
@@ -531,7 +545,7 @@ function render() {
   document.title = appTitle() + ' · ' + (page === 'recipe' ? ((RECIPE[decodeURIComponent(arg || '')] || {}).name || 'Recipe') : (navItems().concat([['account', 'Account'], ['you', 'You'], ['prep', 'Meal prep']]).find(n => n[0] === page) || [, page === 'day' ? 'Day' : phone ? 'Today' : 'Dashboard'])[1]);
   if (page === 'account') accountAfter(); if (page === 'admin') adminAfter(); if (page === 'settings') settingsAfter();
   if (UI._scrollTo) { const el = document.getElementById(UI._scrollTo); UI._scrollTo = null; if (el) el.scrollIntoView({ block: 'start' }); }
-  woRefresh();
+  tipA11y(); woRefresh();
 }
 function applyTheme() { const t = (S && S.settings.theme) || UI.lastTheme || 'dark'; document.documentElement.dataset.theme = t; if (UI.lastTheme !== t) { UI.lastTheme = t; saveUI(); } }
 
@@ -598,7 +612,7 @@ document.addEventListener('change', e => {
   else if (inp === 'day-meal') { pushUndo('change meal'); S.plan[el.dataset.date].m[el.dataset.slot] = el.value || null; markMealEdit(el.dataset.date, el.dataset.slot); commitPlan(el.value ? `${SLOT_LABEL[el.dataset.slot]} → ${RECIPE[el.value].name}` : `${SLOT_LABEL[el.dataset.slot]} removed`); }
   else if (inp === 'share') { pushUndo('ingredient sharing'); S.settings.shareIngredients = el.checked; const from = nextPlanWeekStart(); replanMeals(from); saveState(); render();
     toast(`Ingredient sharing ${el.checked ? 'on' : 'off'} — meals from ${fmtDate(from)} on re-planned (hand-picked meals kept)`, true); }
-  else if (inp === 'gro-week') { UI.groWeek = +el.value; saveUI(); render(); }
+  else if (inp === 'gro-week') { UI.groWeek = +el.value; UI.groWeekFor = inPlan(todayISO()) ? planWeek(todayISO()) : 1; saveUI(); render(); }
   else if (inp === 'gro') groTick(el);
   else if (inp === 'pr-ex') { UI.prEx = el.value; saveUI(); render(); }
   else if (inp === 'rate') { S.settings.rate = +el.value; saveState(); render(); toast(`Target loss rate ${fmt(+el.value, 2)} lb/week — calories and portions updated`); }
@@ -639,8 +653,8 @@ document.addEventListener('submit', e => {
   } else if (kind === 'plan') {
     const sd = fd.get('startDate'); const td = S.settings.trainDays;
     confirmBox('Rebuild the plan?', `Day 1 becomes ${fmtDate(sd, { weekday: 'long', month: 'long', day: 'numeric' })} with training on ${td.map(i => DOW[i]).join(', ')}. Calendar edits are replaced; logs are kept.`, 'Rebuild', () => {
-      const go = () => { S.settings.startDate = sd; pushUndo('rebuild'); S.plan = {}; S.planEnd = null; ensureHorizon(); if (syncActive()) syncApplyAgreed();     // shared meals stay as agreed with the partner
-        UI.calMonth = null; UI.calWeek = null; UI.groWeek = null; saveUI(); saveState(); render(); toast('Plan rebuilt'); };
+      const go = () => { pushUndo('rebuild', { startDate: S.settings.startDate, planEnd: S.planEnd }); S.settings.startDate = sd; S.plan = {}; S.planEnd = null; ensureHorizon(); if (syncActive()) syncApplyAgreed();     // shared meals stay as agreed with the partner
+        UI.calMonth = null; UI.calWeek = null; UI.groWeek = null; UI.groWeekFor = null; S.grocery = {}; saveUI(); saveState(); render(); toast('Plan rebuilt'); };
       if (syncActive()) syncFetch(true).then(go); else go(); });
   } else if (kind === 'body' || kind === 'nut') {
     if (kind === 'body' && S.settings.bfEstimated && +fd.get('startBF') !== +S.settings.startBF) S.settings.bfEstimated = false;

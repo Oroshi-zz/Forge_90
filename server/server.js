@@ -118,7 +118,7 @@ function ownerGuard(ctx, u) { if (isOwner(u) && !isOwner(ctx.me.u)) err(403, 'Th
 function adminChangeGuard(ctx, u) { if (u.role === 'admin' && !isOwner(ctx.me.u)) err(403, 'Only the owner can change another administrator’s access.'); }
 const isLocked = u => !!(u.lockedUntil && u.lockedUntil > now());
 const avatarUrl = u => u && u.avatar ? `/api/avatar/${u.id}?v=${encodeURIComponent(u.avatarV || '1')}` : null;
-function pubUser(u) { return u && { id: u.id, email: u.email, name: u.name, owner: isOwner(u), firstName: u.firstName || '', lastName: u.lastName || '', avatarUrl: avatarUrl(u), role: u.role, status: u.status, mustChange: !!u.mustChange, createdAt: u.createdAt, lastLoginAt: u.lastLoginAt || null, notify: Object.assign({ passwordChange: true, newSignIn: false }, u.notify || {}) }; }
+function pubUser(u) { return u && { id: u.id, email: u.email, name: u.name, owner: isOwner(u), firstName: u.firstName || '', lastName: u.lastName || '', avatarUrl: avatarUrl(u), role: u.role, status: u.status, mustChange: !!u.mustChange, createdAt: u.createdAt, lastLoginAt: u.lastLoginAt || null, notify: Object.assign({ passwordChange: true }, u.notify || {}) }; }
 function audit(type, { userId = null, actorId = null, ip = null, detail = '' } = {}) {
   db.audit.push({ id: uid(), t: now(), type, userId, actorId, ip, detail: String(detail).slice(0, 300) });
   if (db.audit.length > 5000) db.audit.splice(0, db.audit.length - 5000);
@@ -359,7 +359,8 @@ route('PATCH', '/api/account', { auth: true, allowMustChange: true }, async (req
   const u = ctx.me.u, b = ctx.body; const changes = [];
   if (b.name != null) { const n = String(b.name).trim().slice(0, 80); if (!n) err(400, 'Display name can’t be empty.'); if (n !== u.name) { u.name = n; changes.push('display name'); } }
   ['firstName', 'lastName'].forEach(k => { if (b[k] != null) { const v = String(b[k]).trim().slice(0, 40); if (v !== (u[k] || '')) { u[k] = v; changes.push(k === 'firstName' ? 'first name' : 'last name'); } } });
-  if (b.notify && typeof b.notify === 'object') { u.notify = Object.assign({ passwordChange: true, newSignIn: false }, u.notify || {}, { passwordChange: !!b.notify.passwordChange, newSignIn: !!b.notify.newSignIn }); changes.push('notifications'); }
+  // newSignIn used to be stored and validated here with nothing ever sending that email
+  if (b.notify && typeof b.notify === 'object') { u.notify = { passwordChange: !!b.notify.passwordChange }; changes.push('notifications'); }
   if (b.email != null && normEmail(b.email) !== u.email) {
     const e = normEmail(b.email); if (!validEmail(e)) err(400, 'Enter a valid email address.');
     if (!u.mustChange && !(await verifyPw(String(b.currentPassword || ''), u.pw))) err(403, 'Your current password is needed to change your email — and it didn’t match.');

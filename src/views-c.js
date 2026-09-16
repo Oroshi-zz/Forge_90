@@ -30,10 +30,10 @@ const BG_FALLBACK = {
   settings: 'radial-gradient(1200px 700px at 50% 0%, #2a3a5a, transparent 60%), linear-gradient(135deg, #0f1420, #101216)'
 };
 const bgPhotoURL = sec => `https://images.unsplash.com/photo-${SECTION_BG[sec].id}?auto=format&fit=crop&w=2200&q=72`;
-const bgURL = sec => bgPhotoURL(sec);
+const bgURL = sec => ((S && S.bgCustom && S.bgCustom[sec]) || bgPhotoURL(sec));   // an uploaded image wins over the stock photo
 let bgCurrent = null, bgFlip = false;
 function applyBackground(sec) {
-  document.documentElement.style.setProperty('--dim', '0.7');
+  document.documentElement.style.setProperty('--dim', String((S && +S.settings.bgDim >= 0 && +S.settings.bgDim <= 1) ? S.settings.bgDim : 0.7));
   const off = !!(S && S.settings && S.settings.bgPhotos === false); document.body.classList.toggle('no-bg', off);
   if (off) { if (bgCurrent === 'off') return; bgCurrent = 'off'; $$('#bg .bg-layer').forEach(l => { l.classList.remove('on'); l.style.backgroundImage = 'none'; }); return; }
   const url = bgURL(sec); const key = sec + '|' + url.slice(0, 80);
@@ -129,9 +129,10 @@ function setFoodPref(k, on, wasPartial) {
     else { P[k] = false; off = true; }
   }
   invalidate();
-  const n = off ? substitutePlan(maxISO(todayISO(), S.settings.startDate)) : 0;
+  const sub = off ? substitutePlan(maxISO(todayISO(), S.settings.startDate)) : { n: 0, empty: [] };
   saveState(); refreshFoodPrefs();
-  toast(`${label} ${on ? 'on' : 'off'}${n ? ` — swapped ${n} upcoming meal${n === 1 ? '' : 's'}` : ''}`);
+  if (sub.empty.length) toast(`${label} off — but nothing is left for ${sub.empty.join(' and ')}, so those meals were kept. Turn something back on.`);
+  else toast(`${label} ${on ? 'on' : 'off'}${sub.n ? ` — swapped ${sub.n} upcoming meal${sub.n === 1 ? '' : 's'}` : ''}`);
 }
 document.addEventListener('change', e => { const t = e.target; if (t && t.dataset && t.dataset.fp) setFoodPref(t.dataset.fp, t.checked, t.dataset.ind === '1'); });
 document.addEventListener('input', e => { const t = e.target; if (t && t.dataset && t.dataset.input === 'fpq') { UI.fpQ = t.value; $$('[data-fp-tree]').forEach(el => { el.innerHTML = fpTreeHTML(); }); fpAfter(); } });
@@ -197,7 +198,9 @@ function viewFoods() {
         ${r.custom ? `<button class="btn sm ghost danger" data-act="recipe-del" data-rid="${r.id}">${icon('trash')}</button>` : ''}
         ${r.edited ? `<button class="btn sm ghost" data-act="recipe-reset" data-rid="${r.id}">Reset</button>` : ''}
         ${sw(!S.recipeOff[r.id], 'recipe-off', r.id)}</div></div>`; }).join('');
-  return head + `<div class="row wrap rec-bar" style="margin-bottom:12px"><div class="rec-search">${icon('search')}<input class="inp" type="search" placeholder="Search recipes, ingredients or tags…" data-input="recq" value="${esc(UI.recQ || '')}" aria-label="Search recipes" autocomplete="off"></div><div class="filters">${['all', 'fav', 'breakfast', 'lunch', 'dinner', 'snack'].map(c => `<button class="${f === c ? 'on' : ''}" data-act="rec-filter" data-v="${c}">${recFilterLabel(c)}</button>`).join('')}</div>${recipeSortHTML()}</div>
+  const dr = !RE && reDraft();
+  const draftBar = dr ? `<div class="note warn" style="margin-bottom:12px">${icon('edit')}<span><b>You have an unsaved recipe</b>${dr.name ? ` — “${esc(dr.name)}”` : ''}. It was kept when you left the editor.</span><span class="row" style="gap:6px"><button class="btn sm primary" data-act="re-resume">Continue editing</button><button class="btn sm ghost" data-act="re-discard">Discard</button></span></div>` : '';
+  return head + draftBar + `<div class="row wrap rec-bar" style="margin-bottom:12px"><div class="rec-search">${icon('search')}<input class="inp" type="search" placeholder="Search recipes, ingredients or tags…" data-input="recq" value="${esc(UI.recQ || '')}" aria-label="Search recipes" autocomplete="off"></div><div class="filters">${['all', 'fav', 'breakfast', 'lunch', 'dinner', 'snack'].map(c => `<button class="${f === c ? 'on' : ''}" data-act="rec-filter" data-v="${c}">${recFilterLabel(c)}</button>`).join('')}</div>${recipeSortHTML()}</div>
     <div class="tiny muted" style="margin:-4px 0 12px">★ Favorites show up about twice as often in the meal plan. Switch a recipe off to keep it out of the plan. Blocked recipes contain a food you’ve unchecked.</div>
     ${words.length ? `<div class="small muted" style="margin:-4px 0 10px">${rs.length} recipe${rs.length === 1 ? '' : 's'} match “${esc(UI.recQ.trim())}” <button class="btn sm ghost" data-act="recq-clear">${icon('x')}Clear</button></div>` : ''}
     <div class="grid g2" style="gap:10px">${cards || `<div class="muted small">${f === 'fav' && !words.length ? 'No favorites yet — tap the ☆ on any recipe.' : 'No recipes match.'}</div>`}</div>`;
@@ -290,7 +293,7 @@ function saveFood(form) {
   }
   const newId = id || Object.keys(S.customFoods).find(k => S.customFoods[k] === rec);
   rebuildCatalog(); saveState();
-  if (UI.returnToRecipe && RE) { UI.returnToRecipe = false; if (!id) RE.ing.push([newId, ING[newId].u ? 1 : 100]); render(); renderRecipeEditor(); toast(`${rec.n} added to the recipe`); return; }
+  if (UI.returnToRecipe && RE) { UI.returnToRecipe = false; if (!id) RE.ing.push([newId, ING[newId].u ? 1 : 100]); closeModal(); renderRecipeEditor(); toast(`${rec.n} added to the recipe`); return; }
   closeModal(); render(); toast(`${rec.n} saved — every recipe using it is updated`);
 }
 
@@ -302,13 +305,31 @@ function recipeEditor(rid, dup) {
     storage: r ? r.storage : 'fridge', time: r ? r.time : 20, tags: r ? (r.tags || []).join(', ') : '', fixed: !!(r && r.fixed), rotate: r ? r.rotate !== false && (r.custom || dup) : true,
     ing: r ? r.ing.map(([id, a]) => [id, a]) : [['chicken_breast', 200]], steps: r ? (r.steps || []).join('\n') : '',
     links: r ? (r.links || []).map(l => ({ title: l.title || '', url: l.url || '', site: l.site || '' })) : [] };
-  renderRecipeEditor();
+  reOpen();
 }
+/* The editor is a page, not a dialog: a stray tap on a backdrop or an Escape used to throw the
+   whole thing away. It also keeps a draft, so a closed tab or a misclick is recoverable. */
+const reDraftKey = () => 'forge90.redraft' + (typeof AUTH !== 'undefined' && AUTH && AUTH.user ? ':' + AUTH.user.id : '');
+function reSaveDraft() { if (!RE) return; try { localStorage.setItem(reDraftKey(), JSON.stringify(RE)); } catch (e) { /* full or blocked */ } }
+function reClearDraft() { try { localStorage.removeItem(reDraftKey()); } catch (e) { /* ignore */ } }
+function reClearDraftKeep() { reSaveDraft(); }          // cancelling keeps the draft on purpose
+function reDraft() { try { const d = JSON.parse(localStorage.getItem(reDraftKey()) || 'null'); return d && typeof d === 'object' && ('ing' in d) ? d : null; } catch (e) { return null; } }
+function reOpen() {
+  reSaveDraft();
+  if (location.hash.replace(/^#\/?/, '').split('/')[0] !== 'recipe-edit') { UI.reReturn = location.hash || '#/foods'; saveUI(); location.hash = '#/recipe-edit'; }
+  else renderRecipeEditor();
+}
+function reLeave() { const back = UI.reReturn || '#/foods'; RE = null; UI.reReturn = null; saveUI(); if (location.hash === back) render(); else location.hash = back; }
+function reResume() { const d = reDraft(); if (!d) { toast('That draft is gone'); render(); return; } RE = d; reOpen(); }
+function reDiscard() { RE = null; reClearDraft(); const back = UI.reReturn || '#/foods'; UI.reReturn = null; saveUI(); if (location.hash === back) render(); else location.hash = back; }
+window.addEventListener('beforeunload', ev => { if (RE && !RE._saving) { ev.preventDefault(); ev.returnValue = ''; } });
+/* Was a <select> listing all ~650 foods in subgroup optgroups, which is unusable on a phone
+   and slow to scan anywhere. Now a button that opens the same search used elsewhere. */
 function foodSelect(sel, i, sugg) {
-  const bySub = {}; Object.values(ING).forEach(g => (bySub[g.sub] = bySub[g.sub] || []).push(g));
-  const sg = (sugg || []).filter(id => ING[id]); const inSg = sg.includes(sel);
-  return `<select class="inp" data-re="ing-id" data-i="${i}">${ING[sel] ? '' : `<option value="" selected disabled>Choose a food…</option>`}${sg.length ? `<optgroup label="Best matches">${sg.map(id => `<option value="${id}" ${sel === id ? 'selected' : ''}>${esc(ING[id].n)}${foodAllowed(id) ? '' : ' (off)'}</option>`).join('')}</optgroup>` : ''}${FOOD_CATS.map(c => c.subs.map(([sid, l]) => { const fs = (bySub[sid] || []).sort((a, b) => a.n.localeCompare(b.n));
-    return fs.length ? `<optgroup label="${esc(c.icon + ' ' + c.name + ' · ' + l)}">${fs.map(g => `<option value="${g.id}" ${sel === g.id && !inSg ? 'selected' : ''}>${esc(g.n)}${foodAllowed(g.id) ? '' : ' (off)'}</option>`).join('')}</optgroup>` : ''; }).join('')).join('')}</select>`;
+  const g = ING[sel]; const sg = (sugg || []).filter(id => ING[id] && id !== sel).slice(0, 3);
+  return `<div class="re-food"><button type="button" class="inp re-food-b ${g ? '' : 'empty'}" data-act="re-ing-pick" data-i="${i}">
+      <span class="re-food-n">${g ? esc(g.n) + (foodAllowed(sel) ? '' : ' (off)') : 'Choose a food…'}</span>${icon('search')}</button>
+    ${sg.length ? `<div class="re-sugg">${sg.map(id => `<button type="button" class="btn sm ghost" data-act="re-ing-set" data-i="${i}" data-id="${id}" title="Suggested match">${esc(ING[id].n)}</button>`).join('')}</div>` : ''}</div>`;
 }
 /* food-only emoji dropdown */
 function emojiPickerHTML(cur) {
@@ -342,8 +363,20 @@ function cleanLinks(list) {
 function refreshTagChips() { const el = $('#re-tag-chips'); if (el) el.innerHTML = tagChipsHTML(); }
 const reAmtNote = y => `amounts for the whole recipe${+y >= 1 ? ` (all ${+y} serving${+y > 1 ? 's' : ''})` : ''}`;
 function renderRecipeEditor() {
-  const e = RE; const im = e.imp; const prevScroll = $('#modal .modal.re-modal') ? $('#modal .modal.re-modal').scrollTop : 0;
-  modal(`<div class="row"><h2 style="flex:1">${e.id ? 'Edit recipe' : im ? 'Review imported recipe' : 'New recipe'}</h2><button class="btn icon ghost" data-act="close-modal">${icon('x')}</button></div>
+  if (!RE) return;
+  reSaveDraft();
+  if (location.hash.replace(/^#\/?/, '').split('/')[0] !== 'recipe-edit') { reOpen(); return; }
+  const v = $('#view'); if (!v) return;
+  const y = window.scrollY;
+  v.innerHTML = recipeEditorHTML();
+  updateRecipePreview();
+  window.scrollTo(0, y);
+}
+function recipeEditorHTML() {
+  const e = RE; const im = e.imp;
+  return `<div class="re-page"><div class="page-head"><div class="t"><h1>${e.id ? 'Edit recipe' : im ? 'Review imported recipe' : 'New recipe'}</h1><p>Nothing is saved until you press Save. Your draft is kept if you navigate away.</p></div>
+      <div class="row wrap">${im && im.q ? `<button class="btn" data-act="re-skip" title="Don’t import this one and go to the next">Skip</button>` : ''}<button class="btn" data-act="re-cancel">${im && im.q ? 'Stop importing' : 'Cancel'}</button><button class="btn primary" data-act="re-save">${im ? (im.q && im.q.i < im.q.n ? 'Save & next' : 'Save recipe') : 'Save recipe'}</button></div></div>
+    <div class="card">
     ${im ? impBannerHTML() : ''}
     ${e.base ? `<div class="note" style="margin:10px 0">${icon('info')}<span>Editing a built-in recipe saves your version; you can reset it later.</span></div>` : ''}
     <div class="grid" style="grid-template-columns:86px 1fr;gap:12px;margin-top:12px">
@@ -367,9 +400,8 @@ function renderRecipeEditor() {
     <button class="btn sm" data-act="re-link-add" style="margin-top:6px">${icon('plus')}Add link</button>
     <div class="row wrap" style="margin-top:10px;gap:16px"><label class="small"><input type="checkbox" data-re="fixed" ${e.fixed ? 'checked' : ''}> Fixed portion (don’t resize daily)</label>
       <label class="small"><input type="checkbox" data-re="rotate" ${e.rotate ? 'checked' : ''}> Include in the auto-plan for future weeks</label></div>
-    <div class="row" style="justify-content:flex-end;margin-top:14px">${im && im.q ? `<button class="btn" data-act="re-skip" style="margin-right:auto" title="Don’t import this one and go to the next">Skip</button>` : ''}<button class="btn" data-act="close-modal">${im && im.q ? 'Stop importing' : 'Cancel'}</button><button class="btn primary" data-act="re-save">${im ? (im.q && im.q.i < im.q.n ? 'Save & next' : 'Save recipe') : 'Save recipe'}</button></div>`, 're-modal');
-  updateRecipePreview();
-  if (prevScroll) { const md = $('#modal .modal.re-modal'); if (md) md.scrollTop = prevScroll; }
+    <div class="row wrap" style="justify-content:flex-end;margin-top:16px;gap:8px">${im && im.q ? `<button class="btn" data-act="re-skip" style="margin-right:auto">Skip</button>` : ''}<button class="btn" data-act="re-cancel">${im && im.q ? 'Stop importing' : 'Cancel'}</button><button class="btn primary big" data-act="re-save">${im ? (im.q && im.q.i < im.q.n ? 'Save & next' : 'Save recipe') : 'Save recipe'}</button></div>
+    </div></div>`;
 }
 function updateRecipePreview() {
   const e = RE; const el = $('#re-preview'); if (!el) return;
@@ -384,23 +416,31 @@ function updateRecipePreview() {
     ${blocked.length ? `<div class="note warn" style="margin-top:8px">${icon('info')}<span>Uses foods you’ve turned off (${esc(blocked.join(', '))}) — it won’t be scheduled until they’re back on.</span></div>` : ''}`;
 }
 function saveRecipe() {
-  const e = RE; const name = e.name.trim();
-  if (!name) { toast('Give the recipe a name'); const n = $('#modal [data-re="name"]'); if (n) n.focus(); return; }
-  if (e.imp && !impValidate()) return;
+  const e = RE; const name = e.name.trim(); e._saving = true;
+  if (!name) { e._saving = false; toast('Give the recipe a name'); const n = $('[data-re="name"]'); if (n) n.focus(); return; }
+  if (e.imp && !impValidate()) { e._saving = false; return; }
   const ing = e.ing.filter(([id, a]) => ING[id] && +a > 0).map(([id, a]) => [id, +a]);
-  if (!ing.length) { toast('Add at least one ingredient'); return; }
+  if (!ing.length) { e._saving = false; toast('Add at least one ingredient'); return; }
   const cl = cleanLinks(e.links);
   const rec = { links: cl.links, name, emoji: e.emoji || '🍽️', cat: e.cat, yield: Math.max(1, Math.round(+e.yield || 1)), storage: e.storage, time: +e.time || 0,
     tags: (() => { const known = usedTags().map(([t]) => t); const out = []; e.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(t => { t = known.find(k => k.toLowerCase() === t.toLowerCase()) || t; if (!out.some(o => o.toLowerCase() === t.toLowerCase())) out.push(t); }); return out; })(), fixed: !!e.fixed, rotate: !!e.rotate, ing, steps: e.steps.split('\n').map(s => s.trim()).filter(Boolean) };
   if (e.id && e.base) S.recipeOverrides[e.id] = rec;
   else { const id = e.id || 'cr_' + Date.now().toString(36) + (e.imp ? Math.random().toString(36).slice(2, 5) : ''); S.customRecipes[id] = Object.assign(rec, { id }); }
-  if (e.imp) { impRemember(); rebuildCatalog(); saveState(); if (IMPQ) { IMPQ.done++; toast(`${name} imported`); impNext(); return; } closeModal(); render(); toast(`${name} imported — find it in Foods & recipes and the calendar library`); return; }
-  rebuildCatalog(); saveState(); closeModal(); render(); toast(`${name} saved — find it in the calendar library${cl.bad ? ` · skipped ${cl.bad} link${cl.bad > 1 ? 's' : ''} that ${cl.bad > 1 ? 'aren’t web addresses' : 'isn’t a web address'}` : ''}`);
+  reClearDraft();
+  if (e.imp) { impRemember(); rebuildCatalog(); saveState(); if (IMPQ) { IMPQ.done++; toast(`${name} imported`); impNext(); return; } reLeave(); toast(`${name} imported — find it in Foods & recipes and the calendar library`); return; }
+  rebuildCatalog(); saveState(); reLeave(); toast(`${name} saved — find it in the calendar library${cl.bad ? ` · skipped ${cl.bad} link${cl.bad > 1 ? 's' : ''} that ${cl.bad > 1 ? 'aren’t web addresses' : 'isn’t a web address'}` : ''}`);
 }
-function replaceRecipeEverywhere(rid) {
-  const r = RECIPE[rid]; let n = 0; const cat = r ? r.cat : null;
-  Object.values(S.plan).forEach(e => MEAL_SLOTS.forEach(slot => { if (e.m && e.m[slot] === rid) { e.m[slot] = pickSubstitute(cat || SLOT_CAT[slot], r ? r.yield : 1, n); n++; } }));
-  return n;
+/* cat/yld are passed in because the recipe may already be gone from the catalog by now.
+   A null substitute leaves the meal alone rather than blanking the day. */
+function replaceRecipeEverywhere(rid, cat0, yld0) {
+  const r = RECIPE[rid]; let n = 0, empty = false; const cat = cat0 || (r ? r.cat : null);
+  Object.values(S.plan).forEach(e => MEAL_SLOTS.forEach(slot => {
+    if (!e.m || e.m[slot] !== rid) return;
+    const sub = pickSubstitute(cat || SLOT_CAT[slot], yld0 || (r ? r.yield : 1), n);
+    if (sub == null) { empty = true; return; }
+    e.m[slot] = sub; n++;
+  }));
+  return { n, empty };
 }
 document.addEventListener('input', e => {
   const t = e.target;
@@ -417,20 +457,31 @@ document.addEventListener('input', e => {
   else if (k === 'fixed' || k === 'rotate') RE[k] = t.checked;
   else if (k !== 'ing-id') RE[k] = t.value;
   if (k === 'tags') refreshTagChips();
-  if (k === 'yield') { const h = $('#modal h3 .tiny'); if (h) h.textContent = '— ' + reAmtNote(RE.yield); }
-  updateRecipePreview(); if (RE.imp) impRefresh();
+  if (k === 'yield') { const h = $('.re-page h3 .tiny'); if (h) h.textContent = '— ' + reAmtNote(RE.yield); }
+  updateRecipePreview(); reSaveDraft(); if (RE.imp) impRefresh();
 });
 document.addEventListener('change', e => {
   const t = e.target; if (!t.dataset) return;
-  if (t.dataset.re === 'ing-id' && RE) { const i = +t.dataset.i; RE.ing[i][0] = t.value; const g = ING[t.value];
-    if (RE.ing[i][2]) impFoodChanged(i); else if (g && g.u && +RE.ing[i][1] > 20) RE.ing[i][1] = 1; renderRecipeEditor(); }
+
   if (t.dataset.re === 'cat' && RE && RE.imp) { RE.cat = t.value; impRefresh(); }
   if (t.dataset.re === 'fixed' || t.dataset.re === 'rotate') { if (RE) RE[t.dataset.re] = t.checked; }
   if (t.dataset.input === 'fe-basis') { const u = $('#modal .fe-unit'); if (u) u.classList.toggle('hidden', t.value !== 'u'); const pu = $('#fe-pk-unit'); if (pu) pu.textContent = (t.value === 'u' ? 'items' : t.value === 'ml' ? 'ml' : 'g') + ' per package'; }
   if (t.closest && t.closest('#modal form[data-form="food"]')) feDefHints();
 });
+function reSetIng(i, id) {
+  if (!RE || !RE.ing[i]) return;
+  RE.ing[i][0] = id; const g = ING[id];
+  if (RE.ing[i][2]) impFoodChanged(i); else if (g && g.u && +RE.ing[i][1] > 20) RE.ing[i][1] = 1;
+  renderRecipeEditor();
+}
 Object.assign(ACT, {
   'foods-tab': el => { UI.foodsTab = el.dataset.v; saveUI(); render(); },
+  're-ing-pick': el => foodByName('ing', null, +el.dataset.i),
+  're-ing-set': el => reSetIng(+el.dataset.i, el.dataset.id),
+  're-cancel': () => { if (!RE) { reLeave(); return; }
+    confirmBox('Leave without saving?', 'Your draft is kept, so you can pick it up again from Foods &amp; recipes.', 'Leave', () => { reClearDraftKeep(); reLeave(); }); },
+  're-resume': () => reResume(),
+  're-discard': () => confirmBox('Discard the draft?', 'The unsaved recipe is deleted.', 'Discard', () => reDiscard(), true),
   'rec-filter': el => { UI.recFilter = el.dataset.v; saveUI(); render(); },
   'fp-open': el => { const k = el.dataset.k; UI.fpOpen = UI.fpOpen || {}; UI.fpOpen[k] = !fpOpen(k); saveUI(); refreshFoodPrefs(); },
   'fp-all': el => { const v = el.dataset.v === '1'; UI.fpOpen = {}; FOOD_CATS.forEach(c => { UI.fpOpen['cat:' + c.id] = v; c.subs.forEach(([s]) => { UI.fpOpen[s] = v; }); }); saveUI(); refreshFoodPrefs(); },
@@ -438,8 +489,13 @@ Object.assign(ACT, {
   'recipe-edit': el => recipeEditor(el.dataset.rid),
   'recipe-dup': el => recipeEditor(el.dataset.rid, true),
   'recipe-reset': el => confirmBox('Reset recipe?', `Restore the built-in version of <b>${esc(RECIPE[el.dataset.rid].name)}</b>?`, 'Reset', () => { delete S.recipeOverrides[el.dataset.rid]; rebuildCatalog(); saveState(); render(); toast('Recipe reset'); }),
-  'recipe-del': el => { const r = RECIPE[el.dataset.rid]; confirmBox('Delete recipe?', `Delete <b>${esc(r.name)}</b>? Any planned servings are swapped for another ${r.cat} recipe.`, 'Delete', () => { delete S.customRecipes[r.id]; const n = replaceRecipeEverywhere(r.id); rebuildCatalog(); saveState(); render(); toast(`Deleted${n ? ` — swapped ${n} planned meal${n === 1 ? '' : 's'}` : ''}`); }, true); },
-  'recipe-off': el => { const id = el.dataset.k; if (S.recipeOff[id]) delete S.recipeOff[id]; else S.recipeOff[id] = true; invalidate(); const n = S.recipeOff[id] ? substitutePlan(maxISO(todayISO(), S.settings.startDate)) : 0; saveState(); render(); toast(`${RECIPE[id].name} ${S.recipeOff[id] ? 'turned off' : 'turned on'}${n ? ` — swapped ${n} upcoming meal${n === 1 ? '' : 's'}` : ''}`); },
+  'recipe-del': el => { const r = RECIPE[el.dataset.rid]; const cat = r.cat, yld = r.yield; confirmBox('Delete recipe?', `Delete <b>${esc(r.name)}</b>? Any planned servings are swapped for another ${r.cat} recipe.`, 'Delete', () => {
+    delete S.customRecipes[r.id]; rebuildCatalog();                    // drop it from RECIPES first, or it can be picked as its own replacement
+    const { n, empty } = replaceRecipeEverywhere(r.id, cat, yld); saveState(); render();
+    toast(empty ? `Deleted — no other ${cat} recipe is available, so those days kept it` : `Deleted${n ? ` — swapped ${n} planned meal${n === 1 ? '' : 's'}` : ''}`); }, true); },
+  'recipe-off': el => { const id = el.dataset.k; if (S.recipeOff[id]) delete S.recipeOff[id]; else S.recipeOff[id] = true; invalidate();
+    const sub = S.recipeOff[id] ? substitutePlan(maxISO(todayISO(), S.settings.startDate)) : { n: 0, empty: [] }; saveState(); render();
+    toast(sub.empty.length ? `${RECIPE[id].name} turned off — nothing is left for ${sub.empty.join(' and ')}, so those meals were kept` : `${RECIPE[id].name} ${S.recipeOff[id] ? 'turned off' : 'turned on'}${sub.n ? ` — swapped ${sub.n} upcoming meal${sub.n === 1 ? '' : 's'}` : ''}`); },
   fav: el => toggleFav(el.dataset.rid),
   'rec-dir': () => { UI.recDir = UI.recDir === 'asc' ? 'desc' : 'asc'; saveUI(); render(); },
   're-link-add': () => { RE.links.push({ title: '', url: '', site: '' }); const w = $('#re-links'); if (w) { w.innerHTML = reLinksHTML(); const ins = w.querySelectorAll('[data-re="link-url"]'); if (ins.length) ins[ins.length - 1].focus(); } },
@@ -447,12 +503,12 @@ Object.assign(ACT, {
   'emo-toggle': el => { const p = el.parentElement.querySelector('.emo-pop'); const open = !p.classList.contains('open'); p.classList.toggle('open', open); el.setAttribute('aria-expanded', String(open)); if (open) { const q = p.querySelector('input'); q.value = ''; q.dispatchEvent(new Event('input', { bubbles: true })); q.focus(); const on = p.querySelector('.emo.on'); if (on) on.scrollIntoView({ block: 'nearest' }); } },
   'emo-pick': el => { if (!RE) return; RE.emoji = el.dataset.e; const c = $('#modal .emo-cur'); if (c) c.textContent = RE.emoji; $$('#modal .emo').forEach(b => b.classList.toggle('on', b === el)); emoClose(); },
   're-tag': el => { const t = el.dataset.t; const list = reTagList(); const i = list.findIndex(x => x.toLowerCase() === t.toLowerCase()); if (i >= 0) list.splice(i, 1); else list.push(t);
-    RE.tags = list.join(', '); const inp = $('#modal [data-re="tags"]'); if (inp) inp.value = RE.tags; refreshTagChips(); },
+    RE.tags = list.join(', '); const inp = $('[data-re="tags"]'); if (inp) inp.value = RE.tags; refreshTagChips(); reSaveDraft(); },
   're-add': () => { RE.ing.push(['chicken_breast', 100]); renderRecipeEditor(); },
   're-rm': el => { RE.ing.splice(+el.dataset.i, 1); renderRecipeEditor(); },
   're-save': () => saveRecipe(),
   'food-new': () => foodEditor(null),
-  'food-new-inline': () => { const keep = RE; foodEditor(null); RE = keep; UI.returnToRecipe = true; },
+  'food-new-inline': () => { const keep = RE; FP = null; foodEditor(null); RE = keep; UI.returnToRecipe = true; },
   'food-edit': el => foodEditor(el.dataset.id),
   'fe-calc': () => { const f = $('#modal form[data-form="food"]'); const v = n => +f.elements[n].value || 0; f.elements.k.value = Math.round(v('p') * 4 + v('c') * 4 + v('f') * 9); feSuggest(); },
   'food-reset': el => { const id = el.dataset.id; if (!BASE_ING[id]) return; const keep = UI.returnToRecipe, re = RE;

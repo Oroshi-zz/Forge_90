@@ -8,6 +8,7 @@ Object.assign(IC, {
   play: '<path d="M7 4v16l13-8z"/>',
   pause: '<rect x="6" y="4.5" width="4" height="15" rx="1"/><rect x="14" y="4.5" width="4" height="15" rx="1"/>',
   reset: '<path d="M3 12a9 9 0 1 0 2.64-6.36L3 8.3"/><path d="M3 3v5.3h5.3"/>',
+  stop: '<rect x="5.5" y="5.5" width="13" height="13" rx="2"/>',
   bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   vol: '<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/>',
   mute: '<path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m22 9-6 6M16 9l6 6"/>'
@@ -75,11 +76,34 @@ document.addEventListener('pointerdown', () => { if (!AC || AC.state === 'suspen
 /* ---------------- rest timer ---------------- */
 const RT = { d: null, dur: 90, left: 90000, run: false, paused: false, endAt: 0, cued: false, flash: false };
 let rtT = null;
+/* When the rest ends the alarm repeats until it's stopped — one chime is easy to miss
+   mid-set. The cap is a backstop for a phone left in a bag, not a feature. */
+let rtAlarmT = null, rtAlarmAt = 0;
+const RT_ALARM_MAX = 120000;
+function rtAlarmStop() {
+  if (!rtAlarmT) return;
+  clearInterval(rtAlarmT); rtAlarmT = null; soundStop();
+  if (navigator.vibrate) try { navigator.vibrate(0); } catch (e) { /* not supported */ }
+}
+function rtAlarmGo() {
+  rtAlarmStop(); rtAlarmAt = performance.now();
+  const x = restSoundOf(restSoundId());
+  let first = true;
+  const beat = () => {
+    if (!RT.flash) { rtAlarmStop(); return; }
+    if (performance.now() - rtAlarmAt > RT_ALARM_MAX) { rtIdle(); rtPaint(true); return; }
+    if (x.play && !(first && RT.cued)) soundPlay(x.id, 0);      // a lead-in sound is already ringing on the first beat
+    buzz([220, 120, 220]); first = false;
+  };
+  beat();
+  rtAlarmT = setInterval(beat, Math.max(1500, ((x.dur || 0) + 0.9) * 1000));
+}
 function mmss(ms) { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
 const restFor = row => (S.settings.restPlan !== false && row && +row.rest) || (+S.settings.restDef || 90);
 const rtLeft = () => RT.run ? Math.max(0, RT.endAt - performance.now()) : RT.left;
 const rtBusy = () => RT.run || RT.paused;
 function rtIdle(row, keepSound) {
+  rtAlarmStop();
   clearInterval(rtT); Object.assign(RT, { dur: restFor(row || woRow()), run: false, paused: false, cued: false, flash: false }); RT.left = RT.dur * 1000;
   if (!keepSound) soundStop();
 }
@@ -102,17 +126,18 @@ function rtTick() {
   const left = RT.endAt - performance.now(), x = restSoundOf(restSoundId()), lead = x.lead || 0;
   if (!RT.cued && left <= lead * 1000 + 150) { RT.cued = true; if (x.play) soundPlay(x.id, Math.max(0, left / 1000 - lead)); }
   if (left > 0) { rtPaint(false); return; }
-  clearInterval(rtT); Object.assign(RT, { run: false, paused: false, left: 0, flash: true }); buzz([220, 120, 220]);
+  clearInterval(rtT); Object.assign(RT, { run: false, paused: false, left: 0, flash: true });
+  rtAlarmGo();                                                                        // keeps sounding until Stop
   rtPaint(true); if (!(WO && WO.open)) toast('Rest over — back to your workout');     // in workout mode the timer bar itself turns green
-  setTimeout(() => { if (RT.flash) { rtIdle(null, true); rtPaint(true); } }, 2600);
 }
 function rtHTML() {
   const st = RT.flash ? 'done' : RT.run ? 'run' : RT.paused ? 'paused' : 'idle', left = rtLeft();
   const lbl = { done: 'Rest over · go', run: 'Resting', paused: 'Paused', idle: 'Rest · ready' }[st];
+  const go = st === 'done' ? { ic: 'stop', a: 'Stop the alarm', cls: ' stop' } : { ic: RT.run ? 'pause' : 'play', a: `${RT.run ? 'Pause' : 'Start'} the rest timer`, cls: '' };
   return `<div class="rt ${st}" id="rt" role="timer" aria-label="Rest timer ${mmss(left)}">
     <div class="rt-l"><small>${lbl}</small><b class="num" id="rt-v">${mmss(left)}</b></div>
     <div class="rt-b"><button type="button" data-act="rt-add" data-v="5" aria-label="Add 5 seconds">+5 s</button><button type="button" data-act="rt-add" data-v="30" aria-label="Add 30 seconds">+30 s</button>
-      <button type="button" class="go" data-act="rt-go" aria-label="${RT.run ? 'Pause' : 'Start'} the rest timer">${icon(RT.run ? 'pause' : 'play')}</button><button type="button" data-act="rt-reset" aria-label="Reset the rest timer">${icon('reset')}</button></div>
+      <button type="button" class="go${go.cls}" data-act="rt-go" aria-label="${go.a}">${icon(go.ic)}</button><button type="button" data-act="rt-reset" aria-label="Reset the rest timer">${icon('reset')}</button></div>
     <i class="bar" id="rt-bar" style="width:${st === 'idle' || !RT.dur ? 0 : (1 - left / (RT.dur * 1000)) * 100}%"></i></div>`;
 }
 function rtPaint(full) {
@@ -122,9 +147,13 @@ function rtPaint(full) {
 }
 // small pill above the tab bar while a rest runs and the workout screen is closed
 function rtPill() {
-  let p = $('#rt-pill'); const show = rtBusy() && !(WO && WO.open) && !!$('#view');
-  if (!p) { if (!show) return; p = document.createElement('button'); p.type = 'button'; p.id = 'rt-pill'; p.className = 'rt-pill'; p.dataset.act = 'wo-resume'; document.body.appendChild(p); }
-  p.hidden = !show; if (show) p.innerHTML = `${icon('clock')}<b class="num">${mmss(rtLeft())}</b><span>${RT.paused ? 'paused' : 'rest'} · back to workout</span>`;
+  let p = $('#rt-pill'); const show = (rtBusy() || RT.flash) && !(WO && WO.open) && !!$('#view');
+  if (!p) { if (!show) return; p = document.createElement('button'); p.type = 'button'; p.id = 'rt-pill'; p.className = 'rt-pill'; document.body.appendChild(p); }
+  p.hidden = !show; if (!show) return;
+  p.dataset.act = RT.flash ? 'rt-go' : 'wo-resume';          // while it's going off, the pill is the stop button
+  p.classList.toggle('done', !!RT.flash);
+  p.innerHTML = RT.flash ? `${icon('stop')}<b>Rest over</b><span>tap to stop</span>`
+    : `${icon('clock')}<b class="num">${mmss(rtLeft())}</b><span>${RT.paused ? 'paused' : 'rest'} · back to workout</span>`;
 }
 
 /* ---------------- workout mode ---------------- */
@@ -279,7 +308,7 @@ Object.assign(ACT, {
   'wo-edit-x': () => { if (WO) { WO.edit = null; woRender(); } },
   'wo-unlog': () => { const r = woRow(); if (!r || WO.edit == null) return; const arr = setsOf(WO.d, r.ex.id); if (arr[WO.edit]) arr[WO.edit] = {}; while (arr.length && !(arr[arr.length - 1] && +arr[arr.length - 1].r > 0)) arr.pop(); WO.edit = null; saveState(); woRender(); toast('Set removed'); },
   'wo-finish': () => { if (!WO) return; S.done[WO.d] = true; saveState(); WO.done = true; rtIdle(); woRender(); },
-  'rt-go': () => { if (RT.run) rtPause(); else rtStart(); },
+  'rt-go': () => { if (RT.flash) { rtIdle(); rtPaint(true); return; } if (RT.run) rtPause(); else rtStart(); },
   'rt-reset': () => { rtIdle(); rtPaint(true); },
   'rt-add': el => rtAdd(+el.dataset.v),
   'rest-set': () => modal(restSettingsHTML(true), 'sm rest-modal'),

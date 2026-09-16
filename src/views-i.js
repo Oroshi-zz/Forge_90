@@ -129,11 +129,17 @@ function bcDecodeImage(img) {
 }
 
 /* ---------- the shared product list ---------- */
-let SHARED_REV = 0, SHARED_LOADED = false;
+let SHARED_REV = 0, SHARED_LOADED = false, SHARED_TRY = 0, SHARED_T = null, SHARED_WARNED = false;
 const gtinNorm = code => { code = String(code || '').replace(/\D/g, ''); if (code.length === 12) code = '0' + code; return code; };
 async function loadSharedFoods() {
   if (AUTH.mode !== 'server') { SHARED_LOADED = true; return; }
-  try { const r = await api('GET', '/api/foods/shared'); SHARED_FOODS = r.foods || {}; SHARED_REV = r.rev || 0; SHARED_LOADED = true; if (S) { rebuildCatalog(); render(); } } catch (e) { /* offline: keep what we have */ }
+  try { const r = await api('GET', '/api/foods/shared'); SHARED_FOODS = r.foods || {}; SHARED_REV = r.rev || 0; SHARED_LOADED = true; SHARED_TRY = 0; if (S) { rebuildCatalog(); render(); } }
+  catch (e) {
+    /* Without this list the pantry stops being consumed and scanned foods vanish from recipes,
+       so keep retrying rather than sitting broken for the rest of the session. */
+    if (SHARED_TRY < 6) { const wait = Math.min(30000, 1000 * Math.pow(2, SHARED_TRY++)); clearTimeout(SHARED_T); SHARED_T = setTimeout(loadSharedFoods, wait); }
+    else if (!SHARED_WARNED) { SHARED_WARNED = true; toast('Couldn’t load the shared food list — the pantry won’t update until it loads. Reload to try again.'); }
+  }
 }
 function sharedAdd(food) { SHARED_FOODS[food.id] = food; rebuildCatalog(); }
 const foodLabel = id => { const g = ING[id]; return g ? g.n + (g.brand ? ' · ' + g.brand : '') : id; };
@@ -374,22 +380,24 @@ function qpListHTML(q, act, d) {
    The camera isn't always the way in: a lot of what people add is already on the food list,
    and loose produce has no barcode at all. Same picker, three destinations. */
 let FP = null;              // { mode: 'pantry' | 'today' | 'foods', d }
-function foodByName(mode, date) {
+function foodByName(mode, date, ingIndex) {
   scanStop();               // release the camera if we came from the scanner
-  FP = { mode, d: date || (SCN && SCN.date) || todayISO() };
-  const title = mode === 'pantry' ? 'Add to the pantry by name' : mode === 'foods' ? 'Find a food' : `Add food to ${FP.d === todayISO() ? 'today' : fmtDate(FP.d, { weekday: 'short', month: 'short', day: 'numeric' })}`;
+  FP = { mode, d: date || (SCN && SCN.date) || todayISO(), i: ingIndex };
+  const title = mode === 'pantry' ? 'Add to the pantry by name' : mode === 'foods' ? 'Find a food' : mode === 'ing' ? 'Pick an ingredient' : `Add food to ${FP.d === todayISO() ? 'today' : fmtDate(FP.d, { weekday: 'short', month: 'short', day: 'numeric' })}`;
   const hint = mode === 'pantry' ? 'Pick a food to put one package in the pantry — handy for loose produce and anything without a barcode.'
     : mode === 'foods' ? 'Search everything on the food list, including products other people scanned. Pick one to see or edit it.'
+    : mode === 'ing' ? 'Search the whole food database. Your recipe is untouched while this is open.'
     : 'Search the food list and anything scanned on this server.';
   modal(`<div class="qp-m"><div class="row"><h2 style="flex:1">${esc(title)}</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
     <div class="tiny muted" style="margin:2px 0 8px">${esc(hint)}</div>
-    <div class="row" style="gap:8px;margin-bottom:10px"><input class="inp" type="search" id="fp-q" data-input="fp-q" placeholder="Search foods and scanned products…" style="flex:1;min-width:0" autocomplete="off">${mode !== 'foods' && canScan() ? `<button type="button" class="btn" data-act="fp-scan">${icon('scan')}Scan</button>` : ''}</div>
+    <div class="row" style="gap:8px;margin-bottom:10px"><input class="inp" type="search" id="fp-q" data-input="fp-q" placeholder="Search foods and scanned products…" style="flex:1;min-width:0" autocomplete="off">${mode !== 'foods' && mode !== 'ing' && canScan() ? `<button type="button" class="btn" data-act="fp-scan">${icon('scan')}Scan</button>` : ''}</div>
     <div class="qp-list" id="fp-list">${qpListHTML('', 'fp-pick', FP.d)}</div>
-    ${mode === 'foods' ? `<div class="row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="btn" data-act="food-new-from-pick">${icon('plus')}None of these — create a new food</button></div>` : ''}</div>`, 'qp-modal');
+    ${mode === 'foods' || mode === 'ing' ? `<div class="row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="btn" data-act="${mode === 'ing' ? 'food-new-inline' : 'food-new-from-pick'}">${icon('plus')}None of these — create a new food</button></div>` : ''}</div>`, 'qp-modal');
   const q = $('#fp-q'); if (q && window.matchMedia && matchMedia('(pointer: fine)').matches) q.focus();
 }
 function fpPick(id) {
-  const m = FP ? FP.mode : 'today'; const d = FP ? FP.d : todayISO(); FP = null;
+  const m = FP ? FP.mode : 'today'; const d = FP ? FP.d : todayISO(); const ii = FP ? FP.i : null; FP = null;
+  if (m === 'ing') { closeModal(); reSetIng(ii, id); return; }
   if (m === 'foods') { const g = ING[id]; closeModal(); if (g && g.shared) sharedFoodEditor(id); else foodEditor(id); return; }
   if (m === 'pantry') {
     if (SCN && SCN.mode === 'pantry') { scanUse(id); openScannerKeep(); return; }   // straight back to the scanner with the session list
@@ -431,8 +439,14 @@ function qaSave() {
 function extraRemove(d, i) { const e = S.plan[d]; if (!e || !e.x || !e.x[i]) return; pushUndo('remove added food'); const x = e.x.splice(i, 1)[0]; if (!e.x.length) delete e.x; saveState(); render(); toast(`${ING[x.id] ? ING[x.id].n : 'Item'} removed`, true); }
 // foods added to a day (quick add / scan); slot null = every slot, labelled
 function extrasHTML(day, slot) {
-  const xs = (day.extras || []).filter(x => !slot || x.slot === slot); if (!xs.length) return '';
-  return `<div class="xtras ${slot ? '' : 'all'}">${xs.map(x => `<span class="xtra">${icon('plus')}<span class="xtra-t">${slot ? '' : `<span class="xtra-s">${SLOT_LABEL[x.slot] || ''}</span>`}${esc(ING[x.id].n)} <b>${esc(amountText(x.id, x.amt).main)}</b> <span class="muted num">${fmt(x.m.k)} kcal · ${fmt(x.m.p)}P</span></span><button type="button" class="xtra-x" data-act="x-rm" data-d="${day.date}" data-i="${x.i}" title="Remove" aria-label="Remove ${esc(ING[x.id].n)}">${icon('x')}</button></span>`).join('')}</div>`;
+  const xs = (day.extras || []).filter(x => !slot || x.slot === slot);
+  /* A product an admin deleted drops out of day.extras, but its record stays on the day with
+     no way to clear it. Show those as orphans so they can be removed. */
+  const raw = ((S.plan[day.date] || {}).x || []);
+  const orphans = raw.map((x, i) => ({ x, i })).filter(({ x, i }) => x && !ING[x.id] && (!slot || x.slot === slot) && !xs.some(e => e.i === i));
+  if (!xs.length && !orphans.length) return '';
+  return `<div class="xtras ${slot ? '' : 'all'}">${xs.map(x => `<span class="xtra">${icon('plus')}<span class="xtra-t">${slot ? '' : `<span class="xtra-s">${SLOT_LABEL[x.slot] || ''}</span>`}${esc(ING[x.id].n)} <b>${esc(amountText(x.id, x.amt).main)}</b> <span class="muted num">${fmt(x.m.k)} kcal · ${fmt(x.m.p)}P</span></span><button type="button" class="xtra-x" data-act="x-rm" data-d="${day.date}" data-i="${x.i}" title="Remove" aria-label="Remove ${esc(ING[x.id].n)}">${icon('x')}</button></span>`).join('')}
+    ${orphans.map(({ i }) => `<span class="xtra gone">${icon('info')}<span class="xtra-t">${slot ? '' : `<span class="xtra-s">${SLOT_LABEL[raw[i].slot] || ''}</span>`}<span class="muted">Food no longer on the list</span></span><button type="button" class="xtra-x" data-act="x-rm" data-d="${day.date}" data-i="${i}" title="Remove" aria-label="Remove">${icon('x')}</button></span>`).join('')}</div>`;
 }
 
 /* ---------- favorite foods ---------- */
@@ -508,8 +522,11 @@ function pantryCatchUp() {
   if (S.pantryThrough >= y) return;
   const A = computeAll(); const use = {}; let d = addDays(S.pantryThrough, 1); let n = 0;
   while (d <= y && n < 120) { if (A.days[d]) Object.entries(dayUse(A, d, true)).forEach(([id, a]) => use[id] = (use[id] || 0) + a); d = addDays(d, 1); n++; }
-  const prev = S.pantryThrough; S.pantryThrough = y;
-  if (pantryShared()) { _pantryBusy = true; pantryOps([], { through: y, use }).then(ok => { if (!ok) S.pantryThrough = prev; }).finally(() => { _pantryBusy = false; }); return; }
+  // only mark off the days actually accounted for; a longer gap catches up on the next pass
+  const through = addDays(d, -1);
+  const prev = S.pantryThrough; S.pantryThrough = through < y ? through : y;
+  const y2 = S.pantryThrough;
+  if (pantryShared()) { _pantryBusy = true; pantryOps([], { through: y2, use }).then(ok => { if (!ok) S.pantryThrough = prev; }).finally(() => { _pantryBusy = false; }); return; }
   S.pantry = useFifo((S.pantry || []).map(x => Object.assign({}, x)), use); saveState();
 }
 // sharing turned on/off (or the sync ended): move items between the personal and the shared pantry
