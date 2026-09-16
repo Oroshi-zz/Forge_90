@@ -271,7 +271,7 @@ function serveStatic(req, res, pathname) {
 /* ---------- routes ---------- */
 const routes = [];
 const route = (method, pattern, opts, fn) => { if (typeof opts === 'function') { fn = opts; opts = {}; } routes.push({ method, re: new RegExp('^' + pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)') + '$'), opts, fn }); };
-function publicConfig() { const s = db.settings; return { appName: s.appName, defaults: s.defaults, inviteDays: INVITE_DAYS, version: VERSION, pwMinLength: s.security.pwMinLength, pwRequireMix: !!s.security.pwRequireMix, emailReady: emailReady(), resetMinutes: RESET_MINUTES, rememberDays: s.security.rememberDays }; }
+function publicConfig() { const s = db.settings; return { appName: s.appName, defaults: s.defaults, inviteDays: INVITE_DAYS, version: VERSION, pwMinLength: s.security.pwMinLength, pwRequireMix: !!s.security.pwRequireMix, emailReady: emailReady(), resetMinutes: RESET_MINUTES, rememberDays: s.security.rememberDays, bg: bgMap() }; }
 
 route('GET', '/api/health', async (req, res) => send(res, 200, { ok: true, version: VERSION, uptime: Math.round(process.uptime()) }));
 route('GET', '/api/session', async (req, res, ctx) => send(res, 200, { user: ctx.me ? pubUser(ctx.me.u) : null, config: publicConfig() }));
@@ -375,6 +375,14 @@ route('PATCH', '/api/account', { auth: true, allowMustChange: true }, async (req
 /* ---------- profile pictures: DATA/avatars/<userId>-<version>.<ext> — a new upload deletes the old file ---------- */
 const AVATAR_DIR = path.join(DATA, 'avatars'); fs.mkdirSync(AVATAR_DIR, { recursive: true });
 const AVATAR_MAX = 512 * 1024;
+/* Backgrounds belong to the server, not to a person: the owner sets the look and everyone
+   sees it. Stored as files rather than in the state blob, which is pushed whole on every save. */
+const BG_DIR = path.join(DATA, 'backgrounds'); fs.mkdirSync(BG_DIR, { recursive: true });
+const BG_MAX = 400 * 1024;
+const BG_SECTIONS = ['dashboard', 'calendar', 'day', 'workouts', 'diet', 'foods', 'grocery', 'progress', 'settings'];
+const bgPath = sec => { const b = (db.settings.bg || {})[sec]; return b && b.f ? path.join(BG_DIR, path.basename(String(b.f))) : null; };
+function removeBg(sec) { const f = bgPath(sec); if (f) { try { fs.unlinkSync(f); } catch (e) { /* already gone */ } } if (db.settings.bg) delete db.settings.bg[sec]; }
+const bgMap = () => { const out = {}; Object.entries(db.settings.bg || {}).forEach(([k, b]) => { if (b && b.v) out[k] = b.u ? { v: b.v, u: b.u } : { v: b.v }; }); return out; };
 const AVATAR_TYPES = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
 const avatarPath = u => u && u.avatar ? path.join(AVATAR_DIR, path.basename(String(u.avatar))) : null;
 function removeAvatar(u) { const f = avatarPath(u); if (f) { try { fs.unlinkSync(f); } catch (e) { /* already gone */ } } delete u.avatar; delete u.avatarV; }
@@ -399,6 +407,41 @@ route('PUT', '/api/account/avatar', { auth: true, maxBody: 1024 * 1024 }, async 
 route('DELETE', '/api/account/avatar', { auth: true }, async (req, res, ctx) => {
   const u = ctx.me.u; if (u.avatar) { removeAvatar(u); saveDb(); audit('avatar_changed', { userId: u.id, ip: clientIp(req), detail: 'removed' }); }
   send(res, 200, { user: pubUser(u) });
+});
+route('PUT', '/api/backgrounds/:sec', { auth: true, maxBody: 1024 * 1024 }, async (req, res, ctx) => {
+  if (!isOwner(ctx.me.u)) err(403, 'Only the owner can change the backgrounds.');
+  const sec = String(ctx.params.sec); if (!BG_SECTIONS.includes(sec)) err(400, 'Unknown section.');
+  if (ctx.body.url != null) {                                // a link costs no storage and is served from wherever it lives
+    const u = String(ctx.body.url).trim();
+    if (!/^https:\/\/[^\s<>"']{3,500}$/i.test(u)) err(400, 'Enter a full https link to an image.');
+    removeBg(sec); db.settings.bg = db.settings.bg || {}; db.settings.bg[sec] = { u, v: Date.now().toString(36) }; saveDb();
+    audit('background_changed', { userId: ctx.me.u.id, ip: clientIp(req), detail: sec + ' (link)' });
+    return send(res, 200, { bg: bgMap() });
+  }
+  const m = String(ctx.body.data || '').match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/); if (!m) err(400, 'Upload a JPEG, PNG or WebP image.');
+  const buf = Buffer.from(m[2], 'base64'); if (!buf.length) err(400, 'That image is empty.');
+  if (buf.length > BG_MAX) err(413, 'That image is too large (400 KB max after resizing). Use a smaller photo, or link to one with URL.');
+  const ext = imageExt(buf); if (!ext) err(400, 'That file isn’t a JPEG, PNG or WebP image.');
+  const v = Date.now().toString(36); const name = `${sec}-${v}.${ext}`;
+  writeAtomic(path.join(BG_DIR, name), buf);
+  removeBg(sec);                                            // the old image is deleted, not kept
+  db.settings.bg = db.settings.bg || {}; db.settings.bg[sec] = { f: name, v }; saveDb();
+  audit('background_changed', { userId: ctx.me.u.id, ip: clientIp(req), detail: sec });
+  send(res, 200, { bg: bgMap() });
+});
+route('DELETE', '/api/backgrounds/:sec', { auth: true }, async (req, res, ctx) => {
+  if (!isOwner(ctx.me.u)) err(403, 'Only the owner can change the backgrounds.');
+  const sec = String(ctx.params.sec); if (!BG_SECTIONS.includes(sec)) err(400, 'Unknown section.');
+  if ((db.settings.bg || {})[sec]) { removeBg(sec); saveDb(); audit('background_changed', { userId: ctx.me.u.id, ip: clientIp(req), detail: sec + ' reset' }); }   // a link has no file, but still has an entry
+  send(res, 200, { bg: bgMap() });
+});
+route('GET', '/api/background/:sec', { auth: true }, async (req, res, ctx) => {
+  const sec = String(ctx.params.sec); const b = (db.settings.bg || {})[sec]; const f = bgPath(sec);
+  if (!f || (ctx.query.v && b && ctx.query.v !== b.v)) err(404, 'No background.');
+  let buf; try { buf = fs.readFileSync(f); } catch (e) { err(404, 'No background.'); }
+  const type = AVATAR_TYPES[path.extname(f).slice(1)] || 'application/octet-stream';
+  res.writeHead(200, Object.assign({}, SEC_HEADERS, { 'Content-Type': type, 'Content-Length': buf.length, 'Cache-Control': 'private, max-age=31536000, immutable', 'Content-Security-Policy': "default-src 'none'" }));
+  res.end(buf);
 });
 route('GET', '/api/avatar/:id', { auth: true }, async (req, res, ctx) => {
   const u = userById(ctx.params.id); const f = avatarPath(u); if (!f || (ctx.query.v && ctx.query.v !== u.avatarV)) err(404, 'No picture.');   // an old version's URL stops working once it's replaced

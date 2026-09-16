@@ -364,7 +364,10 @@ function admTabHTML() {
       <div class="field"><label>App name (shown in emails)</label><input class="inp" name="appName" value="${esc(st.appName)}" maxlength="40"></div>
       <div class="field"><label>Default theme for new accounts</label><select class="inp" name="theme">${['dark', 'light', 'system'].map(v => `<option ${st.defaults.theme === v ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
       <div class="field" style="grid-column:1/-1"><label>App address <span class="muted" style="font-weight:500">— used for the links in invite and reset emails</span></label><input class="inp" name="appUrl" value="${esc(st.appUrl)}" placeholder="${esc(st.envAppUrl || location.origin)}"><span class="tiny muted">Set this to the address people open FORGE 90 at (for example http://192.168.1.20:8090 or https://forge.example.com). If it’s blank, links use ${esc(st.envAppUrl || 'the address in each request')}.</span></div></div>
-      <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" type="submit">Save</button></div></form>`; }
+      <div class="row" style="justify-content:flex-end;margin-top:12px"><button class="btn primary" type="submit">Save</button></div></form>
+      ${AUTH.user && AUTH.user.owner ? `<div style="height:16px"></div><div class="card"><div class="card-h"><h2>Background images</h2><span class="pill own">Owner</span></div>
+        <div class="small sub" style="margin-top:-4px">Everyone signed in to this server sees these behind the glass. They are stored as files on the server, not in anyone's plan, so they cost nothing to sync. Each person sets how visible they are in their own Appearance settings.</div>
+        ${bgImagesHTML()}</div>` : ''}`; }
   if (t === 'email') { const e = st.email;
     const warn = (e.warnings || []).length ? `<div class="note warn" style="margin-bottom:14px">${icon('info')}<span><b>Deliverability</b><ul style="margin:6px 0 0;padding-left:18px">${e.warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul></span></div>` : '';
     return `<div class="grid g-split"><form data-form="adm-email" class="card"><div class="card-h"><h2>Outgoing email (SMTP)</h2>${e.ready ? '<span class="pill acc">Ready</span>' : '<span class="pill warn-pill">Not set up</span>'}</div>${warn}<div class="grid g2" style="gap:14px">

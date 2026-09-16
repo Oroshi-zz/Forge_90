@@ -45,10 +45,9 @@ function viewWorkouts() {
         ${e.custom ? `<button class="ex-edit" data-act="ex-edit" data-id="${e.id}" title="Edit exercise" aria-label="Edit ${esc(e.name)}">${icon('edit')}</button>` : ''}</div>`; }).join('')}
       <button class="ex-card ex-add" data-act="ex-new" data-group="${g === 'Rear delts' ? 'Shoulders' : g}" aria-label="Add a ${g.toLowerCase()} exercise"><span class="plus">${icon('plus')}</span><span>Add ${g === 'Rear delts' ? 'rear delt' : g.toLowerCase()} exercise</span></button></div></div>`; }).join('');
   const libCard = `<div class="card ${collCls('lib')}" data-coll="lib"><div class="card-h">${collHead('lib', 'Exercise library', `<span class="muted small">Hover for step-by-step form · switch exercises on or off · add your own with the + card</span>`)}</div><div class="coll-body">
-      <div class="note" style="margin-bottom:14px">${icon('info')}<span>Switching an exercise off removes it from the rotation from this plan week on (next week if you’ve already logged it this week); past sessions keep what you did. Every muscle group keeps at least one exercise on — if every variation for a slot is off, the plan borrows another switched-on exercise for the same muscles. Research picks start switched off; hover one to see why it’s included.</span></div>${lib}</div></div>`;
+      <div class="note" style="margin-bottom:14px">${icon('info')}<span>Switching an exercise off removes it from the rotation from this plan week on (next week if you’ve already logged it this week); past sessions keep what you did. Every muscle group keeps at least one exercise on — if every variation for a slot is off, the plan borrows another switched-on exercise for the same muscles. Research picks start switched off; hover one to see why it’s included.</span></div>${lib}${cardioLibHTML()}</div></div>`;
   return `<div class="page-head"><div class="t"><h1>Workout plan</h1><p>A 90-day launch, then repeating 13-week cycles · ${S.settings.trainDays.length} training day${S.settings.trainDays.length === 1 ? '' : 's'} a week (change it below or in <a href="#/settings">Settings</a>) · Push / Pull / Legs — push and pull never share a session. Every muscle group rotates through 3+ exercise variations.</p></div></div>
-    ${stylesCardHTML(true)}<div style="height:16px"></div>
-    ${trainingDaysCardHTML(true)}<div style="height:16px"></div>
+    ${trainingCardHTML(true)}<div style="height:16px"></div>
     <section class="${collCls('cycle1')}" data-coll="cycle1"><div class="coll-row">${collHead('cycle1', 'Cycle 1 · the 90-day launch')}</div><div class="coll-body"><div class="grid g4">${phaseCards}</div></div></section><div style="height:18px"></div>
     <section class="${collCls('cycle2')}" data-coll="cycle2"><div class="coll-row">${collHead('cycle2', 'Cycle 2 onward · repeats every 13 weeks', `<span class="pill">Next: ${fmtDate(cycleStartDate(2), { month: 'short', day: 'numeric', year: 'numeric' })}</span>`)}</div><div class="coll-body">
     <div class="grid g4">${contCards}</div>
@@ -444,9 +443,10 @@ const STYLE_DEFS = [
   ['hypertrophy', 'Hypertrophy', 'flame', 'Moderate loads for 8 to 20 reps with shorter rests. Trains how much muscle you carry.'],
   ['cardio', 'Cardio', 'heart', 'Adds cardio sessions to the plan, on the days without a lifting session by default.']
 ];
-function stylesCardHTML(coll) {
+function trainingCardHTML(coll) {
   const st = styles(); const cp = cardioPlan(); const on = Object.keys(st).filter(k => st[k]);
-  const pill = `<span class="pill acc">${on.length ? on.map(k => (STYLE_DEFS.find(s => s[0] === k) || [, k])[1]).join(' · ') : 'None'}</span>`;
+  const days = S.settings.trainDays.length;
+  const pill = `<span class="pill acc">${on.length ? on.map(k => (STYLE_DEFS.find(s => s[0] === k) || [, k])[1]).join(' · ') : 'None'}</span><span class="pill" id="td-count">${days} day${days === 1 ? '' : 's'} / week</span>`;
   const sw = STYLE_DEFS.map(([k, label, ic, why]) => `<label class="set-tog"><span><b class="small">${icon(ic)}${label}</b><span class="tiny muted">${esc(why)}</span></span>
     <input type="checkbox" data-input="style" data-v="${k}" ${st[k] ? 'checked' : ''}><i class="switch ${st[k] ? 'on' : ''}" aria-hidden="true"><i></i></i></label>`).join('');
   const both = st.strength && st.hypertrophy;
@@ -457,12 +457,11 @@ function stylesCardHTML(coll) {
   const cd = st.cardio ? `<hr class="sep"><div class="grid g2" style="gap:12px">
       <div class="field"><label>Cardio sessions a week</label><div class="big-num"><button type="button" class="btn icon" data-act="cd-per" data-v="-1" aria-label="One fewer">${icon('minus')}</button><b class="num">${cp.perWeek}</b><button type="button" class="btn icon" data-act="cd-per" data-v="1" aria-label="One more">${icon('plus')}</button></div></div>
       <div class="field"><label>Minutes each</label><div class="big-num"><button type="button" class="btn icon" data-act="cd-dur" data-v="-5" aria-label="Five minutes less">${icon('minus')}</button><b class="num">${cp.minutes}</b><button type="button" class="btn icon" data-act="cd-dur" data-v="5" aria-label="Five minutes more">${icon('plus')}</button></div></div></div>
-    <div class="field" style="margin-top:12px"><label>Kinds of cardio to rotate</label>
-      <div class="cd-types">${CARDIO_GROUPS.map(g => `<div class="cd-grp"><span class="tiny muted">${esc(g)}</span><div class="row wrap" style="gap:6px">${CARDIO_IDS.filter(id => CARDIO[id].group === g).map(id => `<label class="chk-pill ${(cp.types || []).includes(id) ? 'on' : ''}"><input type="checkbox" data-input="cd-type" data-v="${id}" ${(cp.types || []).includes(id) ? 'checked' : ''}><span>${esc(CARDIO[id].name)}</span></label>`).join('')}</div></div>`).join('')}</div></div>
-    <div class="note" style="margin-top:12px">${icon('info')}<span>Cardio lands on days without a lifting session. If a week has fewer free days than sessions asked for, the rest double up on lifting days. A day's calorie target still comes from the lifting session alone, so cardio never moves your macros.</span></div>` : '';
-  const body = `<div class="set-togs">${sw}</div><div class="note" style="margin-top:12px">${icon('info')}<span>${esc(note)}</span></div>${cd}`;
-  return coll ? `<div class="card ${collCls('styles')}" data-coll="styles"><div class="card-h">${collHead('styles', 'Training style', pill)}</div><div class="coll-body">${body}</div></div>`
-    : `<div class="card"><div class="card-h"><h2>Training style</h2>${pill}</div>${body}</div>`;
+    <div class="note" style="margin-top:12px">${icon('info')}<span>${cardioTypes().length} kind${cardioTypes().length === 1 ? '' : 's'} in the rotation. Switch kinds on or off in the <a href="#/workouts">exercise library</a>, alongside the lifts.</span></div>
+    <div class="note" style="margin-top:10px">${icon('info')}<span>Cardio lands on days without a lifting session. If a week has fewer free days than sessions asked for, the rest double up on lifting days. A day's calorie target still comes from the lifting session alone, so cardio never moves your macros.</span></div>` : '';
+  const body = `<div class="set-togs">${sw}</div><div class="note" style="margin-top:12px">${icon('info')}<span>${esc(note)}</span></div>${cd}<hr class="sep">${trainingDaysBodyHTML()}`;
+  return coll ? `<div class="card ${collCls('styles')}" data-coll="styles"><div class="card-h">${collHead('styles', 'Training style & days', pill)}</div><div class="coll-body">${body}</div></div>`
+    : `<div class="card"><div class="card-h"><h2>Training style &amp; days</h2>${pill}</div>${body}</div>`;
 }
 /* Every style change re-plans from today forward: sessions, cardio placement and the rest-day
    snacks that follow whether a day has a lifting session. Past days are left as they happened. */
@@ -471,16 +470,29 @@ function styleApply(msg) {
   rescheduleWorkouts(from); saveState(); render();
   toast(`${msg} — plan updated from ${fmtDate(from)}`, true);
 }
-function trainingDaysCardHTML(coll) { const st = S.settings; const f = setField;
-  const pill = `<span class="pill acc" id="td-count">${st.trainDays.length} day${st.trainDays.length === 1 ? '' : 's'} / week</span>`;
-  const body = `<div class="row wrap td-pick">${[1, 2, 3, 4, 5, 6, 0].map(i => `<label class="td ${st.trainDays.includes(i) ? 'on' : ''}"><input type="checkbox" data-input="td" value="${i}" ${st.trainDays.includes(i) ? 'checked' : ''}><span>${DOW[i]}</span></label>`).join('')}</div>
+/* Cardio sits in the exercise library with the lifts rather than buried in settings: it is the
+   same question (what is in my rotation), asked about the same thing. The switches write to the
+   cardio plan's list of kinds, and the library is the only place they live now. */
+function cardioLibHTML() {
+  const on = cardioOn(); const picked = cardioTypes(); const w = latestStats().w;
+  const sec = CARDIO_GROUPS.map(g => {
+    const list = CARDIO_IDS.filter(id => CARDIO[id].group === g); const nOn = list.filter(id => picked.includes(id)).length;
+    return `<div style="margin-bottom:18px"><h3 style="margin-bottom:8px">${esc(g)} <span class="muted small" style="font-weight:500">· ${nOn} of ${list.length} in rotation</span></h3><div class="grid g4" style="gap:10px">
+      ${list.map(id => { const c = CARDIO[id]; const isOn = picked.includes(id); const last = isOn && picked.length <= 1;
+        return `<div class="ex-card cd-ex ${isOn ? '' : 'off'}" data-tip="${esc(c.how)}"><span class="cd-ic">${icon('heart')}</span><div style="min-width:0;flex:1"><b>${esc(c.name)}</b><span>${esc(c.how)}</span>
+          <div class="row wrap" style="margin-top:4px;gap:4px"><span class="pill" style="font-size:10.5px">MET ${c.met}</span><span class="pill" style="font-size:10.5px">~${fmt(cardioKcal(id, 30, w))} kcal / 30 min</span>${c.laps ? '<span class="pill" style="font-size:10.5px">Laps</span>' : ''}</div>
+          <label class="ex-tog" title="${last ? 'This is the only kind switched on — the rotation keeps at least one' : isOn ? 'Switch off to keep it out of the rotation' : 'Switch on to add it to the rotation'}"><input type="checkbox" data-input="cd-type" data-v="${id}" ${isOn ? 'checked' : ''} ${last ? 'disabled' : ''}><i class="switch ${isOn ? 'on' : ''}" aria-hidden="true"><i></i></i><span>${isOn ? (last ? 'Required' : 'In rotation') : 'Off'}</span></label></div></div>`; }).join('')}</div></div>`; }).join('');
+  return `<hr class="sep"><div class="row wrap" style="gap:10px;margin-bottom:10px"><h3 style="margin:0;flex:1">Cardio</h3>${on ? '' : '<span class="pill">Cardio is switched off</span>'}</div>
+    <div class="note" style="margin-bottom:14px">${icon('heart')}<span>${on ? `Your plan rotates through the kinds switched on here, ${cardioPlan().perWeek} time${cardioPlan().perWeek === 1 ? '' : 's'} a week at ${cardioPlan().minutes} minutes. Sessions a week and minutes are in <a href="#/settings/training">Settings</a>.` : `Switch cardio on in <a href="#/settings/training">Settings</a> to put these in your plan. The burn figures are an estimate from your body weight and the clock, not a measurement.`}</span></div>${sec}`;
+}
+/* The days picker is its own body so the combined Training card can fold it in. */
+function trainingDaysBodyHTML() { const st = S.settings; const f = setField;
+  return `<h3 style="margin:0 0 10px">Training days</h3><div class="row wrap td-pick">${[1, 2, 3, 4, 5, 6, 0].map(i => `<label class="td ${st.trainDays.includes(i) ? 'on' : ''}"><input type="checkbox" data-input="td" value="${i}" ${st.trainDays.includes(i) ? 'checked' : ''}><span>${DOW[i]}</span></label>`).join('')}</div>
         <div class="note" style="margin-top:12px">${icon('dumbbell')}<span>Pick as many days as you like — the workout plan updates instantly from today forward. Sessions rotate <b>Push → Pull → Legs</b> (push and pull never share a day), so each muscle is trained about <b>${fmt(st.trainDays.length / 3, 1)}×</b> per week${st.trainDays.length < 3 ? '' : ''}. ${st.trainDays.length >= 6 ? 'Six or more days gives a classic twice-a-week PPL.' : st.trainDays.length <= 2 ? 'With 1–2 days, the rotation spreads across weeks.' : ''}</span></div>
         <form data-form="plan" class="row wrap" style="gap:10px;margin-top:14px;align-items:flex-end">
           ${f('Start date (Day 1)', 'startDate', st.startDate, 'type="date" required')}
           <button class="btn" type="submit">Rebuild from new start date</button></form>
-        <div class="tiny muted" style="margin-top:8px">After the 90-day launch the plan keeps going in 13-week cycles (Build → Intensify → Volume → Deload & Test).</div>`;
-  return coll ? `<div class="card ${collCls('days')}" data-coll="days"><div class="card-h">${collHead('days', 'Training days', pill)}</div><div class="coll-body">${body}</div></div>`
-    : `<div class="card"><div class="card-h"><h2>Training days</h2>${pill}</div>${body}</div>`; }
+        <div class="tiny muted" style="margin-top:8px">After the 90-day launch the plan keeps going in 13-week cycles (Build → Intensify → Volume → Deload & Test).</div>`; }
 const GOALS = [['cut', 'Lose fat', 'Calorie deficit, protein held high to keep muscle.'], ['maintain', 'Maintain', 'Eat at maintenance and train.'], ['bulk', 'Build muscle', 'Measured surplus, most of the extra as carbohydrate.']];
 function lossRateCardHTML() { const st = S.settings; const k = goalKind(); const cur = latestStats();
   const goalPick = `<div class="field" style="margin-bottom:12px"><label>Goal</label><div class="seg seg-goal">${GOALS.map(([v, l]) => `<button type="button" class="${k === v ? 'on' : ''}" data-act="set-goal" data-v="${v}">${l}</button>`).join('')}</div>
@@ -540,8 +552,7 @@ function viewSettings(group) {
   const f = (lbl, name, val, attrs = '', hint = '') => `<div class="field"><label>${lbl}</label><input class="inp" name="${name}" value="${esc(val)}" ${attrs}>${hint ? `<span class="tiny muted">${hint}</span>` : ''}</div>`;
   return `<div class="page-head"><div class="t"><h1>Settings</h1><p>${AUTH.mode === 'server' ? 'Everything is saved to your account. Export a backup now and then.' : 'Everything is saved in this browser. Export a backup now and then.'}</p></div></div>
     <div class="grid g2">
-      ${stylesCardHTML()}<div style="height:16px"></div>
-      ${trainingDaysCardHTML()}
+      ${trainingCardHTML()}
       ${lossRateCardHTML()}
       ${bodyGoalsCardHTML()}
       ${nutritionCardHTML()}
@@ -753,7 +764,7 @@ document.addEventListener('change', e => {
   else if (inp === 'bg-photos') { S.settings.bgPhotos = el.checked; saveState(); bgCurrent = null; applyBackground(document.body.dataset.sec || 'settings'); render(); toast(el.checked ? 'Background photos on' : 'Background photos off'); }
   else if (inp === 'bg-dim') { S.settings.bgDim = +(1 - el.value).toFixed(2); saveState(); document.documentElement.style.setProperty('--dim', S.settings.bgDim); }
   else if (inp === 'foodcat') { UI.foodCat = el.value; saveUI(); render(); }
-  else if (inp === 'bg-file') { const f = el.files[0]; if (!f) return; resizeImageFile(f).then(url => { S.bgCustom[el.dataset.sec] = url; bgCurrent = null; saveState(); render(); toast('Background updated'); }).catch(() => toast('Couldn’t read that image')); }
+  else if (inp === 'bg-file') { const f = el.files[0]; if (!f) return; bgUpload(el.dataset.sec, f); el.value = ''; }
   else if (inp === 'import') {
     const file = el.files[0]; if (!file) return; const rd = new FileReader();
     rd.onload = () => { try { let o = JSON.parse(rd.result); if (o && o.state && o.state.settings) o = o.state; if (!o.settings || !o.plan) throw 0; loadState(o); bgCurrent = null; undoStack.length = 0; applyTheme(); render(); toast('Backup imported'); } catch (x) { toast('That file isn’t a FORGE 90 backup'); } };

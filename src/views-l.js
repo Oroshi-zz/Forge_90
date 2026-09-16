@@ -231,7 +231,7 @@ function viewPrep() {
 
 /* ---------------- YOU (phone) ---------------- */
 const SET_GROUPS = {
-  training: ['Training style & days', () => stylesCardHTML() + '<div style="height:16px"></div>' + trainingDaysCardHTML() + restSettingsHTML()],
+  training: ['Training style & days', () => trainingCardHTML() + '<div style="height:16px"></div>' + restSettingsHTML()],
   targets: ['Targets & loss rate', () => lossRateCardHTML() + nutritionCardHTML()],
   body: ['Body & goals', () => bodyGoalsCardHTML()],
   gym: ['Gym cards', () => gymSettingsHTML()],

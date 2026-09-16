@@ -30,7 +30,23 @@ const BG_FALLBACK = {
   settings: 'radial-gradient(1200px 700px at 50% 0%, #2a3a5a, transparent 60%), linear-gradient(135deg, #0f1420, #101216)'
 };
 const bgPhotoURL = sec => `https://images.unsplash.com/photo-${SECTION_BG[sec].id}?auto=format&fit=crop&w=2200&q=72`;
-const bgURL = sec => ((S && S.bgCustom && S.bgCustom[sec]) || bgPhotoURL(sec));   // an uploaded image wins over the stock photo
+/* On a server the backgrounds belong to the instance: the owner sets them and everyone sees
+   the same thing, served as files from /api/background. The local single-user file build has no
+   owner and no server, so there it stays a per-user image kept in the state blob. */
+const bgOwned = () => AUTH.mode === 'server';
+const bgCanEdit = () => !bgOwned() || !!(AUTH.user && AUTH.user.owner);
+const bgServer = sec => { const b = (AUTH.config && AUTH.config.bg) ? AUTH.config.bg[sec] : null;
+  return b ? (b.u || `/api/background/${encodeURIComponent(sec)}?v=${encodeURIComponent(b.v)}`) : null; };
+function bgSet(map) { AUTH.config = AUTH.config || {}; AUTH.config.bg = map || {}; bgCurrent = null; render(); }
+function bgUrlSave(sec, url) { api('PUT', '/api/backgrounds/' + encodeURIComponent(sec), { url }).then(r => { closeModal(); bgSet(r.bg); toast('Background updated for everyone'); }).catch(e => toast(e.message)); }
+function bgUpload(sec, file) {
+  resizeBackgroundFile(file)
+    .then(data => bgOwned() ? api('PUT', '/api/backgrounds/' + encodeURIComponent(sec), { data }).then(r => { bgSet(r.bg); toast('Background updated for everyone'); })
+      : Promise.resolve().then(() => { S.bgCustom[sec] = data; bgCurrent = null; saveState(); render(); toast('Background updated'); }))
+    .catch(e => toast(e && e.message ? e.message : 'Couldn’t read that image'));
+}
+const bgCustomURL = sec => bgOwned() ? bgServer(sec) : ((S && S.bgCustom && S.bgCustom[sec]) || null);
+const bgURL = sec => (bgCustomURL(sec) || bgPhotoURL(sec));   // a set image wins over the stock photo
 let bgCurrent = null, bgFlip = false;
 function applyBackground(sec) {
   document.documentElement.style.setProperty('--dim', String((S && +S.settings.bgDim >= 0 && +S.settings.bgDim <= 1) ? S.settings.bgDim : 0.7));
@@ -46,20 +62,46 @@ function applyBackground(sec) {
   img.onload = () => { if (bgCurrent === key) next.style.backgroundImage = `url("${url}"), ${BG_FALLBACK[sec]}`; };
   img.src = url;
 }
-function resizeImageFile(file, maxW = 1920) {
+function resizeImageFile(file, maxW = 1920, q = 0.78) {
   return new Promise((res, rej) => {
     const fr = new FileReader();
-    fr.onload = () => { const im = new Image(); im.onload = () => { const sc = Math.min(1, maxW / im.width); const c = document.createElement('canvas'); c.width = Math.round(im.width * sc); c.height = Math.round(im.height * sc); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', 0.78)); }; im.onerror = rej; im.src = fr.result; };
+    fr.onload = () => { const im = new Image(); im.onload = () => { const sc = Math.min(1, maxW / im.width); const c = document.createElement('canvas'); c.width = Math.round(im.width * sc); c.height = Math.round(im.height * sc); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); res(c.toDataURL('image/jpeg', q)); }; im.onerror = rej; im.src = fr.result; };
     fr.onerror = rej; fr.readAsDataURL(file);
   });
 }
+/* A background is decoration, so it is encoded small: 1280 wide at 0.70 is roughly 40% of what
+   1920 at 0.78 cost, and a background is always behind a sheet of glass at 30% visibility.
+   Anything still over 400 KB is refused rather than quietly stored. */
+const BG_MAX_BYTES = 400 * 1024;
+function resizeBackgroundFile(file) {
+  return resizeImageFile(file, 1280, 0.70).then(url => {
+    const bytes = Math.round((url.length - (url.indexOf(',') + 1)) * 3 / 4);
+    if (bytes > BG_MAX_BYTES) throw new Error(`That image is still ${fmt(bytes / 1024)} KB after resizing (400 KB max). Try a smaller photo, or use URL to link to one.`);
+    return url;
+  });
+}
+/* Two different things, so two different homes. The visibility slider is a readability control
+   on one person's screen, so it stays in their Appearance settings. The images are server-wide,
+   set once by the owner, so they live on the admin console with the other instance settings. */
 function backgroundsHTML() {
-  return `<div class="field"><label>Background visibility</label><input type="range" min="0.1" max="0.75" step="0.05" value="${(1 - S.settings.bgDim).toFixed(2)}" data-input="bg-dim"><span class="tiny muted">Slide right to show more of the photo behind the glass.</span></div>
-    <div class="bg-grid" style="margin-top:12px">${Object.entries(SECTION_BG).map(([k, b]) => `<div class="bg-item"><div class="bg-thumb" style="background-image:url('${esc(bgURL(k))}'), ${BG_FALLBACK[k]}"></div>
-      <div style="min-width:0;flex:1"><b class="small">${b.label}</b><div class="tiny muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${S.bgCustom[k] ? 'Your image' : esc(b.alt)}</div>
+  const credit = `<div class="tiny muted" style="margin-top:12px">Default photos from Unsplash (free Unsplash License): ${Object.values(SECTION_BG).map(b => `<a href="https://unsplash.com/photos/${b.slug}" target="_blank" rel="noopener">${esc(b.who)}</a>`).join(' · ')}. Photos load from the internet; offline you’ll see tinted gradients instead.</div>`;
+  const dim = `<div class="field"><label>Background visibility</label><input type="range" min="0.1" max="0.75" step="0.05" value="${(1 - S.settings.bgDim).toFixed(2)}" data-input="bg-dim"><span class="tiny muted">Slide right to show more of the photo behind the glass. This setting is yours alone.</span></div>`;
+  if (!bgOwned()) return dim + bgImagesHTML() + credit;      // the local single-user build has no admin console
+  const note = bgCanEdit()
+    ? `<div class="note" style="margin-top:12px">${icon('info')}<span>The background images are the same for everyone on this server. Change them in <a href="#/admin" data-act="adm-tab" data-v="app">Admin → App settings</a>.</span></div>`
+    : `<div class="note" style="margin-top:12px">${icon('info')}<span>The background images are set by whoever runs this server, so they look the same for everyone. The slider above is yours.</span></div>`;
+  return dim + note + credit;
+}
+/* The owner's grid. Rendered on the admin console when signed in, and inline in Appearance for
+   the local file build, where there is no server and no one else to affect. */
+function bgImagesHTML() {
+  const owned = bgOwned();
+  return `<div class="bg-grid" style="margin-top:12px">${Object.entries(SECTION_BG).map(([k, b]) => { const mine = !!bgCustomURL(k);
+      return `<div class="bg-item"><div class="bg-thumb" style="background-image:url('${esc(bgURL(k))}'), ${BG_FALLBACK[k]}"></div>
+      <div style="min-width:0;flex:1"><b class="small">${b.label}</b><div class="tiny muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${mine ? (owned ? 'Set for everyone' : 'Your image') : esc(b.alt)}</div>
       <div class="row" style="gap:4px;margin-top:4px"><label class="btn sm">${icon('upload')}Upload<input type="file" accept="image/*" hidden data-input="bg-file" data-sec="${k}"></label>
-      <button class="btn sm" data-act="bg-url" data-sec="${k}">URL</button>${S.bgCustom[k] ? `<button class="btn sm ghost" data-act="bg-reset" data-sec="${k}">Reset</button>` : ''}</div></div></div>`).join('')}</div>
-    <div class="tiny muted" style="margin-top:12px">Default photos from Unsplash (free Unsplash License): ${Object.values(SECTION_BG).map(b => `<a href="https://unsplash.com/photos/${b.slug}" target="_blank" rel="noopener">${esc(b.who)}</a>`).join(' · ')}. Photos load from the internet; offline you’ll see tinted gradients instead.</div>`;
+      <button class="btn sm" data-act="bg-url" data-sec="${k}">URL</button>${mine ? `<button class="btn sm ghost" data-act="bg-reset" data-sec="${k}">Reset</button>` : ''}</div></div></div>`; }).join('')}</div>
+    <div class="tiny muted" style="margin-top:8px">Uploads are resized to 1280px wide and must come out under 400 KB. A URL costs nothing and is served straight from wherever it lives.</div>`;
 }
 
 /* ---------------- food preferences (checkbox tree: group → subgroup → food) ---------------- */
@@ -542,9 +584,13 @@ Object.assign(ACT, {
     confirmBox('Delete food?', used.length ? `It’s used in ${used.length} recipe${used.length > 1 ? 's' : ''} (${esc(used.map(r => r.name).join(', '))}); it will be removed from them.` : 'This can’t be undone.', 'Delete', () => {
       delete S.customFoods[id]; Object.values(S.customRecipes).forEach(r => r.ing = r.ing.filter(([x]) => x !== id)); Object.values(S.recipeOverrides).forEach(r => r.ing = r.ing.filter(([x]) => x !== id));
       rebuildCatalog(); saveState(); render(); toast('Food deleted'); }, true); },
-  'bg-reset': el => { delete S.bgCustom[el.dataset.sec]; bgCurrent = null; saveState(); render(); },
+  'bg-reset': el => { const sec = el.dataset.sec;
+    if (!bgOwned()) { delete S.bgCustom[sec]; bgCurrent = null; saveState(); render(); return; }
+    api('DELETE', '/api/backgrounds/' + encodeURIComponent(sec)).then(r => { bgSet(r.bg); toast('Background reset for everyone'); }).catch(e => toast(e.message)); },
   'bg-url': el => { const sec = el.dataset.sec; modal(`<h2>Background for ${esc(SECTION_BG[sec].label)}</h2><p class="sub small">Paste a direct image link (ending in .jpg, .png or .webp, or an images.unsplash.com link).</p><input class="inp" id="bg-url-in" style="width:100%" placeholder="https://…"><div class="row" style="justify-content:flex-end;margin-top:14px"><button class="btn" data-act="close-modal">Cancel</button><button class="btn primary" id="bg-url-ok">Use image</button></div>`, 'sm');
-    $('#bg-url-ok').onclick = () => { const v = $('#bg-url-in').value.trim(); if (!/^https?:\/\//.test(v)) { toast('Enter a full http(s) link'); return; } S.bgCustom[sec] = v; bgCurrent = null; saveState(); closeModal(); render(); toast('Background updated'); }; }
+    $('#bg-url-ok').onclick = () => { const v = $('#bg-url-in').value.trim(); if (!/^https?:\/\//.test(v)) { toast('Enter a full http(s) link'); return; }
+      if (!bgOwned()) { S.bgCustom[sec] = v; bgCurrent = null; saveState(); closeModal(); render(); toast('Background updated'); return; }
+      bgUrlSave(sec, v); }; }
 });
 document.addEventListener('submit', e => { if (e.target.dataset && e.target.dataset.form === 'food') { e.preventDefault(); saveFood(e.target); } });
 

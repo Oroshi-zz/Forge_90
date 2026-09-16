@@ -45,6 +45,14 @@
 .dessert-add { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
 .dessert-add .tiny { flex: 1 1 260px; min-width: 0; }
 
+/* a cardio card in the exercise library: same frame as a lift, an icon where the muscle map goes */
+.cd-ex .cd-ic { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; flex: none; border-radius: 12px; background: color-mix(in srgb, var(--kcal) 14%, transparent); color: var(--kcal); }
+.cd-ex .cd-ic svg { width: 22px; height: 22px; }
+.cd-ex { align-items: flex-start; }
+.cd-ex > div { padding-top: 2px; }
+.cd-ex span { display: block; }
+.cd-ex .pill { display: inline-block; }
+
 /* ---------- cardio ---------- */
 .chip.cd { --k: var(--kcal); display: inline-flex; align-items: center; gap: 5px; }
 .chip.cd small { opacity: .75; font-weight: 600; }
