@@ -41,8 +41,7 @@ function plusSheet() {
   const woL = e && e.w ? (loggedSets(t, sessionRows(e.w)).done ? 'Resume workout' : 'Start workout') : 'Workout';
   modal(`<div class="plus-m"><div class="row"><h2 style="flex:1">Quick add</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
     <div class="qa-grid">${canScan() ? b('scan', 'Scan food', 'data-act="scan" data-v="today"', 'hot') : ''}${b('plus', 'Add food', 'data-act="qa-pick"', canScan() ? '' : 'hot')}${b('scale', 'Log weight', 'data-act="weigh-sheet"')}
-      ${b('dumbbell', woL, `data-act="wo-open" data-d="${t}"`)}${c ? b('scan', 'Gym card', `data-act="gym-full" data-id="${c.id}"`) : b('scan', 'Add gym card', 'data-act="gym-add"')}${canScan() ? b('box', 'Scan into pantry', 'data-act="scan" data-v="pantry"') : b('box', 'Add to pantry', 'data-act="pan-add"')}</div>
-    <div class="tiny muted" style="margin-top:12px">One button, on every tab, for the things you do standing up.</div></div>`, 'sm plus-modal', true);
+      ${b('dumbbell', woL, `data-act="wo-open" data-d="${t}"`)}${c ? b('scan', 'Gym card', `data-act="gym-full" data-id="${c.id}"`) : b('scan', 'Add gym card', 'data-act="gym-add"')}${canScan() ? b('box', 'Scan into pantry', 'data-act="scan" data-v="pantry"') : b('box', 'Add to pantry', 'data-act="pan-add"')}</div></div>`, 'sm plus-modal', true);
 }
 
 /* ---------------- weigh-in sheet ---------------- */

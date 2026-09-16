@@ -178,7 +178,7 @@ function linkChipsHTML(r) { const ls = (r.links || []).filter(l => l && l.url); 
 function viewFoods() {
   const tab = UI.foodsTab || 'recipes';
   const head = `<div class="page-head"><div class="t"><h1>Foods & recipes</h1><p>Edit the macros of any food, add your own foods and recipes, and choose which food groups the plan can use.</p></div>
-    <div class="row wrap">${scanBtnHTML('today')}${AUTH.mode === 'server' ? `<button class="btn" data-act="imp-open">${icon('download')}Import recipe</button>` : ''}<button class="btn primary" data-act="recipe-new">${icon('plus')}New recipe</button><button class="btn" data-act="food-new">${icon('plus')}Add food</button></div></div>
+    <div class="row wrap">${scanBtnHTML('today')}${AUTH.mode === 'server' ? `<button class="btn" data-act="imp-open">${icon('download')}Import recipe</button>` : ''}<button class="btn primary" data-act="recipe-new">${icon('plus')}New recipe</button><button class="btn" data-act="food-by-name" data-v="foods">${icon('search')}Find a food</button><button class="btn" data-act="food-new">${icon('plus')}Add food</button></div></div>
     <div class="seg" style="margin-bottom:16px">${[['recipes', 'Recipes'], ['foods', 'Foods & macros'], ['prefs', 'Food preferences']].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-act="foods-tab" data-v="${k}">${l}</button>`).join('')}</div>`;
   if (tab === 'prefs') return head + `<div class="card"><div class="card-h"><h2>Food preferences</h2></div>${foodPrefsHTML()}</div>`;
   if (tab === 'foods') return head + foodsTableHTML();

@@ -410,10 +410,18 @@ function bulkInfoHTML(pct) {
   return `<div class="grid g3" style="gap:10px"><div><div class="tiny muted">Daily surplus</div><b class="num" style="font-size:18px">+${fmt(Math.round(lb * 3500 / 7))} kcal</b></div><div><div class="tiny muted">Training / rest day</div><b class="num" style="font-size:18px">${fmt(tT.kcal)} / ${fmt(tR.kcal)}</b></div><div><div class="tiny muted">${toGoal > 0 ? `Reach ${st.goalWeight} lb` : 'Above goal weight'}</div><b style="font-size:18px">${toGoal > 0 ? fmtDate(when, { month: 'short', year: 'numeric' }) : '—'}</b></div></div>
     <div class="tiny muted" style="margin-top:6px">${fmt(lb, 2)} lb per week at ${fmt(cur.w, 0)} lb${capped ? ` · capped at the ${st.bulkMaxSurplus} kcal/day surplus` : ''} · stops at ${st.bulkMaxBF}% body fat.</div>${fast}${cap}`;
 }
-function bodyGoalsCardHTML() { const st = S.settings; const f = setField;
+function bodyGoalsCardHTML() { const st = S.settings; const f = setField; const pr = S.profile || {};
+  const ft = pr.heightIn ? Math.floor(pr.heightIn / 12) : '', inch = pr.heightIn ? Math.round(pr.heightIn % 12) : '';
+  /* Height, age and sex are asked for during setup and then used for the body-fat estimate,
+     so they have to be editable afterwards — people mistype them, and age moves on. */
   return `<div class="card"><div class="card-h"><h2>Body & goals</h2></div><form data-form="body" class="grid g2" style="gap:12px">
         ${f('Starting weight (lb)', 'startWeight', st.startWeight, 'type="number" step="0.1"')}${f('Starting body fat %', 'startBF', st.startBF, 'type="number" step="0.1"')}
         ${f('Goal weight (lb)', 'goalWeight', st.goalWeight, 'type="number" step="0.1"')}${f('Goal body fat %', 'goalBF', st.goalBF, 'type="number" step="0.1"')}
+        <div class="field"><label>Height</label><div class="row" style="gap:6px"><input class="inp" name="hFt" value="${esc(ft)}" type="number" min="3" max="8" step="1" placeholder="ft" style="width:50%"><input class="inp" name="hIn" value="${esc(inch)}" type="number" min="0" max="11" step="1" placeholder="in" style="width:50%"></div></div>
+        ${f('Age', 'age', pr.age == null ? '' : pr.age, 'type="number" min="13" max="100" step="1"')}
+        <div class="field"><label>Sex <span class="muted" style="font-weight:500">— for the body-fat estimate</span></label><select class="inp" name="sex"><option value="" ${!pr.sex ? 'selected' : ''}>Prefer not to say</option><option value="m" ${pr.sex === 'm' ? 'selected' : ''}>Male</option><option value="f" ${pr.sex === 'f' ? 'selected' : ''}>Female</option></select></div>
+        <div class="field"><label>Name shown in the app</label><input class="inp" name="nick" value="${esc(pr.nick || '')}" maxlength="40" placeholder="What we call you"></div>
+        <div class="tiny muted" style="grid-column:1/-1">${st.bfEstimated ? 'Your body fat is estimated from these — changing height, age or sex re-estimates it. Enter a measured body fat % above and the estimate is dropped.' : 'Height, age and sex are only used for the body-fat estimate, which you have replaced with a measured figure.'}</div>
         <div><button class="btn primary" type="submit">Save</button></div></form></div>`; }
 function nutritionCardHTML() { const st = S.settings; const f = setField;
   return `<div class="card"><div class="card-h"><h2>Nutrition model</h2></div><form data-form="nut" class="grid g2" style="gap:12px">
@@ -636,7 +644,18 @@ document.addEventListener('submit', e => {
       if (syncActive()) syncFetch(true).then(go); else go(); });
   } else if (kind === 'body' || kind === 'nut') {
     if (kind === 'body' && S.settings.bfEstimated && +fd.get('startBF') !== +S.settings.startBF) S.settings.bfEstimated = false;
-    for (const [k, v] of fd.entries()) S.settings[k] = isNaN(+v) ? v : +v;
+    const PROFILE = ['hFt', 'hIn', 'age', 'sex', 'nick'];
+    for (const [k, v] of fd.entries()) { if (kind === 'body' && PROFILE.includes(k)) continue; S.settings[k] = isNaN(+v) ? v : +v; }
+    if (kind === 'body') {
+      const pr = S.profile = Object.assign({}, S.profile);
+      const ft = +fd.get('hFt') || 0, inch = +fd.get('hIn') || 0;
+      pr.heightIn = ft * 12 + inch || null;
+      pr.age = fd.get('age') === '' ? null : +fd.get('age');
+      pr.sex = String(fd.get('sex') || '') || null;
+      const nick = String(fd.get('nick') || '').trim(); if (nick) pr.nick = nick;
+      // re-estimate last, after the plain fields are in, and only while no measured figure has been given
+      if (S.settings.bfEstimated) { const est = deurenbergBF(+S.settings.startWeight, pr.heightIn, pr.age, pr.sex === 'm'); if (est != null) S.settings.startBF = est; }
+    }
     saveState(); render(); toast('Saved — targets and portions recalculated');
   }
 });

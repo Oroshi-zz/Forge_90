@@ -153,7 +153,8 @@ function openScanner(mode, date, draft) {
     <div class="tiny muted" style="margin:2px 0 10px">${gym ? 'Hold the card or key tag flat, with the whole barcode inside the box. Most gym barcodes work, including QR codes on phones that can read them.' : mode === 'pantry' ? 'Each scan adds one package with a typical use-by date — keep scanning, then fix dates or amounts on the Pantry page.' : `Scan a snack or meal to add it to ${SCN.date === todayISO() ? 'today' : fmtDate(SCN.date, { weekday: 'long', month: 'short', day: 'numeric' })}.`}</div>
     <div class="scan-view" id="scan-view"><video id="scan-video" playsinline muted></video><div class="scan-guide"></div><div class="scan-msg" id="scan-msg">Starting the camera…</div>
       <button type="button" class="btn sm scan-torch hidden" id="scan-torch" data-act="scan-torch">${icon('bolt')}Light</button></div>
-    ${gym ? `<div class="row wrap" style="gap:8px;margin-top:10px"><button type="button" class="btn" data-act="gym-type">${icon('edit')}Type the number instead</button></div>` : `<form class="row" data-form="scan-code" style="gap:8px;margin-top:10px"><input class="inp" id="scan-code" inputmode="numeric" pattern="[0-9 ]*" placeholder="Or type the barcode number" autocomplete="off" style="flex:1"><button class="btn" type="submit">Look up</button></form>`}
+    ${gym ? `<div class="row wrap" style="gap:8px;margin-top:10px"><button type="button" class="btn" data-act="gym-type">${icon('edit')}Type the number instead</button></div>` : `<form class="row" data-form="scan-code" style="gap:8px;margin-top:10px"><input class="inp" id="scan-code" inputmode="numeric" pattern="[0-9 ]*" placeholder="Or type the barcode number" autocomplete="off" style="flex:1"><button class="btn" type="submit">Look up</button></form>
+      <div class="row" style="margin-top:8px"><button type="button" class="btn sm ghost" style="flex:1" data-act="food-by-name" data-v="${mode}" data-d="${esc(date || todayISO())}">${icon('search')}Search by name instead</button></div>`}
     <label class="btn sm ghost scan-photo">${icon('upload')}<span class="scan-photo-t">Use a photo instead</span><input type="file" accept="image/*" capture="environment" data-input="scan-photo" hidden></label>
     ${mode === 'pantry' ? `<div class="scan-added" id="scan-added">${scanAddedHTML()}</div>` : ''}</div>`, 'scan-modal');
   scanStart();
@@ -356,16 +357,47 @@ function quickPick(date) {
     <div class="qp-list" id="qp-list">${qpListHTML('')}</div></div>`, 'qp-modal');
   const q = $('#qp-q'); if (q && window.matchMedia && matchMedia('(pointer: fine)').matches) q.focus();
 }
-function qpListHTML(q) {
+function qpListHTML(q, act, d) {
+  act = act || 'qa-food'; d = d == null ? (QP ? QP.d : '') : d;
   const words = String(q || '').toLowerCase().split(/\s+/).filter(Boolean);
   const recent = {}; Object.keys(S.plan || {}).sort().slice(-60).forEach((d, i) => ((S.plan[d] || {}).x || []).forEach(x => { recent[x.id] = i + 1; }));
   const hay = g => (g.n + ' ' + (g.brand || '') + ' ' + (SUB_LABEL[g.sub] || '') + ' ' + (g.gtin || '')).toLowerCase();
   const rank = g => (isFavFood(g.id) ? 4 : 0) + (recent[g.id] ? 2 : 0) + (g.shared ? 1 : 0);
   const list = Object.values(ING).filter(g => words.every(w => hay(g).includes(w))).sort((a, b) => rank(b) - rank(a) || (recent[b.id] || 0) - (recent[a.id] || 0) || a.n.localeCompare(b.n));
   const top = list.slice(0, 50);
-  return top.map(g => `<button type="button" class="qp-opt" data-act="qa-food" data-id="${g.id}" data-d="${QP ? QP.d : ''}"><span class="qp-t"><b>${esc(g.n)}</b><small>${esc([g.brand, SUB_LABEL[g.sub]].filter(Boolean).join(' · '))}</small></span>
+  return top.map(g => `<button type="button" class="qp-opt" data-act="${act}" data-id="${g.id}" data-d="${esc(d)}"><span class="qp-t"><b>${esc(g.n)}</b><small>${esc([g.brand, SUB_LABEL[g.sub]].filter(Boolean).join(' · '))}</small></span>
       <span class="qp-p">${isFavFood(g.id) ? `<span class="qp-star" title="Favorite">${icon('star')}</span>` : ''}${recent[g.id] ? '<span class="pill">Recent</span>' : ''}${g.shared ? '<span class="pill acc">Scanned</span>' : ''}<span class="tiny muted num">${fmt(g.k)} kcal / ${g.u ? esc(g.u) : g.ml ? '100 ml' : '100 g'}</span></span></button>`).join('')
-    + (list.length > top.length ? `<div class="tiny muted" style="padding:8px 4px">${list.length - top.length} more — keep typing to narrow it down.</div>` : '') || '<div class="muted small" style="padding:12px 4px">No foods match. Scan the barcode to add a new product.</div>';
+    + (list.length > top.length ? `<div class="tiny muted" style="padding:8px 4px">${list.length - top.length} more — keep typing to narrow it down.</div>` : '') || `<div class="muted small" style="padding:12px 4px">No foods match.${canScan() ? ' Scan the barcode to add a new product.' : ''}</div>`;
+}
+
+/* ---------- find a food by name ----------
+   The camera isn't always the way in: a lot of what people add is already on the food list,
+   and loose produce has no barcode at all. Same picker, three destinations. */
+let FP = null;              // { mode: 'pantry' | 'today' | 'foods', d }
+function foodByName(mode, date) {
+  scanStop();               // release the camera if we came from the scanner
+  FP = { mode, d: date || (SCN && SCN.date) || todayISO() };
+  const title = mode === 'pantry' ? 'Add to the pantry by name' : mode === 'foods' ? 'Find a food' : `Add food to ${FP.d === todayISO() ? 'today' : fmtDate(FP.d, { weekday: 'short', month: 'short', day: 'numeric' })}`;
+  const hint = mode === 'pantry' ? 'Pick a food to put one package in the pantry — handy for loose produce and anything without a barcode.'
+    : mode === 'foods' ? 'Search everything on the food list, including products other people scanned. Pick one to see or edit it.'
+    : 'Search the food list and anything scanned on this server.';
+  modal(`<div class="qp-m"><div class="row"><h2 style="flex:1">${esc(title)}</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
+    <div class="tiny muted" style="margin:2px 0 8px">${esc(hint)}</div>
+    <div class="row" style="gap:8px;margin-bottom:10px"><input class="inp" type="search" id="fp-q" data-input="fp-q" placeholder="Search foods and scanned products…" style="flex:1;min-width:0" autocomplete="off">${mode !== 'foods' && canScan() ? `<button type="button" class="btn" data-act="fp-scan">${icon('scan')}Scan</button>` : ''}</div>
+    <div class="qp-list" id="fp-list">${qpListHTML('', 'fp-pick', FP.d)}</div>
+    ${mode === 'foods' ? `<div class="row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="btn" data-act="food-new-from-pick">${icon('plus')}None of these — create a new food</button></div>` : ''}</div>`, 'qp-modal');
+  const q = $('#fp-q'); if (q && window.matchMedia && matchMedia('(pointer: fine)').matches) q.focus();
+}
+function fpPick(id) {
+  const m = FP ? FP.mode : 'today'; const d = FP ? FP.d : todayISO(); FP = null;
+  if (m === 'foods') { const g = ING[id]; closeModal(); if (g && g.shared) sharedFoodEditor(id); else foodEditor(id); return; }
+  if (m === 'pantry') {
+    if (SCN && SCN.mode === 'pantry') { scanUse(id); openScannerKeep(); return; }   // straight back to the scanner with the session list
+    const it = pantryAdd(id, null, null, 'manual'); closeModal(); render();
+    toast(it ? `${foodLabel(id)} added to the pantry` : 'That food has no package size set');
+    return;
+  }
+  SCN = null; quickAdd(id, d);
 }
 const slotNow = () => { const h = new Date().getHours() + new Date().getMinutes() / 60; return h < 10.5 ? 'breakfast' : h < 14.5 ? 'lunch' : h < 17 ? 'snack1' : h < 20.5 ? 'dinner' : 'snack2'; };
 let QA = null;
@@ -633,6 +665,11 @@ Object.assign(ACT, {
   'scan-less': el => { scanCount(el.dataset.f, (SCN.added.find(x => x.food === el.dataset.f) || { n: 0 }).n - 1); scanPaint(); },
   'scan-more': el => { scanCount(el.dataset.f, (SCN.added.find(x => x.food === el.dataset.f) || { n: 0 }).n + 1); scanPaint(); },
   'scan-review': () => scanReview(),
+  'food-by-name': el => foodByName(el.dataset.v === 'pantry' ? 'pantry' : el.dataset.v === 'foods' ? 'foods' : 'today', el.dataset.d || null),
+  'fp-pick': el => fpPick(el.dataset.id),
+  'fp-scan': () => { const m = FP ? FP.mode : 'today', d = FP ? FP.d : todayISO(); FP = null;
+    if (m === 'pantry' && SCN && SCN.mode === 'pantry') openScannerKeep(); else openScanner(m === 'pantry' ? 'pantry' : 'today', d); },
+  'food-new-from-pick': () => { FP = null; closeModal(); foodEditor(null); },
   'scan-again': () => openScannerKeep(),
   'scan-done': () => { const n = SCN ? SCN.added.reduce((a, e) => a + e.n, 0) : 0; scanStop(); SCN = null; closeModal(); render(); if (n) toast(`${n} item${n === 1 ? '' : 's'} in the pantry`); },
   'srv-less': el => { scanCount(el.dataset.f, (SCN.added.find(x => x.food === el.dataset.f) || { n: 0 }).n - 1); scanReviewPaint(); },
@@ -661,6 +698,7 @@ document.addEventListener('input', e => {
   const t = e.target; if (!t || !t.dataset) return;
   if (t.dataset.input === 'panq') { UI.panQ = t.value; const pos = t.selectionStart; render(); const n = $('[data-input="panq"]'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) { /* ignore */ } } return; }
   if (t.dataset.input === 'qp-q' && QP) { const l = $('#qp-list'); if (l) l.innerHTML = qpListHTML(t.value); }
+  if (t.dataset.input === 'fp-q' && FP) { const l = $('#fp-list'); if (l) l.innerHTML = qpListHTML(t.value, 'fp-pick', FP.d); }
   if (t.dataset.input === 'pan-foodq') { const g = panFindFood(t.value); const u = $('#pan-unit'); if (u) u.textContent = g ? panUnit(g.id) : ''; }
   if (!QA) return;
   if (t.dataset.input === 'qa-n') { QA.n = t.value; const m = ingMacros(QA.id, qaAmount()); const el = $('#qa-mac'); if (el) el.innerHTML = `<b>${fmt(m.k)}</b> kcal · <span style="color:var(--prot)">${fmt(m.p)}P</span> · <span style="color:var(--carb)">${fmt(m.c)}C</span> · <span style="color:var(--fat)">${fmt(m.f)}F</span>`; }
