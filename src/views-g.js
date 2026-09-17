@@ -283,17 +283,19 @@ function impGuessEmoji(name, cat) {
   return best || { breakfast: '🍳', lunch: '🥗', dinner: '🍽️', snack: '🍎' }[cat] || '🍽️';
 }
 function impExisting(rec) { const u = rec.url || rec.mealieUrl; const n = impAscii(rec.name).trim(); return RECIPES.find(r => (u && (r.links || []).some(l => l.url === u || l.url === rec.mealieUrl)) || (n && impAscii(r.name).trim() === n)) || null; }
-function importToEditor(rec, extra = {}) {
+/* The editor state a fetched recipe becomes. Separate from importToEditor so the bulk import can
+   build and inspect one (impNeeds) without putting it on screen. */
+function impEditorState(rec, extra = {}) {
   const rows = [], skipped = [];
   (rec.ingredients || []).forEach(it => { const r = impRow(it); if (r.header) return; if (r.skip) skipped.push({ text: it.text, why: r.skip }); else rows.push(r.row); });
   const cat = impGuessCat(rec); const sv = rec.servings > 0 ? Math.round(rec.servings) : null;
   const links = []; if (rec.url) links.push({ title: rec.name || linkHost(rec.url), url: rec.url, site: rec.site || linkHost(rec.url) }); if (rec.mealieUrl) links.push({ title: 'Mealie', url: rec.mealieUrl, site: 'Mealie' });
   const dup = impExisting(rec);
-  RE = { id: null, base: false, name: rec.name || '', emoji: impGuessEmoji(rec.name, cat), cat, yield: sv && sv <= 12 ? sv : '', storage: 'fridge', time: rec.minutes || 20, tags: '', fixed: false, rotate: true,
+  return { id: null, base: false, name: rec.name || '', emoji: impGuessEmoji(rec.name, cat), cat, yield: sv && sv <= 12 ? sv : '', storage: 'fridge', time: rec.minutes || 20, tags: '', fixed: false, rotate: true,
     ing: rows, steps: (rec.steps || []).join('\n'), links,
     imp: { from: rec.source, site: rec.source === 'mealie' ? 'Mealie' : (rec.site || linkHost(rec.url)), nut: rec.nutrition || null, bigYield: sv > 12 ? sv : null, yieldText: rec.yieldText || '', skipped, noIng: !rows.length, error: extra.error || (rec.loose ? 'That page had no recipe data, so this was read from the page itself. Check the amounts and steps before saving.' : ''), dup: dup ? dup.name : '', q: IMPQ && IMPQ.list.length > 1 ? { i: IMPQ.i + 1, n: IMPQ.list.length } : null, paste: !rows.length } };
-  renderRecipeEditor();
 }
+function importToEditor(rec, extra = {}) { RE = impEditorState(rec, extra); renderRecipeEditor(); }
 
 /* ---------- review UI inside the recipe editor ---------- */
 const IMP_ST = { none: ['Needs a food', 'imp-none'], amt: ['Needs an amount', 'imp-amt'], check: ['Check', 'imp-check'], ok: ['Matched', 'imp-ok'] };
@@ -356,12 +358,14 @@ function impRemember() {
 /* ---------- the import dialog ---------- */
 let INTEG = null;                        // { mealie: {...} } from the server
 let IMPQ = null;                         // queue of Mealie recipes being reviewed one after another
-const IMPUI = { tab: 'url', url: '', q: '', items: [], page: 1, pages: 1, total: 0, sel: {}, busy: false, err: '', loaded: false };
+const IMPUI = { tab: 'url', url: '', q: '', items: [], page: 1, pages: 1, total: 0, sel: {}, busy: false, err: '', loaded: false, sync: false, note: '' };
 async function loadInteg(force) { if (INTEG && !force) return INTEG; try { INTEG = await api('GET', '/api/integrations'); } catch (e) { INTEG = { mealie: { configured: false, canEdit: isAdmin() }, error: e.message }; } return INTEG; }
 function importModal(tab) {
   if (AUTH.mode !== 'server') { toast('Importing recipes needs the FORGE 90 server.'); return; }
   if (tab) IMPUI.tab = tab; IMPUI.err = '';
-  renderImportModal(); loadInteg(true).then(() => { if (!$('#modal .imp-modal')) return; renderImportModal(); if (IMPUI.tab === 'mealie' && INTEG.mealie.configured && !IMPUI.loaded) impSearch(); });
+  /* Always re-ask Mealie for the list. It was cached for the whole session, so a recipe added in
+     Mealie after the first look never showed up until the connection was re-saved in Settings. */
+  renderImportModal(); loadInteg(true).then(() => { if (!$('#modal .imp-modal')) return; renderImportModal(); if (IMPUI.tab === 'mealie' && INTEG.mealie.configured) impSearch(); });
 }
 function renderImportModal() {
   const t = IMPUI.tab; const mc = INTEG && INTEG.mealie;
@@ -373,14 +377,18 @@ function renderImportModal() {
     : `<div class="row" style="gap:8px"><input class="inp" type="search" id="imp-q" placeholder="Search your Mealie recipes…" value="${esc(IMPUI.q)}" data-input="imp-q" autocomplete="off" style="flex:1"></div>
       <div class="imp-list" id="imp-list">${impListHTML()}</div>
       <div class="row" style="justify-content:space-between;margin-top:10px;gap:8px;flex-wrap:wrap"><span class="tiny muted" id="imp-count">${impCountText()}</span>
-        <button class="btn primary" data-act="imp-mealie-go" id="imp-go" ${Object.keys(IMPUI.sel).length && !IMPUI.busy ? '' : 'disabled'}>${impGoLabel()}</button></div>`;
+        <span class="row" style="gap:8px"><button class="btn" data-act="imp-bulk" id="imp-bulk" ${Object.keys(IMPUI.sel).length && !IMPUI.busy ? '' : 'disabled'}>Save all without review</button>
+        <button class="btn primary" data-act="imp-mealie-go" id="imp-go" ${Object.keys(IMPUI.sel).length && !IMPUI.busy ? '' : 'disabled'}>${impGoLabel()}</button></span></div>`;
   modal(`<div class="imp-modal"><div class="row"><h2 style="flex:1">Import a recipe</h2><button class="btn icon ghost" data-act="close-modal">${icon('x')}</button></div>
     <div class="seg" style="margin:12px 0 14px">${[['url', 'Web link'], ['mealie', 'Mealie']].map(([k, l]) => `<button class="${t === k ? 'on' : ''}" data-act="imp-tab" data-v="${k}">${l}</button>`).join('')}</div>
     ${IMPUI.err ? `<div class="note warn" style="margin-bottom:10px">${icon('info')}<span>${esc(IMPUI.err)}</span></div>` : ''}${body}</div>`);
   const f = $(t === 'url' ? '#imp-url-in' : '#imp-q'); if (f && !IMPUI.busy) { f.focus(); if (f.value) f.setSelectionRange(f.value.length, f.value.length); }
 }
 const impGoLabel = () => { const n = Object.keys(IMPUI.sel).length; return IMPUI.busy ? 'Importing…' : n ? `Import ${n} recipe${n > 1 ? 's' : ''}` : 'Import'; };
-const impCountText = () => IMPUI.total ? `${IMPUI.total} recipe${IMPUI.total === 1 ? '' : 's'} in Mealie${IMPUI.q ? ' match' : ''} · ${Object.keys(IMPUI.sel).length} selected` : '';
+const impCountText = () => IMPUI.note ? IMPUI.note
+  : IMPUI.sync ? 'Checking Mealie for new recipes…'
+  : IMPUI.total ? `${IMPUI.total} recipe${IMPUI.total === 1 ? '' : 's'} in Mealie${IMPUI.q ? ' match' : ''} · ${Object.keys(IMPUI.sel).length} selected` : '';
+const impCountPaint = () => { const c = $('#imp-count'); if (c) c.textContent = impCountText(); };
 function impListHTML() {
   if (!IMPUI.loaded) return `<div class="muted small" style="padding:12px">Loading recipes…</div>`;
   if (!IMPUI.items.length) return `<div class="muted small" style="padding:12px">${IMPUI.q ? 'No recipes match.' : 'No recipes in Mealie yet.'}</div>`;
@@ -390,12 +398,19 @@ function impListHTML() {
 }
 async function impSearch(more) {
   const q = IMPUI.q; const page = more ? IMPUI.page + 1 : 1;
+  /* The already-loaded list stays on screen while this runs, so a refresh doesn't blank the dialog. */
+  if (!more && IMPUI.loaded) { IMPUI.sync = true; impCountPaint(); }
   try {
     const r = await api('GET', `/api/import/mealie/recipes?q=${encodeURIComponent(q)}&page=${page}`);
-    if (q !== IMPUI.q) return;
+    if (q !== IMPUI.q) { IMPUI.sync = false; return; }
     IMPUI.items = more ? IMPUI.items.concat(r.items) : r.items; IMPUI.page = r.page; IMPUI.pages = r.pages; IMPUI.total = r.total; IMPUI.loaded = true; IMPUI.err = '';
-  } catch (e) { IMPUI.err = e.message; IMPUI.loaded = true; IMPUI.items = more ? IMPUI.items : []; if ($('#modal .imp-modal')) renderImportModal(); return; }
-  const l = $('#imp-list'); if (l) l.innerHTML = impListHTML(); const c = $('#imp-count'); if (c) c.textContent = impCountText();
+    /* a recipe deleted in Mealie shouldn't stay selected and then fail to import */
+    Object.keys(IMPUI.sel).forEach(s => { if (!IMPUI.items.some(x => x.slug === s)) delete IMPUI.sel[s]; });
+  } catch (e) { IMPUI.sync = false; IMPUI.err = e.message; IMPUI.loaded = true; IMPUI.items = more ? IMPUI.items : []; if ($('#modal .imp-modal')) renderImportModal(); return; }
+  IMPUI.sync = false;
+  const l = $('#imp-list'); if (l) l.innerHTML = impListHTML(); impCountPaint();
+  const g = $('#imp-go'), bk = $('#imp-bulk'); const on = !!Object.keys(IMPUI.sel).length && !IMPUI.busy;
+  if (g) { g.disabled = !on; g.textContent = impGoLabel(); } if (bk) bk.disabled = !on;
 }
 async function impFromUrl() {
   const inp = $('#imp-url-in'); const url = (inp ? inp.value : IMPUI.url).trim(); IMPUI.url = url; if (!url) return;
@@ -413,13 +428,48 @@ async function impNext() {
   IMPQ.i++;
   if (IMPQ.i >= IMPQ.list.length) { const d = IMPQ.done, n = IMPQ.list.length; IMPQ = null; closeModal(); render(); toast(`Imported ${d} of ${n} recipe${n > 1 ? 's' : ''} from Mealie`); return; }
   const slug = IMPQ.list[IMPQ.i];
-  modal(`<div class="imp-loading"><h2>Importing from Mealie</h2><p class="sub small">Recipe ${IMPQ.i + 1} of ${IMPQ.list.length}…</p></div>`, 'sm');
-  try { const r = await api('GET', '/api/import/mealie/recipes/' + encodeURIComponent(slug)); if (!IMPQ) return; importToEditor(r.recipe); }
-  catch (e) { toast(`Couldn’t import “${(IMPUI.items.find(x => x.slug === slug) || {}).name || slug}”: ${e.message}`); impNext(); }
+  /* No loading popup here: the review screen already carries "Recipe n of N", and the popup used to
+     sit over the editor for every single recipe until it was clicked away. */
+  try { const r = await api('GET', '/api/import/mealie/recipes/' + encodeURIComponent(slug)); if (!IMPQ) return; IMPUI.busy = false; closeModal(); importToEditor(r.recipe); }
+  catch (e) { toast(`Couldn’t import “${impName(slug)}”: ${e.message}`); impNext(); }
 }
+const impName = slug => (IMPUI.items.find(x => x.slug === slug) || {}).name || slug;
+const impSelected = () => { const list = IMPUI.items.filter(r => IMPUI.sel[r.slug]).map(r => r.slug); Object.keys(IMPUI.sel).forEach(s => { if (!list.includes(s)) list.push(s); }); return list; };
 function impStartQueue() {
-  const list = IMPUI.items.filter(r => IMPUI.sel[r.slug]).map(r => r.slug); Object.keys(IMPUI.sel).forEach(s => { if (!list.includes(s)) list.push(s); });
-  if (!list.length) return; IMPQ = { list, i: -1, done: 0 }; IMPUI.sel = {}; impNext();
+  const list = impSelected();
+  if (!list.length) return; IMPQ = { list, i: -1, done: 0 }; IMPUI.sel = {}; IMPUI.busy = true; renderImportModal(); impNext();
+}
+/* Save everything that came through complete, and hand the rest to the normal review queue.
+   "Complete" is the same bar the review screen enforces (impNeeds), so nothing half-filled is saved. */
+async function impBulk() {
+  const list = impSelected(); if (!list.length) return;
+  const wasRE = RE; IMPUI.busy = true; renderImportModal();
+  const review = []; let saved = 0, failed = 0;
+  for (let i = 0; i < list.length; i++) {
+    IMPUI.note = `Saving ${i + 1} of ${list.length}…`; impCountPaint();
+    let rec;
+    try { rec = (await api('GET', '/api/import/mealie/recipes/' + encodeURIComponent(list[i]))).recipe; }
+    catch (e) { failed++; continue; }
+    RE = impEditorState(rec);
+    // anything incomplete, or a near-certain duplicate, is a decision for a person
+    if (impNeeds().length || RE.imp.dup) { review.push(list[i]); continue; }
+    try { await impSaveOne(); saved++; } catch (e) { review.push(list[i]); }
+  }
+  RE = wasRE && wasRE !== RE ? wasRE : null;
+  IMPUI.busy = false; IMPUI.note = ''; IMPUI.sel = {};
+  saveState(); rebuildCatalog();
+  const part = [saved ? `Saved ${saved}` : '', failed ? `${failed} couldn’t be fetched` : ''].filter(Boolean).join(' · ');
+  if (review.length) { IMPQ = { list: review, i: -1, done: saved }; closeModal(); toast(`${part || 'Saved 0'} · ${review.length} need${review.length === 1 ? 's' : ''} review`); impNext(); return; }
+  closeModal(); render(); toast(part || 'Nothing was saved');
+}
+async function impSaveOne() {
+  const built = reBuildRecord(RE); if (!built) throw new Error('incomplete');
+  const id = 'cr_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+  if (AUTH.mode === 'server') {
+    const r = await api('POST', '/api/recipes/shared', Object.assign({ id }, built.rec));
+    SHARED_RECIPES[r.recipe.id] = r.recipe; SREC_REV = r.rev || SREC_REV;
+  } else S.customRecipes[id] = Object.assign(built.rec, { id });
+  impRemember(); rebuildCatalog();      // so the next one in the batch sees it when checking for duplicates
 }
 
 /* ---------- Settings → API connections ---------- */
@@ -445,9 +495,13 @@ function mealieFormData() { const f = $('form[data-form="mealie"]'); return f ? 
 
 Object.assign(ACT, {
   'imp-open': el => importModal(el.dataset.v),
-  'imp-tab': el => { IMPUI.tab = el.dataset.v; IMPUI.err = ''; renderImportModal(); if (IMPUI.tab === 'mealie' && INTEG && INTEG.mealie.configured && !IMPUI.loaded) impSearch(); },
+  'imp-tab': el => { IMPUI.tab = el.dataset.v; IMPUI.err = ''; renderImportModal(); if (IMPUI.tab === 'mealie' && INTEG && INTEG.mealie.configured) impSearch(); },
   'imp-more': () => impSearch(true),
   'imp-mealie-go': () => impStartQueue(),
+  'imp-bulk': () => { const n = Object.keys(IMPUI.sel).length; if (!n) return;
+    confirmBox(`Save ${n} recipe${n > 1 ? 's' : ''} without reviewing?`,
+      `Each one is matched to foods automatically and saved straight away, so <b>expect some wrong foods and amounts</b> — nobody checks them first. Recipes missing anything required, and any that look like one you already have, are left for you to review as usual. You can edit or delete anything afterwards.`,
+      'Save without review', () => impBulk(), true); },
   're-imp-ok': el => { const r = RE && RE.ing[+el.dataset.i]; if (r && r[2]) { r[2].st = 'ok'; impRefresh(); } },
   're-imp-add': el => { if (!RE || !RE.imp) return; const s = RE.imp.skipped.splice(+el.dataset.i, 1)[0]; if (!s) return; const r = impRow({ text: s.text }); const row = r.row || ['', '', { src: s.text, st: 'none', est: null, sugg: [], key: impKey(impParseLine(s.text).food), p: impParseLine(s.text) }];
     if (!row[0] && row[2]) row[2].st = 'none'; RE.ing.push(row); renderRecipeEditor(); },

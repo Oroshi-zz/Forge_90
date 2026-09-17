@@ -551,7 +551,7 @@ function viewSettings(group) {
   if (group && SET_GROUPS[group]) return settingsGroupHTML(group);
   const f = (lbl, name, val, attrs = '', hint = '') => `<div class="field"><label>${lbl}</label><input class="inp" name="${name}" value="${esc(val)}" ${attrs}>${hint ? `<span class="tiny muted">${hint}</span>` : ''}</div>`;
   return `<div class="page-head"><div class="t"><h1>Settings</h1><p>${AUTH.mode === 'server' ? 'Everything is saved to your account. Export a backup now and then.' : 'Everything is saved in this browser. Export a backup now and then.'}</p></div></div>
-    <div class="grid g2">
+    <div class="set-cards">
       ${trainingCardHTML()}
       ${lossRateCardHTML()}
       ${bodyGoalsCardHTML()}
@@ -559,7 +559,6 @@ function viewSettings(group) {
       ${gymSettingsHTML()}
       ${restSettingsHTML()}
       ${appearanceCardHTML()}</div>
-    <div style="height:16px"></div>
     ${moneyCardHTML()}
     ${apiCardHTML()}
     <div style="height:16px"></div>

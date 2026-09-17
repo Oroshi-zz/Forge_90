@@ -1485,9 +1485,13 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
 .eqz i { width: 3px; height: 6px; border-radius: 2px; background: currentColor; animation: eqb .55s ease-in-out infinite alternate; }
 .eqz i:nth-child(2) { animation-delay: -.18s; } .eqz i:nth-child(3) { animation-delay: -.36s; }
 @keyframes eqb { to { height: 18px; } }
-/* Settings cards sit in a 2-column grid, which stretches every card to its row's height. The gym card
-   pairs with the much taller rest timer card, so left stretching it was mostly empty space. */
-#gym-cards { align-self: start; }
+/* Settings cards pack like masonry rather than sitting in grid rows. A grid stretched every card to
+   the height of the tallest in its row, so the short gym card left a hole beside the rest timer.
+   Columns let each card take its own height and the ones under it move up to meet it; a card that
+   grows later just pushes its own column down, with no re-render needed. */
+.set-cards { columns: 2; column-gap: 16px; margin-bottom: 16px; }   /* the last card's own margin is swallowed by the column box */
+.set-cards > .card { break-inside: avoid; -webkit-column-break-inside: avoid; margin: 0 0 16px; }
+@media (max-width: 720px) { .set-cards { columns: 1; } }
 .rs-alarm { justify-content: flex-start; margin-bottom: 6px; }
 .rs-vol { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; color: var(--muted); }
 .rs-vol input { flex: 1; accent-color: var(--accent-2); }
@@ -1548,6 +1552,7 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
   .card { padding: 16px; }
   .card-h { flex-wrap: wrap; }
   .grid.g2, .g-half, .g-split { gap: 12px; }
+  .set-cards { column-gap: 12px; margin-bottom: 12px; } .set-cards > .card { margin-bottom: 12px; }
 
   /* fixes: the day view and Foods & recipes no longer scroll sideways */
   .day-head { flex-wrap: wrap; }

@@ -480,15 +480,24 @@ function updateRecipePreview() {
       return `<div class="tiny ${off > .25 ? '' : 'muted'}" style="margin-top:6px">The source lists <b>${fmt(n.k)} kcal</b>${n.p ? ` and <b>${fmt(n.p)} g protein</b>` : ''} per serving${off > .25 && e.ing.every(r => ING[r[0]] && +r[1] > 0) ? ` — yours is ${fmt(off * 100)}% ${ps.k > n.k ? 'higher' : 'lower'}, so check the amounts and servings.` : '.'}</div>`; })() : ''}
     ${blocked.length ? `<div class="note warn" style="margin-top:8px">${icon('info')}<span>Uses foods you’ve turned off (${esc(blocked.join(', '))}) — it won’t be scheduled until they’re back on.</span></div>` : ''}`;
 }
+/* The record an editor state describes, or null when it is too incomplete to save. Split out of
+   saveRecipe so the unattended bulk import can build the same record without the editor on screen. */
+function reBuildRecord(e) {
+  const name = e.name.trim(); if (!name) return null;
+  const ing = e.ing.filter(([id, a]) => ING[id] && +a > 0).map(([id, a]) => [id, +a]);
+  if (!ing.length) return null;
+  const cl = cleanLinks(e.links);
+  const rec = { links: cl.links, name, emoji: e.emoji || '🍽️', cat: e.cat, yield: Math.max(1, Math.round(+e.yield || 1)), storage: e.storage, time: +e.time || 0,
+    tags: (() => { const known = usedTags().map(([t]) => t); const out = []; e.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(t => { t = known.find(k => k.toLowerCase() === t.toLowerCase()) || t; if (!out.some(o => o.toLowerCase() === t.toLowerCase())) out.push(t); }); return out; })(), fixed: !!e.fixed, rotate: !!e.rotate, ing, steps: e.steps.split('\n').map(s => s.trim()).filter(Boolean) };
+  return { rec, cl, name };
+}
 function saveRecipe() {
   const e = RE; const name = e.name.trim(); e._saving = true;
   if (!name) { e._saving = false; toast('Give the recipe a name'); const n = $('[data-re="name"]'); if (n) n.focus(); return; }
   if (e.imp && !impValidate()) { e._saving = false; return; }
-  const ing = e.ing.filter(([id, a]) => ING[id] && +a > 0).map(([id, a]) => [id, +a]);
-  if (!ing.length) { e._saving = false; toast('Add at least one ingredient'); return; }
-  const cl = cleanLinks(e.links);
-  const rec = { links: cl.links, name, emoji: e.emoji || '🍽️', cat: e.cat, yield: Math.max(1, Math.round(+e.yield || 1)), storage: e.storage, time: +e.time || 0,
-    tags: (() => { const known = usedTags().map(([t]) => t); const out = []; e.tags.split(',').map(t => t.trim()).filter(Boolean).forEach(t => { t = known.find(k => k.toLowerCase() === t.toLowerCase()) || t; if (!out.some(o => o.toLowerCase() === t.toLowerCase())) out.push(t); }); return out; })(), fixed: !!e.fixed, rotate: !!e.rotate, ing, steps: e.steps.split('\n').map(s => s.trim()).filter(Boolean) };
+  const built = reBuildRecord(e);
+  if (!built) { e._saving = false; toast('Add at least one ingredient'); return; }
+  const { rec, cl } = built;
   if (e.id && e.base) { S.recipeOverrides[e.id] = rec; reSaveDone(e, e.id, name, cl); return; }
   const id = e.id || 'cr_' + Date.now().toString(36) + (e.imp ? Math.random().toString(36).slice(2, 5) : '');
   /* On a server the recipe belongs to the shared book, so it goes there and not into this user's
