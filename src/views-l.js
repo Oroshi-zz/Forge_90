@@ -42,24 +42,24 @@ function plusSheet() {
 let WS = null;
 function weighSheet(date) {
   const d = date || todayISO(); const ex = S.weights.find(x => x.d === d); const last = sortedWeights().filter(x => x.d <= d).slice(-1)[0];
-  WS = { d, v: ex ? +ex.w : last ? +last.w : +S.settings.startWeight, bf: ex && ex.bf != null && ex.bf !== '' ? ex.bf : '' }; renderWeigh();
+  WS = { d, v: wNum(ex ? +ex.w : last ? +last.w : +S.settings.startWeight, 1), bf: ex && ex.bf != null && ex.bf !== '' ? ex.bf : '' }; renderWeigh();
 }
 function renderWeigh() {
   const t = todayISO(); const last = sortedWeights().filter(x => x.d < WS.d).slice(-1)[0];
   modal(`<div class="ws-m"><div class="row"><h2 style="flex:1">Log weight</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
-    <div class="tiny muted" style="text-align:center">${WS.d === t ? 'This morning' : esc(fmtDate(WS.d))}${last ? ` · last ${fmt(last.w, 1)} lb on ${esc(fmtDate(last.d, { weekday: 'short', month: 'short', day: 'numeric' }))}` : ''}</div>
-    <div class="big-num"><button type="button" data-act="ws-step" data-v="-0.1" aria-label="0.1 lb less">−</button><input id="ws-v" class="num" type="number" inputmode="decimal" step="0.1" min="80" max="500" value="${fmt(WS.v, 1).replace(/,/g, '')}" data-input="ws-v" aria-label="Weight in lb"><button type="button" data-act="ws-step" data-v="0.1" aria-label="0.1 lb more">+</button></div>
-    <div class="row wrap ws-chips">${[-1, -0.5, 0.5, 1].map(v => `<button type="button" class="btn sm" data-act="ws-step" data-v="${v}">${v > 0 ? '+' : '−'}${Math.abs(v)} lb</button>`).join('')}</div>
+    <div class="tiny muted" style="text-align:center">${WS.d === t ? 'This morning' : esc(fmtDate(WS.d))}${last ? ` · last ${wTxt(last.w, 1)} on ${esc(fmtDate(last.d, { weekday: 'short', month: 'short', day: 'numeric' }))}` : ''}</div>
+    <div class="big-num"><button type="button" data-act="ws-step" data-v="-0.1" aria-label="0.1 ${wU()} less">−</button><input id="ws-v" class="num" type="number" inputmode="decimal" step="0.1" min="${wNum(80)}" max="${wNum(500)}" value="${fmt(WS.v, 1).replace(/,/g, '')}" data-input="ws-v" aria-label="Weight in ${wU()}"><button type="button" data-act="ws-step" data-v="0.1" aria-label="0.1 ${wU()} more">+</button></div>
+    <div class="row wrap ws-chips">${(isMetric() ? [-0.5, -0.2, 0.2, 0.5] : [-1, -0.5, 0.5, 1]).map(v => `<button type="button" class="btn sm" data-act="ws-step" data-v="${v}">${v > 0 ? '+' : '−'}${Math.abs(v)} ${wU()}</button>`).join('')}</div>
     <div class="grid g2" style="gap:10px"><div class="field"><label for="ws-bf">Body fat % (optional)</label><input id="ws-bf" class="inp" type="number" inputmode="decimal" step="0.1" min="3" max="60" value="${esc(WS.bf)}" placeholder="Estimated if blank" data-input="ws-bf"></div>
       <div class="field"><label for="ws-d">Date</label><input id="ws-d" class="inp" type="date" value="${WS.d}" max="${t}" data-input="ws-d"></div></div>
-    <button type="button" class="btn primary block big" id="ws-save" data-act="ws-save">${icon('check')}Save ${fmt(WS.v, 1)} lb</button></div>`, 'sm ws-modal');
+    <button type="button" class="btn primary block big" id="ws-save" data-act="ws-save">${icon('check')}Save ${fmt(WS.v, 1)} ${wU()}</button></div>`, 'sm ws-modal');
 }
-function wsSync() { const i = $('#ws-v'), b = $('#ws-save'); if (i && document.activeElement !== i) i.value = fmt(WS.v, 1).replace(/,/g, ''); if (b) b.innerHTML = `${icon('check')}Save ${fmt(WS.v, 1)} lb`; }
+function wsSync() { const i = $('#ws-v'), b = $('#ws-save'); if (i && document.activeElement !== i) i.value = fmt(WS.v, 1).replace(/,/g, ''); if (b) b.innerHTML = `${icon('check')}Save ${fmt(WS.v, 1)} ${wU()}`; }
 function wsSave() {
-  const w = Math.round(+WS.v * 10) / 10; if (!(w >= 80 && w <= 500)) { toast('Enter a weight between 80 and 500 lb'); return; }
+  const w = Math.round(frW(WS.v) * 100) / 100; if (!(w >= 80 && w <= 500)) { toast(`Enter a weight between ${wNum(80)} and ${wNum(500)} ${wU()}`); return; }
   const bf = WS.bf === '' || WS.bf == null ? null : +WS.bf; if (bf != null && !(bf >= 3 && bf <= 60)) { toast('Body fat should be between 3 and 60 %'); return; }
   S.weights = S.weights.filter(x => x.d !== WS.d); S.weights.push({ d: WS.d, w, bf }); saveState(); closeModal(); render();
-  const t = latestStats(); toast(`Logged ${w} lb${bf != null ? ' · ' + bf + '%' : ''} — targets now ${targetsFor(t.w, t.bf, true).kcal}/${targetsFor(t.w, t.bf, false).kcal} kcal`); WS = null;
+  const t = latestStats(); toast(`Logged ${wTxt(w, 1)}${bf != null ? ' · ' + bf + '%' : ''} — targets now ${targetsFor(t.w, t.bf, true).kcal}/${targetsFor(t.w, t.bf, false).kcal} kcal`); WS = null;
 }
 
 /* ---------------- meal swap sheet: searchable, favorites first, macros shown ---------------- */
@@ -112,7 +112,7 @@ function viewToday(date) {
   const frac = idx < 0 ? 0 : Math.min(1, (idx + 1) / (idx < LAUNCH_DAYS ? LAUNCH_DAYS : 91));
   const bar = `<div class="ph-cyc" title="${idx >= 0 ? `Day ${idx + 1}` : 'Before Day 1'}"><i style="width:${frac * 100}%"></i></div>`;
   const weighed = S.weights.some(x => x.d === t); const last = sortedWeights().slice(-1)[0];
-  const prompt = date === t && !weighed ? `<button type="button" class="ph-prompt" data-act="weigh-sheet">${icon('scale')}<span><b>Log this morning’s weight</b><small class="num">${last ? `Last: ${fmt(last.w, 1)} lb on ${esc(fmtDate(last.d, { weekday: 'short' }))}` : 'Your first weigh-in sets the trend line'}</small></span><span class="go">Log</span></button>` : '';
+  const prompt = date === t && !weighed ? `<button type="button" class="ph-prompt" data-act="weigh-sheet">${icon('scale')}<span><b>Log this morning’s weight</b><small class="num">${last ? `Last: ${wTxt(last.w, 1)} on ${esc(fmtDate(last.d, { weekday: 'short' }))}` : 'Your first weigh-in sets the trend line'}</small></span><span class="go">Log</span></button>` : '';
   if (!inPlan(date)) {
     const before = date < st.startDate;
     return head + bar + prompt + `<div class="card empty-state">${icon('cal')}<h2 style="margin:8px 0 4px">${before ? `Your plan starts ${esc(fmtDate(st.startDate, { weekday: 'long', month: 'long', day: 'numeric' }))}` : 'That day isn’t in the plan'}</h2>
@@ -161,10 +161,10 @@ function progressCardHTML() {
   const pr = recentPRs(1)[0];
   const mon = mondayOf(todayISO()); const wk = Array.from({ length: 7 }, (_, i) => addDays(mon, i)).filter(d => S.plan[d] && S.plan[d].w);
   const done = wk.filter(d => S.done[d]).length;
-  return `<a class="card pcard" href="#/progress" aria-label="Progress: ${fmt(cur.w, 1)} lb${hasW ? `, ${sign(dW)} lb since the start` : ''}. Open the progress page">
+  return `<a class="card pcard" href="#/progress" aria-label="Progress: ${wTxt(cur.w, 1)}${hasW ? `, ${sign(toW(dW))} ${wU()} since the start` : ''}. Open the progress page">
     <span class="pc-top"><span class="h">Progress</span><span class="see">See all${icon('right')}</span></span>
-    <span class="pc-main"><span><small>Weight</small><b class="num">${fmt(cur.w, 1)} <span>lb</span></b><small class="num ${hasW ? (dW <= 0 ? 'good' : '') : ''}">${hasW ? `${sign(dW)} lb since the start` : 'Log a weigh-in to start the trend'}</small></span>${spark}</span>
-    <span class="pc-mini"><span><small>Body fat</small><b class="num">${fmt(cur.bf, 1)}<span class="u">%${cur.est ? ' est.' : ''}</span></b></span><span><small>Trend</small><b class="num">${trend && trend.rate != null ? sign(-trend.rate, 2) : '—'}<span class="u"> lb/wk</span></b></span><span><small>To goal</small><b class="num">${fmt(Math.max(0, cur.w - st.goalWeight), 1)}<span class="u"> lb</span></b></span></span>
+    <span class="pc-main"><span><small>Weight</small><b class="num">${fmt(toW(cur.w), 1)} <span>${wU()}</span></b><small class="num ${hasW ? (dW <= 0 ? 'good' : '') : ''}">${hasW ? `${sign(toW(dW))} ${wU()} since the start` : 'Log a weigh-in to start the trend'}</small></span>${spark}</span>
+    <span class="pc-mini"><span><small>Body fat</small><b class="num">${fmt(cur.bf, 1)}<span class="u">%${cur.est ? ' est.' : ''}</span></b></span><span><small>Trend</small><b class="num">${trend && trend.rate != null ? sign(toW(-trend.rate), 2) : '—'}<span class="u"> ${wU()}/wk</span></b></span><span><small>To goal</small><b class="num">${fmt(toW(Math.max(0, cur.w - st.goalWeight)), 1)}<span class="u"> ${wU()}</span></b></span></span>
     <span class="pc-foot"><span class="pc-pr">${icon('trophy')}<span>${pr ? `${esc(EX[pr.ex].name)} ${fmt(+pr.set.w || 0, (+pr.set.w || 0) % 1 ? 1 : 0)} × ${pr.set.r} · ${esc(fmtDate(pr.d, { weekday: 'short' }))}` : 'Log sets to start your PR board'}</span></span>${wk.length ? `<span class="wkdots">${wk.map(d => `<i class="${S.done[d] ? 'done' : ''}"></i>`).join('')}<span class="num">${done}/${wk.length} this week</span></span>` : ''}</span></a>`;
 }
 function todayMacroHTML(day) {
@@ -246,12 +246,12 @@ function viewYou() {
   return `<div class="you-top"><div class="me">${avatarHTML(u || { name })}<div><b>${esc(name)}</b><div class="tiny muted">${srv && u ? (u.role === 'admin' ? 'Administrator · ' : '') + esc(u.email || '') : 'Saved in this browser'}${syncActive() ? ` · meals synced with ${esc(syncName())}` : ''}</div></div></div>${srv && u ? `<button type="button" class="btn icon ghost" data-act="logout" aria-label="Sign out" title="Sign out">${icon('logout')}</button>` : ''}</div>
     ${progressCardHTML()}
     <section class="ygroup"><div class="ph-sec"><h2>Recent PRs</h2><span class="spacer"></span><a class="btn sm ghost" href="#/progress">All progress ${icon('right')}</a></div>
-      ${prs.length ? `<div class="card pad0">${prs.map(p => `<a class="yrow" href="#/progress"><span class="yi pr">${icon('trophy')}</span><span class="t"><b>${esc(EX[p.ex].name)}</b><small class="num">${fmt(+p.set.w || 0, (+p.set.w || 0) % 1 ? 1 : 0)} lb × ${p.set.r} · ${esc(fmtDate(p.d))}</small></span>${icon('right')}</a>`).join('')}</div>` : `<div class="card empty-state">${icon('trophy')}<div>Log your sets in a workout and personal records show up here.</div></div>`}</section>
+      ${prs.length ? `<div class="card pad0">${prs.map(p => `<a class="yrow" href="#/progress"><span class="yi pr">${icon('trophy')}</span><span class="t"><b>${esc(EX[p.ex].name)}</b><small class="num">${loadTxt(p.set.w)} ${wU()} × ${p.set.r} · ${esc(fmtDate(p.d))}</small></span>${icon('right')}</a>`).join('')}</div>` : `<div class="card empty-state">${icon('trophy')}<div>Log your sets in a workout and personal records show up here.</div></div>`}</section>
     <section class="ygroup"><div class="ph-sec"><h2>Gym cards</h2><span class="spacer"></span><a class="btn sm ghost" href="#/settings/gym">Manage</a></div>
       ${cards.length ? `<div class="card pad0">${cards.map(c => `<button type="button" class="yrow" data-act="gym-full" data-id="${c.id}"><span class="gcy ${c.fmt === 'qr' ? 'qr' : ''}">${barcodeSVG(c.code, c.fmt, { h: 40 })}</span><span class="t"><b>${esc(c.name)}</b><small class="num">${esc(gymHuman(c))}</small></span>${icon('expand')}</button>`).join('')}</div>`
         : `<button type="button" class="btn block" data-act="gym-add">${icon('plus')}Add your gym card</button>`}</section>
     ${group('Plan', [row('dumbbell', 'Workout plan', 'Sessions, swaps and the exercise library', 'href="#/workouts"'), row('clock', 'Training days & rest timer', `${st.trainDays.length} days a week · rest ${mmss((+st.restDef || 90) * 1000)} · ${esc(restSoundOf(st.restSound).n)}`, 'href="#/settings/training"'),
-      row('target', 'Targets & loss rate', `${fmt(st.rate, 2)} lb/wk · ${fmt(tT.kcal)} / ${fmt(tR.kcal)} kcal`, 'href="#/settings/targets"'), row('scale', 'Body & goals', `Goal ${st.goalWeight} lb · ${st.goalBF}%`, 'href="#/settings/body"')])}
+      row('target', 'Targets & loss rate', `${rateTxt(st.rate, 2)} · ${fmt(tT.kcal)} / ${fmt(tR.kcal)} kcal`, 'href="#/settings/targets"'), row('scale', 'Body & goals', `Goal ${wTxt(st.goalWeight)} · ${st.goalBF}%`, 'href="#/settings/body"')])}
     ${group('Food', [row('food', 'Food preferences', esc(fpCountText()), 'href="#/settings/food"'), row('book', 'Foods & macros', `${Object.keys(ING).length} foods`, 'href="#/foods" data-act="go-foods" data-v="foods"'), row('flame', 'Money saver', st.shareIngredients !== false ? 'On · recipes share ingredients' : 'Off', 'href="#/settings/money"')])}
     ${group('App', [row(effTheme() === 'light' ? 'sun' : 'moon', 'Appearance & data', `${st.theme[0].toUpperCase() + st.theme.slice(1)} theme · backup and restore`, 'href="#/settings/app"'), srv ? row('users', 'Meal sync', syncActive() ? `Synced with ${esc(syncName())}` : 'Share meals and a shopping list with someone', 'href="#/account" data-act="go-acc-sync"') : '', srv && isAdmin() ? row('link', 'API connections', 'Mealie recipe import', 'href="#/settings/api"') : ''])}
     ${srv ? group('Account', [row('user', 'Profile & password', esc((u && u.email) || ''), 'href="#/account"'), isAdmin() ? row('shield', 'Admin console', 'Users, email, security', 'href="#/admin"') : '']) : ''}
@@ -266,7 +266,7 @@ function copyListPhone() {
 Object.assign(ACT, {
   'plus-sheet': () => plusSheet(),
   'weigh-sheet': el => weighSheet(el.dataset.d),
-  'ws-step': el => { WS.v = Math.max(80, Math.min(500, Math.round((+WS.v + +el.dataset.v) * 10) / 10)); wsSync(); },
+  'ws-step': el => { WS.v = Math.max(wNum(80), Math.min(wNum(500), Math.round((+WS.v + +el.dataset.v) * 10) / 10)); wsSync(); },
   'ws-save': () => wsSave(),
   'meal-swap': el => mealSwap(el.dataset.d, el.dataset.slot),
   'dessert-add': el => mealSwap(el.dataset.d, 'dessert'),
@@ -282,7 +282,7 @@ Object.assign(ACT, {
   'go-acc-sync': () => { UI._scrollTo = 'acc-sync'; location.hash = '#/account'; }
 });
 document.addEventListener('input', e => { const t = e.target; if (!t || !t.dataset) return;
-  if (t.dataset.input === 'ws-v' && WS) { WS.v = +t.value || 0; const b = $('#ws-save'); if (b) b.innerHTML = `${icon('check')}Save ${fmt(WS.v, 1)} lb`; }
+  if (t.dataset.input === 'ws-v' && WS) { WS.v = +t.value || 0; const b = $('#ws-save'); if (b) b.innerHTML = `${icon('check')}Save ${fmt(WS.v, 1)} ${wU()}`; }
   if (t.dataset.input === 'ws-bf' && WS) WS.bf = t.value;
   if (t.dataset.input === 'ws-d' && WS && t.value) { WS.d = t.value > todayISO() ? todayISO() : t.value; }
   if (t.dataset.input === 'ms-q' && MS) { MS.q = t.value; const l = $('#ms-list'); if (l) l.innerHTML = msListHTML(); }

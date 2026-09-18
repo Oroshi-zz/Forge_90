@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Maintainer>
+  <Icon>https://raw.githubusercontent.com/Oroshi-zz/Forge_90/main/server/public/icon.png</Icon>
+  <Profile>
+    FORGE 90 is a self-hosted training and meal planner. It builds a 90-day training program, and plans every meal. Workout mode walks you through a session one exercise at a time with a rest timer. It ships with 144 exercises, 141 recipes and 675 foods. Add your own, scan a barcode, search Open Food Facts by name, or import straight from a web link or your Mealie server. The week's shopping list builds itself by aisle, and the pantry keeps you from buying what is already in the cupboard. Recipes and scanned foods are shared by everyone with an account on your server, so the library grows for the whole house.
+  </Profile>
+  <WebPage>https://github.com/Oroshi-zz/Forge_90</WebPage>
+  <Support>https://github.com/Oroshi-zz/Forge_90/issues</Support>
+</Maintainer>

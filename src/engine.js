@@ -18,10 +18,58 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 function fmtDate(s, opts) { return parseISO(s).toLocaleDateString(undefined, opts || { weekday: 'short', month: 'short', day: 'numeric' }); }
 const maxISO = (a, b) => a > b ? a : b;
 
+/* ---------- units ----------
+   Everything is stored imperial: body weight and logged loads in pounds, height in inches,
+   food in grams. Metric is a display-and-input layer on top, so switching back and forth
+   never rewrites a single saved number and one user's choice cannot affect another's data. */
+const KG_PER_LB = 0.45359237, CM_PER_IN = 2.54;
+function isMetric() { return !!(typeof S !== 'undefined' && S && S.settings && S.settings.units === 'metric'); }
+function wU() { return isMetric() ? 'kg' : 'lb'; }
+function toW(lb) { return isMetric() ? (+lb || 0) * KG_PER_LB : (+lb || 0); }
+function frW(v) { return isMetric() ? (+v || 0) / KG_PER_LB : (+v || 0); }
+/* Leave dp off in prose and a round number loses its ".0": "Reach 180 lb", "Reach 81.6 kg". */
+function wTxt(lb, dp) { const v = toW(lb); return fmt(v, dp == null ? (Math.abs(v % 1) > 0.049 ? 1 : 0) : dp) + ' ' + wU(); }
+function wNum(lb, dp = 1) { const v = toW(lb); return Math.round(v * 10 ** dp) / 10 ** dp; }
+function rateTxt(lb, dp = 2) { return fmt(toW(lb), dp) + ' ' + wU() + '/wk'; }
+function pU() { return isMetric() ? 'g/kg' : 'g/lb'; }
+function toP(p) { return isMetric() ? (+p || 0) / KG_PER_LB : (+p || 0); }
+function frP(v) { return isMetric() ? (+v || 0) * KG_PER_LB : (+v || 0); }
+function pNum(p) { return Math.round(toP(p) * 100) / 100; }
+function hU() { return isMetric() ? 'cm' : 'in'; }
+function toH(inch) { return Math.round((+inch || 0) * (isMetric() ? CM_PER_IN : 1) * 10) / 10; }
+function frH(v) { return Math.round((+v || 0) / (isMetric() ? CM_PER_IN : 1) * 100) / 100; }
+/* The rate slider works in whole display-unit steps rather than converted pounds, so the
+   tick labels stay round in both systems. Stored value is always lb/week. */
+function RATE_SLIDER() {
+  const m = isMetric();
+  return m
+    ? { min: 0.1, max: 0.9, step: 0.025, ticks: ['0.1', '0.5', '0.9'], val: lb => Math.round(toW(lb) / 0.025) * 0.025, get: v => frW(v) }
+    : { min: 0.25, max: 2, step: 0.05, ticks: ['0.25', '1.0', '2.0'], val: lb => +lb, get: v => +v };
+}
+function PROT_SLIDER() {
+  return isMetric()
+    ? { min: 1.1, max: 2.2, step: 0.1, val: p => Math.round(toP(p) * 10) / 10, get: v => frP(v) }
+    : { min: 0.5, max: 1, step: 0.05, val: p => +p, get: v => +v };
+}
+/* A logged load is held in display units while a set is being entered, then stored in pounds. */
+function dLoad(lb) { return Math.round(toW(lb) * 100) / 100; }
+function sLoad(v) { return Math.round(frW(v) * 1000) / 1000; }
+/* snapped to the smallest plate the system actually has, so a converted load reads as a real weight */
+function qLoad(lb) { const q = isMetric() ? 4 : 2; return Math.round(toW(lb) * q) / q; }
+function loadNum(v) { return fmt(v, v % 1 ? 1 : 0); }
+function loadTxt(lb) { return loadNum(dLoad(lb)); }
+/* Progression and the +/- buttons use real plate steps in whichever system, never a converted pound. */
+function loadInc(ex) { const small = /Dumbbell|DB/.test(ex.name) || ['Shoulders', 'Biceps', 'Triceps'].includes(ex.group); return isMetric() ? (small ? 2.5 : 5) : (small ? 5 : 10); }
+function loadStep(cur, dir) {
+  const m = isMetric(), step = m ? (cur < 10 && dir < 0 ? 1.25 : 2.5) : (cur < 20 && dir < 0 ? 2.5 : 5), q = m ? 4 : 2;
+  return Math.max(0, Math.round((cur + dir * step) * q) / q);
+}
+
 /* ---------- state ---------- */
 function defaultSettings() {
   return {
     startDate: nextMonday(todayISO()),
+    units: 'imperial',
     trainDays: [1, 3, 5],
     startWeight: 230, startBF: 30,
     goalWeight: 180, goalBF: 15,
@@ -514,6 +562,9 @@ function latestStats() { return statsOn(null); }
 
 /* ---------- energy targets (Katch–McArdle) ---------- */
 const goalKind = () => { const g = S.settings.goal; return g === 'bulk' || g === 'maintain' ? g : 'cut'; };
+/* Goal body fat the app warns below, and the floor it will never auto-set under, so a plan the app
+   picked for you is never one it then flags. Sex unknown takes the higher of the two. */
+const BF_LOW = sex => sex === 'm' ? 6 : 10;
 function planRate(w) {
   const st = S.settings; const k = goalKind();
   if (k === 'maintain') return 0;
@@ -706,21 +757,25 @@ function amountText(id, amt) {
   }
   let grams = amt >= 60 ? Math.round(amt / 5) * 5 : Math.round(amt);
   const unit = g.ml ? 'ml' : 'g';
+  /* In metric the gram figure is the measurement, so the cup/spoon translation beside it is dropped.
+     A scoop is a scoop in either system, so that one stays. */
   let sub = '';
-  if (TBSP[id] && amt < TBSP[id] * 4) { const t = amt / TBSP[id]; sub = t < 0.9 ? fracStr(t * 3) + ' tsp' : fracStr(t) + ' tbsp'; }
-  else if (id === 'whey') sub = fracStr(amt / 30) + ' scoop' + (amt / 30 > 1.2 ? 's' : '');
+  if (id === 'whey') sub = fracStr(amt / 30) + ' scoop' + (amt / 30 > 1.2 ? 's' : '');
+  else if (isMetric()) sub = '';
+  else if (TBSP[id] && amt < TBSP[id] * 4) { const t = amt / TBSP[id]; sub = t < 0.9 ? fracStr(t * 3) + ' tsp' : fracStr(t) + ' tbsp'; }
   else if (CUP[id]) { const c = amt / CUP[id]; sub = c < 0.2 ? Math.max(1, Math.round(c * 16)) + ' tbsp' : fracStr(c) + ' cup'; }
   else if (g.a === 'Meat & Seafood' || id === 'tuna_can' || id === 'jerky') sub = (amt / 28.35).toFixed(1) + ' oz';
   return { main: grams + ' ' + unit, sub };
 }
 function groceryText(id, amt) {
-  const g = ING[id];
-  if (g.dry) { const d = amt * g.dry; return { name: g.dryName, qty: Math.round(d / 10) * 10 + ' g', sub: (d / 453.6).toFixed(1) + ' lb' }; }
+  const g = ING[id], met = isMetric();
+  const bulk = (a, dp) => met ? (a / 1000).toFixed(dp) + ' kg' : (a / 453.6).toFixed(dp) + ' lb';
+  if (g.dry) { const d = amt * g.dry; return { name: g.dryName, qty: Math.round(d / 10) * 10 + ' g', sub: bulk(d, 1) }; }
   if (g.u) { const n = Math.ceil(amt); return { name: g.n, qty: n + ' ' + (n === 1 ? g.u : g.u + (g.u.endsWith('ch') ? 'es' : 's')), sub: '' }; }
-  if (g.a === 'Meat & Seafood') return { name: g.n, qty: (amt / 453.6).toFixed(2) + ' lb', sub: Math.round(amt) + ' g' };
-  if (g.ml) return { name: g.n, qty: Math.round(amt / 10) * 10 + ' ml', sub: (amt / 946).toFixed(2) + ' qt' };
-  if (amt >= 900) return { name: g.n, qty: (amt / 453.6).toFixed(1) + ' lb', sub: Math.round(amt) + ' g' };
-  return { name: g.n, qty: Math.round(amt) + ' g', sub: CUP[id] ? fracStr(amt / CUP[id]) + ' cup' : (TBSP[id] ? fracStr(amt / TBSP[id]) + ' tbsp' : '') };
+  if (g.a === 'Meat & Seafood') return met ? { name: g.n, qty: Math.round(amt) + ' g', sub: amt >= 1000 ? bulk(amt, 2) : '' } : { name: g.n, qty: bulk(amt, 2), sub: Math.round(amt) + ' g' };
+  if (g.ml) return { name: g.n, qty: Math.round(amt / 10) * 10 + ' ml', sub: met ? (amt >= 500 ? (amt / 1000).toFixed(2) + ' L' : '') : (amt / 946).toFixed(2) + ' qt' };
+  if (amt >= 900) return met ? { name: g.n, qty: Math.round(amt) + ' g', sub: bulk(amt, 1) } : { name: g.n, qty: bulk(amt, 1), sub: Math.round(amt) + ' g' };
+  return { name: g.n, qty: Math.round(amt) + ' g', sub: met ? '' : (CUP[id] ? fracStr(amt / CUP[id]) + ' cup' : (TBSP[id] ? fracStr(amt / TBSP[id]) + ' tbsp' : '')) };
 }
 
 /* ---------- strength log / PRs ---------- */
@@ -754,11 +809,11 @@ function suggestion(exId, reps, beforeDate) {
   const ex = EX[exId];
   const w = last.bestSet ? +last.bestSet.w : 0;
   const allTop = last.sets.every(s => +s.r >= hi);
-  const inc = /Dumbbell|DB/.test(ex.name) || ex.group === 'Shoulders' || ex.group === 'Biceps' || ex.group === 'Triceps' ? 5 : 10;
+  const inc = loadInc(ex), dw = qLoad(w), u = wU(), drop = isMetric() ? 5 : 10;
   if (isBW(exId)) return { text: `Last best: ${last.bestReps} reps → aim for ${last.bestReps + 1}+`, last };
-  if (ex.assist) return { text: allTop ? `Hit the top of the range — drop assistance to ${Math.max(0, w - 10)} lb` : `Keep ${w} lb assist, add a rep per set`, last };
-  if (allTop) return { text: `Hit ${hi}+ on all sets → go up to ${w + inc} lb and aim for ${lo}+`, last };
-  return { text: `Stay at ${w} lb and beat ${last.sets.map(s => s.r).join('/')} reps`, last };
+  if (ex.assist) return { text: allTop ? `Hit the top of the range — drop assistance to ${loadNum(Math.max(0, dw - drop))} ${u}` : `Keep ${loadNum(dw)} ${u} assist, add a rep per set`, last };
+  if (allTop) return { text: `Hit ${hi}+ on all sets → go up to ${loadNum(dw + inc)} ${u} and aim for ${lo}+`, last };
+  return { text: `Stay at ${loadNum(dw)} ${u} and beat ${last.sets.map(s => s.r).join('/')} reps`, last };
 }
 
 /* ---------- trend & projections ---------- */
@@ -777,22 +832,22 @@ function weightTrend() {
   let advice = null, delta = 0;
   if (kind === 'maintain') {
     const drift = -rate;
-    if (Math.abs(drift) <= 0.35) advice = `Holding steady: ${drift >= 0 ? '+' : ''}${drift.toFixed(2)} lb/wk. Maintenance calories look right.`;
-    else { delta = drift > 0 ? -150 : 150; advice = `You’re ${drift > 0 ? 'gaining' : 'losing'} ${Math.abs(drift).toFixed(2)} lb/wk while aiming to hold. ${delta > 0 ? 'Add' : 'Trim'} ${Math.abs(delta)} kcal/day.`; }
+    if (Math.abs(drift) <= 0.35) advice = `Holding steady: ${drift >= 0 ? '+' : ''}${rateTxt(drift, 2)}. Maintenance calories look right.`;
+    else { delta = drift > 0 ? -150 : 150; advice = `You’re ${drift > 0 ? 'gaining' : 'losing'} ${rateTxt(Math.abs(drift), 2)} while aiming to hold. ${delta > 0 ? 'Add' : 'Trim'} ${Math.abs(delta)} kcal/day.`; }
     return { rate, advice, delta, points: pts.length, kind };
   }
   if (kind === 'bulk') {
     const gain = -rate;
     const target = bulkLb(st0.w);
-    if (gain < target * 0.5) { delta = gain < 0 ? 300 : 200; advice = `You’re gaining ${gain.toFixed(2)} lb/wk against a ${target.toFixed(2)} lb/wk target. Add ${delta} kcal/day.`; }
-    else if (gain > target * 1.6) { delta = -150; advice = `You’re gaining ${gain.toFixed(2)} lb/wk — faster than the ${target.toFixed(2)} lb/wk target, and the extra is mostly fat. Trim ${-delta} kcal/day.`; }
-    else advice = `On track: ${gain.toFixed(2)} lb/wk against a ${target.toFixed(2)} lb/wk target. Keep going.`;
+    if (gain < target * 0.5) { delta = gain < 0 ? 300 : 200; advice = `You’re gaining ${rateTxt(gain, 2)} against a ${rateTxt(target, 2)} target. Add ${delta} kcal/day.`; }
+    else if (gain > target * 1.6) { delta = -150; advice = `You’re gaining ${rateTxt(gain, 2)} — faster than the ${rateTxt(target, 2)} target, and the extra is mostly fat. Trim ${-delta} kcal/day.`; }
+    else advice = `On track: ${rateTxt(gain, 2)} against a ${rateTxt(target, 2)} target. Keep going.`;
     return { rate, advice, delta, points: pts.length, kind };
   }
   const target = S.settings.rate;
-  if (rate < target * 0.7) { delta = rate < target * 0.4 ? -200 : -125; advice = `You’re losing ${rate.toFixed(2)} lb/wk vs a ${target} lb/wk target. Trim ${-delta} kcal/day.`; }
-  else if (rate > target * 1.35 && rate > 1.5) { delta = 150; advice = `You’re losing ${rate.toFixed(2)} lb/wk — faster than planned. Add ${delta} kcal/day to protect muscle and training quality.`; }
-  else advice = `On track: ${rate.toFixed(2)} lb/wk vs ${target} lb/wk target. Keep going.`;
+  if (rate < target * 0.7) { delta = rate < target * 0.4 ? -200 : -125; advice = `You’re losing ${rateTxt(rate, 2)} vs a ${rateTxt(target, 2)} target. Trim ${-delta} kcal/day.`; }
+  else if (rate > target * 1.35 && rate > 1.5) { delta = 150; advice = `You’re losing ${rateTxt(rate, 2)} — faster than planned. Add ${delta} kcal/day to protect muscle and training quality.`; }
+  else advice = `On track: ${rateTxt(rate, 2)} vs ${rateTxt(target, 2)} target. Keep going.`;
   return { rate, advice, delta, points: pts.length, kind };
 }
 function movingAvg(ws, days = 7) {

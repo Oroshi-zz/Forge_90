@@ -41,11 +41,11 @@ function viewDashboard() {
   const sign = (v, d = 1) => (v > 0 ? '+' : v < 0 ? '−' : '±') + fmt(Math.abs(v), d);
   const hasW = S.weights.length > 0;
   const tiles = `<div class="grid g5">
-    ${tile('Body weight', 'scale', fmt(cur.w, 1), 'lb', hasW ? `${sign(dW)} lb since start` : null, goalKind() === 'bulk' ? dW >= 0 : dW <= 0, 'Log your first weigh-in')}
+    ${tile('Body weight', 'scale', fmt(toW(cur.w), 1), wU(), hasW ? `${sign(toW(dW))} ${wU()} since start` : null, goalKind() === 'bulk' ? dW >= 0 : dW <= 0, 'Log your first weigh-in')}
     ${tile('Body fat', 'target', fmt(cur.bf, 1), '%' + (cur.est ? ' est.' : ''), hasW ? `${sign(dBF)} pts` : null, dBF <= 0, 'Goal ' + st.goalBF + '%')}
-    ${tile('Lean mass', 'dumbbell', fmt(cur.lbm, 1), 'lb', hasW ? `${sign(dL)} lb` : null, dL >= -1, 'Weight × (1 − BF%)')}
-    ${tile('Weekly trend', 'trend', trend && trend.rate != null ? fmt(trend.rate, 2) : '—', 'lb/wk', null, true, !trend ? 'Needs ~1 week of weigh-ins' : trend.stale ? `No weigh-in for ${trend.days} days` : goalKind() === 'maintain' ? 'Target: hold' : `Target ${fmt(Math.abs(planRate(cur.w)), 2)} lb/wk ${goalKind() === 'bulk' ? 'gain' : 'loss'}`)}
-    ${tile('To goal', 'flame', fmt(Math.abs(cur.w - st.goalWeight), 1), 'lb', null, true, goalKind() === 'maintain' ? 'Holding at maintenance' : `≈ ${fmt(pj.weeks, 0)} weeks at ${fmt(Math.abs(planRate(cur.w)), 2)} lb/wk ${goalKind() === 'bulk' ? 'gain' : 'loss'}`)}
+    ${tile('Lean mass', 'dumbbell', fmt(toW(cur.lbm), 1), wU(), hasW ? `${sign(toW(dL))} ${wU()}` : null, dL >= -1, 'Weight × (1 − BF%)')}
+    ${tile('Weekly trend', 'trend', trend && trend.rate != null ? fmt(toW(trend.rate), 2) : '—', wU() + '/wk', null, true, !trend ? 'Needs ~1 week of weigh-ins' : trend.stale ? `No weigh-in for ${trend.days} days` : goalKind() === 'maintain' ? 'Target: hold' : `Target ${rateTxt(Math.abs(planRate(cur.w)), 2)} ${goalKind() === 'bulk' ? 'gain' : 'loss'}`)}
+    ${tile('To goal', 'flame', fmt(toW(Math.abs(cur.w - st.goalWeight)), 1), wU(), null, true, goalKind() === 'maintain' ? 'Holding at maintenance' : `≈ ${fmt(pj.weeks, 0)} weeks at ${rateTxt(Math.abs(planRate(cur.w)), 2)} ${goalKind() === 'bulk' ? 'gain' : 'loss'}`)}
   </div>`;
 
   let wo = '';
@@ -69,10 +69,10 @@ function viewDashboard() {
 
   const outlook = `<div class="card"><div class="card-h"><h2>Goal outlook</h2></div>
     <div class="grid g2" style="gap:12px">
-      <div><div class="tiny muted">${pj.cyc === 1 ? 'End of 90 days' : 'End of cycle ' + pj.cyc} (${fmtDate(pj.endPlan, { month: 'short', day: 'numeric' })})</div><div style="font-size:22px;font-weight:700" class="num">~${fmt(pj.endW, 0)} lb</div></div>
-      <div><div class="tiny muted">Reach ${st.goalWeight} lb</div><div style="font-size:22px;font-weight:700">${pj.reached ? 'Reached 🎉' : fmtDate(pj.goalDate, { month: 'short', year: 'numeric' })}</div></div></div>
+      <div><div class="tiny muted">${pj.cyc === 1 ? 'End of 90 days' : 'End of cycle ' + pj.cyc} (${fmtDate(pj.endPlan, { month: 'short', day: 'numeric' })})</div><div style="font-size:22px;font-weight:700" class="num">~${wTxt(pj.endW, 0)}</div></div>
+      <div><div class="tiny muted">Reach ${wTxt(st.goalWeight)}</div><div style="font-size:22px;font-weight:700">${pj.reached ? 'Reached 🎉' : fmtDate(pj.goalDate, { month: 'short', year: 'numeric' })}</div></div></div>
     ${pj.reached ? `<div class="note acc" style="margin-top:12px">${icon('target')}<span>Goal reached — calories are now at maintenance. Training continues in 13-week cycles. Change this in Settings.</span></div>` : ''}
-    <div class="note acc" style="margin-top:12px">${icon('info')}<span>If you hold your current <b>${fmt(pj.lbm, 0)} lb</b> of lean mass, ${st.goalBF}% body fat lands at about <b>${fmt(pj.wAtGoalBF, 0)} lb</b>. Hitting ${st.goalWeight} lb <i>and</i> ${st.goalBF}% means ending near ${fmt(st.goalWeight * (1 - st.goalBF / 100), 0)} lb lean — so treat ${fmt(pj.wAtGoalBF, 0)} lb as the milestone where you re-assess by body-fat % rather than scale weight.</span></div>
+    <div class="note acc" style="margin-top:12px">${icon('info')}<span>If you hold your current <b>${wTxt(pj.lbm, 0)}</b> of lean mass, ${st.goalBF}% body fat lands at about <b>${wTxt(pj.wAtGoalBF, 0)}</b>. Hitting ${wTxt(st.goalWeight)} <i>and</i> ${st.goalBF}% means ending near ${wTxt(st.goalWeight * (1 - st.goalBF / 100), 0)} lean — so treat ${wTxt(pj.wAtGoalBF, 0)} as the milestone where you re-assess by body-fat % rather than scale weight.</span></div>
     ${trend ? `<div class="note ${trend.delta ? 'warn' : ''}" style="margin-top:8px">${icon('trend')}<span>${esc(trend.advice)} ${trend.delta ? `<button class="btn sm" data-act="apply-trend" data-delta="${trend.delta}" style="margin-left:6px">Apply ${trend.delta > 0 ? '+' : ''}${trend.delta} kcal</button>` : ''}</span></div>` : ''}
     <hr class="sep"><h3 style="margin-bottom:10px">Quick weigh-in</h3>${weighForm()}</div>`;
 
@@ -83,7 +83,7 @@ function viewDashboard() {
 
   const prs = recentPRs(6);
   const prCard = `<div class="card"><div class="card-h"><h2>Recent PRs</h2><a class="btn sm ghost" href="#/progress">All progress ${icon('right')}</a></div>
-    ${prs.length ? `<table class="tbl">${prs.map(p => `<tr><td><span class="prb">${icon('trophy')}PR</span></td><td><span class="ex-name" data-tip-ex="${p.ex}">${esc(EX[p.ex].name)}</span></td><td>${fmt(p.set.w)} lb × ${p.set.r}</td><td class="muted">e1RM ${fmt(p.best)}</td><td class="muted">${fmtDate(p.d)}</td></tr>`).join('')}</table>`
+    ${prs.length ? `<table class="tbl">${prs.map(p => `<tr><td><span class="prb">${icon('trophy')}PR</span></td><td><span class="ex-name" data-tip-ex="${p.ex}">${esc(EX[p.ex].name)}</span></td><td>${loadTxt(p.set.w)} ${wU()} × ${p.set.r}</td><td class="muted">e1RM ${fmt(toW(p.best))}</td><td class="muted">${fmtDate(p.d)}</td></tr>`).join('')}</table>`
       : `<div class="empty-state">${icon('trophy')}<div>Log your sets on any training day and personal records show up here.</div></div>`}</div>`;
 
   const hero = `<div class="hero">${heroArt()}<div class="eyebrow">${eyebrow}</div><h1 style="margin-top:6px">${title}</h1><p>${esc(ph.summary)}</p>
@@ -99,7 +99,7 @@ function weighForm() {
   const last = sortedWeights().slice(-1)[0];
   return `<form class="row wrap" data-form="weigh" style="gap:8px;align-items:flex-end">
     <div class="field" style="width:150px"><label>Date</label><input class="inp" type="date" name="d" value="${todayISO()}" required></div>
-    <div class="field" style="width:110px"><label>Weight (lb)</label><input class="inp" type="number" step="0.1" min="80" max="500" name="w" placeholder="${last ? last.w : S.settings.startWeight}" required></div>
+    <div class="field" style="width:110px"><label>Weight (${wU()})</label><input class="inp" type="number" step="0.1" min="${wNum(80)}" max="${wNum(500)}" name="w" placeholder="${wNum(last ? last.w : S.settings.startWeight)}" required></div>
     <div class="field" style="width:110px"><label>Body fat %</label><input class="inp" type="number" step="0.1" min="3" max="60" name="bf" placeholder="optional"></div>
     <button class="btn primary" type="submit">${icon('plus')}Log</button></form>`;
 }
@@ -324,7 +324,7 @@ function viewDay(date) {
         ${muscleMap(prim, sec).replace('class="mm"', 'class="mm" style="width:110px;height:110px;flex:none"')}</div>
       <div class="row wrap" style="margin-bottom:12px"><select class="inp" data-input="day-wo" data-date="${date}" style="max-width:280px">${opts}</select>
         <button class="btn ${S.done[date] ? 'primary' : ''}" data-act="toggle-done" data-date="${date}">${icon('check')}${S.done[date] ? 'Completed' : 'Mark complete'}</button><button class="btn primary" data-act="wo-open" data-d="${date}" title="One exercise at a time, with the rest timer">${icon('play')}Workout mode</button><button class="btn" data-act="print-wo" data-d="${date}" title="Print this session with space to write your sets">${icon('print')}Print</button></div>
-      <div class="scroll-x"><table class="ex-table"><thead><tr><th>#</th><th>Exercise</th><th>Target</th><th>Log sets (lb × reps)</th></tr></thead><tbody>
+      <div class="scroll-x"><table class="ex-table"><thead><tr><th>#</th><th>Exercise</th><th>Target</th><th>Log sets (${wU()} × reps)</th></tr></thead><tbody>
       ${rows.map((r, i) => exRowHTML(date, r, i)).join('')}</tbody></table></div>
       <div class="note" style="margin-top:12px">${icon('info')}<span><b>RIR</b> = reps in reserve (how many more clean reps you could do). Strength sets <span class="type-s">S</span>: rest 2–3 min. Hypertrophy sets <span class="type-h">H</span>: rest 60–120 s. Hover any exercise for step-by-step form.</span></div></div>`;
   } else {
@@ -355,7 +355,7 @@ function viewDay(date) {
   }).join('');
   const nutCard = `<div class="card"><div class="card-h"><h2>Nutrition</h2><span class="pill">${day.isTrain ? 'Training' : 'Rest'} target</span><div class="spacer"></div>${scanBtnHTML('today', 'sm', date)}${addFoodBtnHTML(date, 'sm')}</div>
     <div class="grid" style="grid-template-columns:auto 1fr;gap:18px;align-items:center"><div class="ring">${ringSVG(day.totals.k / tg.kcal, 'var(--kcal)')}<div class="c"><b>${fmt(day.totals.k)}</b><span>of ${fmt(tg.kcal)} kcal</span></div></div><div>${macroBars(day.totals, tg)}</div></div>
-    <div class="note" style="margin-top:12px">${icon('scale')}<span>Portions sized from <b>${fmt(st.w, 1)} lb · ${fmt(st.bf, 1)}% BF${st.est ? ' (est.)' : ''}</b> ${st.src === 'start' ? '(starting stats)' : '(weigh-in ' + fmtDate(st.src) + ')'}: protein sources ×${day.pF.toFixed(2)}, carb &amp; fat sources ×${day.cF.toFixed(2)}. <span class="scaled-up" style="color:var(--good)">Green</span> amounts are scaled up, <span style="color:var(--kcal)">orange</span> scaled down.</span></div>
+    <div class="note" style="margin-top:12px">${icon('scale')}<span>Portions sized from <b>${wTxt(st.w, 1)} · ${fmt(st.bf, 1)}% BF${st.est ? ' (est.)' : ''}</b> ${st.src === 'start' ? '(starting stats)' : '(weigh-in ' + fmtDate(st.src) + ')'}: protein sources ×${day.pF.toFixed(2)}, carb &amp; fat sources ×${day.cF.toFixed(2)}. <span class="scaled-up" style="color:var(--good)">Green</span> amounts are scaled up, <span style="color:var(--kcal)">orange</span> scaled down.</span></div>
     <div class="dmeals">${mealsHTML}</div>${dessertAddHTML(date, day)}<div class="tiny muted" style="margin-top:4px">Tap a meal for the full recipe. Amounts above are today’s portions${(day.extras || []).length ? ', already made smaller to fit the foods you added' : ''}.</div></div>`;
   return head + `<div class="day-grid"><div>${woCard}${cdCard ? '<div style="height:16px"></div>' + cdCard : ''}</div><div>${nutCard}</div></div>`;
 }
@@ -368,9 +368,9 @@ function exRowHTML(date, r, i) {
     <td><div class="sets">${sets}</div>${hintHTML(date, r, sug)}</td></tr>`;
 }
 function setInputsHTML(date, r) {
-  const logs = (S.logs[date] || {})[r.ex.id] || []; const wl = r.ex.assist ? 'assist' : isBW(r.ex.id) ? '+lb' : 'lb';
+  const logs = (S.logs[date] || {})[r.ex.id] || []; const wl = r.ex.assist ? 'assist' : isBW(r.ex.id) ? '+' + wU() : wU();
   return Array.from({ length: r.sets }, (_, k) => { const s = logs[k] || {};
-    return `<div class="set ${s.r > 0 ? 'logged' : ''}"><span class="n">${k + 1}</span><input class="w num" type="number" inputmode="decimal" step="2.5" min="0" placeholder="${wl}" value="${s.w != null ? esc(s.w) : ''}" data-log="${date}|${r.ex.id}|${k}|w" aria-label="${esc(r.ex.name)} set ${k + 1} weight"><span class="x">×</span><input class="r num" type="number" inputmode="numeric" min="0" max="100" placeholder="reps" value="${s.r != null ? esc(s.r) : ''}" data-log="${date}|${r.ex.id}|${k}|r" aria-label="${esc(r.ex.name)} set ${k + 1} reps"></div>`; }).join('');
+    return `<div class="set ${s.r > 0 ? 'logged' : ''}"><span class="n">${k + 1}</span><input class="w num" type="number" inputmode="decimal" step="${isMetric() ? 1.25 : 2.5}" min="0" placeholder="${wl}" value="${s.w != null ? esc(dLoad(s.w)) : ''}" data-log="${date}|${r.ex.id}|${k}|w" aria-label="${esc(r.ex.name)} set ${k + 1} weight"><span class="x">×</span><input class="r num" type="number" inputmode="numeric" min="0" max="100" placeholder="reps" value="${s.r != null ? esc(s.r) : ''}" data-log="${date}|${r.ex.id}|${k}|r" aria-label="${esc(r.ex.name)} set ${k + 1} reps"></div>`; }).join('');
 }
 const swapBtnHTML = (date, r, back) => `<button type="button" class="swap-btn ${r.daySwap ? 'on' : ''}" data-act="swap-day" data-date="${date}" data-i="${r.i}"${back ? ` data-back="${back}"` : ''} title="Swap ${esc(r.ex.name)} for this day" aria-label="Swap ${esc(r.ex.name)} for this day">${icon('loop')}</button>`;
 const typeBadge = r => `<span class="type-${r.type.toLowerCase()}">${r.type === 'S' ? 'S' : r.type === 'T' ? 'TEST' : 'H'}</span>`;
