@@ -514,6 +514,9 @@ function latestStats() { return statsOn(null); }
 
 /* ---------- energy targets (Katch–McArdle) ---------- */
 const goalKind = () => { const g = S.settings.goal; return g === 'bulk' || g === 'maintain' ? g : 'cut'; };
+/* Goal body fat the app warns below, and the floor it will never auto-set under, so a plan the app
+   picked for you is never one it then flags. Sex unknown takes the higher of the two. */
+const BF_LOW = sex => sex === 'm' ? 6 : 10;
 function planRate(w) {
   const st = S.settings; const k = goalKind();
   if (k === 'maintain') return 0;

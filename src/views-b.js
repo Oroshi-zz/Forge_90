@@ -500,6 +500,19 @@ function bulkInfoHTML(pct) {
   return `<div class="grid g3" style="gap:10px"><div><div class="tiny muted">Daily surplus</div><b class="num" style="font-size:18px">+${fmt(Math.round(lb * 3500 / 7))} kcal</b></div><div><div class="tiny muted">Training / rest day</div><b class="num" style="font-size:18px">${fmt(tT.kcal)} / ${fmt(tR.kcal)}</b></div><div><div class="tiny muted">${toGoal > 0 ? `Reach ${st.goalWeight} lb` : 'Above goal weight'}</div><b style="font-size:18px">${toGoal > 0 ? fmtDate(when, { month: 'short', year: 'numeric' }) : '—'}</b></div></div>
     <div class="tiny muted" style="margin-top:6px">${fmt(lb, 2)} lb per week at ${fmt(cur.w, 0)} lb${capped ? ` · capped at the ${st.bulkMaxSurplus} kcal/day surplus` : ''} · stops at ${st.bulkMaxBF}% body fat.</div>${fast}${cap}`;
 }
+/* A goal under the athlete range is worth a word, without blocking it: the number is the person's
+   to choose. Sex is optional, so with none recorded this says both ranges rather than asking for it. */
+function goalBFWarnHTML() {
+  const g = +S.settings.goalBF, sex = (S.profile || {}).sex;
+  if (!(g > 0) || g >= BF_LOW(sex)) return '';
+  const lead = `A goal of <b>${fmt(g, g % 1 ? 1 : 0)}%</b> is below the range lean athletes train in`;
+  const body = sex === 'm'
+    ? `${lead}. For men that’s usually 6–13%; physique competitors go lower only for a week or two around a show. Under about 6%, hormones, sleep and recovery start to suffer.`
+    : sex === 'f'
+      ? `${lead}. For women that’s usually 14–20%; physique competitors go lower only for a week or two around a show. Under about 10%, periods stopping, bone-density loss and poor recovery become common.`
+      : `${lead}, usually 6–13% for men and 14–20% for women. Physique competitors go lower only for a week or two around a show.`;
+  return `<div class="note warn" style="grid-column:1/-1">${icon('info')}<span>${body} Worth talking to a doctor or dietitian before aiming this low.</span></div>`;
+}
 function bodyGoalsCardHTML() { const st = S.settings; const f = setField; const pr = S.profile || {};
   const ft = pr.heightIn ? Math.floor(pr.heightIn / 12) : '', inch = pr.heightIn ? Math.round(pr.heightIn % 12) : '';
   /* Height, age and sex are asked for during setup and then used for the body-fat estimate,
@@ -507,6 +520,7 @@ function bodyGoalsCardHTML() { const st = S.settings; const f = setField; const 
   return `<div class="card"><div class="card-h"><h2>Body & goals</h2></div><form data-form="body" class="grid g2" style="gap:12px">
         ${f('Starting weight (lb)', 'startWeight', st.startWeight, 'type="number" step="0.1"')}${f('Starting body fat %', 'startBF', st.startBF, 'type="number" step="0.1"')}
         ${f('Goal weight (lb)', 'goalWeight', st.goalWeight, 'type="number" step="0.1"')}${f('Goal body fat %', 'goalBF', st.goalBF, 'type="number" step="0.1"')}
+        ${goalBFWarnHTML()}
         <div class="field"><label>Height</label><div class="row" style="gap:6px"><input class="inp" name="hFt" value="${esc(ft)}" type="number" min="3" max="8" step="1" placeholder="ft" style="width:50%"><input class="inp" name="hIn" value="${esc(inch)}" type="number" min="0" max="11" step="1" placeholder="in" style="width:50%"></div></div>
         ${f('Age', 'age', pr.age == null ? '' : pr.age, 'type="number" min="13" max="100" step="1"')}
         <div class="field"><label>Sex <span class="muted" style="font-weight:500">— for the body-fat estimate</span></label><select class="inp" name="sex"><option value="" ${!pr.sex ? 'selected' : ''}>Prefer not to say</option><option value="m" ${pr.sex === 'm' ? 'selected' : ''}>Male</option><option value="f" ${pr.sex === 'f' ? 'selected' : ''}>Female</option></select></div>

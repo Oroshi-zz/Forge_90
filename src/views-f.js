@@ -30,7 +30,7 @@ function obApplyDraft() {
   if (w) st.startWeight = w; if (bf) st.startBF = bf; if (g) st.goalWeight = g;
   st.rate = +OB.rate; st.activity = +OB.activity; st.shareIngredients = !!OB.share;
   st.goal = OB.mode === 'bulk' || OB.mode === 'maintain' ? OB.mode : 'cut'; st.bulkPct = +OB.bulkPct || 0.35;
-  if (bf && st.goalBF >= bf) st.goalBF = Math.max(5, Math.round(bf - 3));
+  if (bf && st.goalBF >= bf) st.goalBF = Math.max(BF_LOW(OB.sex), Math.round(bf - 3));
   invalidate();
 }
 function obSummaryHTML() {
@@ -69,7 +69,7 @@ function renderOnboarding() {
         <div class="row" style="justify-content:space-between"><span class="tiny muted">0.25</span><span class="tiny muted">1.0</span><span class="tiny muted">2.0 lb/wk</span></div></div>`;
     body = `<h1>Your goal</h1><p class="sub">${sub}</p>${msg}
     <div class="field"><label>What are you after?</label><div class="seg seg-goal">${[['cut', 'Lose fat'], ['maintain', 'Maintain'], ['bulk', 'Build muscle']].map(([v, l]) => `<button type="button" class="${gk === v ? 'on' : ''}" data-act="ob-mode" data-v="${v}">${l}</button>`).join('')}</div></div>
-    <div class="grid g2" style="gap:12px;margin-top:12px">${fld(gk === 'bulk' ? 'Goal weight (lb)' : 'Goal weight (lb)', 'goal', s.goal, `type="number" inputmode="decimal" step="0.1" ${gk === 'bulk' ? `min="${fmt(w, 1)}" max="600"` : `min="70" max="${fmt(w, 1)}"`} ${gk === 'maintain' ? '' : 'required'}`)}
+    <div class="grid g2" style="gap:12px;margin-top:12px">${fld(gk === 'bulk' ? 'Goal weight (lb)' : 'Goal weight (lb)', 'goal', s.goal, `type="number" inputmode="decimal" step="0.1" ${gk === 'bulk' ? `min="${fmt(w, 1)}" max="700"` : `min="70" max="${fmt(w, 1)}"`} ${gk === 'maintain' ? '' : 'required'}`)}
       <div class="field"><label for="ob-activity">Activity level <span class="muted" style="font-weight:500">— outside the gym</span></label><select class="inp" id="ob-activity" name="activity">${ACTIVITY_LEVELS.map(([v, l, d]) => `<option value="${v}" ${+s.activity === v ? 'selected' : ''}>${l} — ${d}</option>`).join('')}</select></div></div>
     ${rateCtl}
     <div id="ob-rate-info" style="margin-top:6px">${obRateInfo()}</div>`; }
@@ -97,7 +97,14 @@ function obValidate() {
     if (!obEstimated()) { const b = obNum(s.bf); if (!b || b < 3 || b > 70) return 'Body fat should be between 3 and 70% — or leave it blank.'; }
     else { const h = (obNum(s.hFt) || 0) * 12 + (obNum(s.hIn) || 0); if (h < 48 || h > 96) return 'Enter your height so we can estimate body fat (or type a body-fat %).';
       if (!s.sex) return 'Choose male or female for the body-fat estimate.'; const a = obNum(s.age); if (!a || a < 16 || a > 99) return 'Enter your age (16–99) for the body-fat estimate.'; } }
-  if (s.step === 2) { const g = obNum(s.goal), w = obNum(s.w); if (!g || g < 70) return 'Enter your goal weight in pounds.'; if (g >= w) return `Your goal should be below your current weight (${fmt(w, 1)} lb).`; }
+  if (s.step === 2) {
+    const g = obNum(s.goal), w = obNum(s.w);
+    const gk = s.mode === 'bulk' || s.mode === 'maintain' ? s.mode : 'cut';
+    if (gk === 'maintain') { if (String(s.goal).trim() && (!g || g < 70 || g > 700)) return 'Check the goal weight, or leave it blank.'; }
+    else if (!g || g < 70) return 'Enter your goal weight in pounds.';
+    else if (gk === 'bulk') { if (g <= w) return `Your goal should be above your current weight (${fmt(w, 1)} lb).`; if (g > 700) return 'Check the goal weight.'; }
+    else if (g >= w) return `Your goal should be below your current weight (${fmt(w, 1)} lb).`;
+  }
   return null;
 }
 async function obSubmit(form) {
