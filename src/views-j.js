@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
-/* ================================================================
-   FORGE 90 — gym membership cards: barcode drawing (Code 128, Code 39,
-   Codabar, Interleaved 2 of 5, EAN/UPC, QR), reading them from the camera,
-   the dashboard card and the Settings list
-   ================================================================ */
 
 /* ---------- symbology tables ---------- */
 const C128 = ['212222', '222122', '222221', '121223', '121322', '131222', '122213', '122312', '132212', '221213', '221312', '231212', '112232', '122132', '122231', '113222', '123122', '123221', '223211', '221132',
@@ -13,7 +8,6 @@ const C128 = ['212222', '222122', '222221', '121223', '121322', '131222', '12221
   '314111', '221411', '431111', '111224', '111422', '121124', '121421', '141122', '141221', '112214', '112412', '122114', '122411', '142112', '142211', '241211', '221114', '413111', '241112', '134111',
   '111242', '121142', '121241', '114212', '124112', '124211', '411212', '421112', '421211', '212141', '214121', '412121', '111143', '111341', '131141', '114113', '114311', '411113', '411311', '113141',
   '114131', '311141', '411131', '211412', '211214', '211232', '2331112'].map(p => p.split('').map(Number));
-// Code 39: 5 bars (two wide) + 4 spaces (one wide); the bar pairs follow the 2-of-5 order
 const C39_BARS = [[0, 4], [1, 4], [0, 1], [2, 4], [0, 2], [1, 2], [3, 4], [0, 3], [1, 3], [2, 3]];
 const C39 = (() => {
   const t = {}; const put = (ch, bars, spaces) => { const w = Array(9).fill(0); bars.forEach(b => { w[b * 2] = 1; }); spaces.forEach(s => { w[s * 2 + 1] = 1; }); t[ch] = w; };
@@ -29,7 +23,6 @@ const ITF = ['00110', '10001', '01001', '11000', '00101', '10100', '01100', '000
 const GYM_FMTS = [['auto', 'Automatic'], ['code128', 'Code 128'], ['code39', 'Code 39'], ['codabar', 'Codabar'], ['itf', 'Interleaved 2 of 5'], ['ean13', 'EAN-13'], ['upca', 'UPC-A'], ['ean8', 'EAN-8'], ['upce', 'UPC-E'], ['qr', 'QR code']];
 const fmtName = f => (GYM_FMTS.find(x => x[0] === f) || [, f])[1];
 const gtinOk = c => /^\d+$/.test(c) && bcCheck(c);
-// which barcode type a typed number becomes when the type is left on Automatic
 function gymAutoFmt(code) {
   if (/^\d{13}$/.test(code) && gtinOk(code)) return 'ean13';
   if (/^\d{12}$/.test(code) && gtinOk(code)) return 'upca';
@@ -61,7 +54,7 @@ function c128Values(s) {
   const run = k => { let n = 0; while (k + n < s.length && s.charCodeAt(k + n) >= 48 && s.charCodeAt(k + n) <= 57) n++; return n; };
   while (i < s.length) {
     const r = run(i);
-    if (r >= 4 || (r >= 2 && i === 0 && r === s.length)) {                  // runs of digits go two at a time in set C
+    if (r >= 4 || (r >= 2 && i === 0 && r === s.length)) {
       const n = r - (r % 2); if (set !== 'C') { codes.push(set ? 99 : 105); set = 'C'; }
       for (let k = 0; k < n; k += 2) codes.push(+s.substr(i + k, 2)); i += n; continue;
     }
@@ -165,7 +158,6 @@ function bcTry128(runs, i) {
   if (i + 19 > runs.length) return null;
   const st = bcBestPattern(runs.slice(i, i + 6), C128.slice(0, 106)); if (st == null || st < 103) return null;
   const m0 = runs.slice(i, i + 6).reduce((a, b) => a + b, 0) / 11; if (i > 0 && runs[i - 1] < m0 * 4) return null;
-  // bars read wider than spaces (blur, exposure) by the same amount everywhere — measure it on the start symbol
   const P = C128[st]; const d = (runs[i] + runs[i + 2] + runs[i + 4] - (P[0] + P[2] + P[4]) * m0) / 3;
   const fix = (a, b) => runs.slice(a, b).map((x, j) => Math.max(0.05, (a + j - i) % 2 === 0 ? x - d : x + d));
   const vals = [st]; let p = i + 6;
@@ -179,7 +171,6 @@ function bcTry128(runs, i) {
   }
   return null;
 }
-// Code 39 / Codabar / ITF: narrow vs wide elements
 function bcWide(w, nWide) {
   const s = w.slice().sort((a, b) => b - a); const lo = s[nWide - 1], hi = s[nWide]; if (!(lo > hi * 1.55)) return null;
   const t = (lo + hi) / 2; return w.map(x => x > t ? 1 : 0);
@@ -191,7 +182,7 @@ function bcTry39(runs, i) {
   const s = read(i); if (!s || s.ch !== '*') return null; if (i > 0 && runs[i - 1] < s.n * 6) return null;
   let out = '', p = i + 10;
   while (p + 9 <= runs.length && out.length < 60) {
-    if (runs[p - 1] > s.n * 3.5) return null;                                    // gap between characters
+    if (runs[p - 1] > s.n * 3.5) return null;
     const c = read(p); if (!c || !c.ch || Math.abs(c.n - s.n) > s.n * 0.4) return null;
     if (c.ch === '*') return out && (p + 9 >= runs.length || runs[p + 9] > s.n * 6) ? { code: out, fmt: 'code39' } : null;
     out += c.ch; p += 10;
@@ -220,7 +211,6 @@ function bcTryITF(runs, i) {
     const a = bars && ITF.findIndex(x => bcKey(x) === bcKey(bars)), b = sp && ITF.findIndex(x => bcKey(x) === bcKey(sp));
     if (!(a >= 0 && b >= 0)) break; out += a + '' + b; p += 10;
   }
-  // stop: wide bar, narrow space, narrow bar, then the quiet zone
   if (out.length < 4 || p + 3 > runs.length) return null;
   const wb = runs[p], s1 = runs[p + 1], b2 = runs[p + 2];
   if (!(wb > n * 1.8 && s1 < n * 1.6 && b2 < n * 1.6 && (p + 3 >= runs.length || runs[p + 3] > n * 8))) return null;
@@ -247,10 +237,9 @@ function bcDecodeAny(img) {
 const BD_FMT = { code_128: 'code128', code_39: 'code39', codabar: 'codabar', itf: 'itf', ean_13: 'ean13', ean_8: 'ean8', upc_a: 'upca', upc_e: 'upce', qr_code: 'qr' };
 
 /* ---------- gym cards ---------- */
-// S.gymCards = [{ id, name, code, fmt, added }], S.gymActive = id shown on the dashboard
 const gymCards = () => (S && S.gymCards) || [];
 const gymActive = () => gymCards().find(c => c.id === S.gymActive) || gymCards()[0] || null;
-let GC = null;            // card being added or edited: { id?, name, code, fmt }
+let GC = null;
 function gymCardModal(draft) {
   GC = Object.assign({ name: '', code: '', fmt: 'auto' }, draft || {});
   const edit = GC.id && gymCards().some(c => c.id === GC.id);
@@ -286,7 +275,6 @@ function gymScanned(code, fmt) {
   if (!GYM_FMTS.some(x => x[0] === d.fmt)) { toast('That barcode type isn’t supported — type the number instead.'); d.fmt = 'auto'; }
   gymCardModal(d); toast(`Read ${fmtName(d.fmt)}: ${d.fmt === 'qr' && d.code.length > 30 ? d.code.slice(0, 30) + '…' : d.code}`);
 }
-// the dashboard panel
 function gymPanelHTML() {
   const cards = gymCards(); const c = gymActive();
   const head = `<div class="card-h"><h2>${icon('dumbbell')}Gym card</h2>${cards.length > 1 ? `<select class="inp gc-pick" data-input="gc-pick" aria-label="Choose a card">${cards.map(x => `<option value="${x.id}" ${x === c ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : ''}<a class="btn sm ghost" href="#/settings" data-act="gym-manage">Manage</a></div>`;
@@ -295,7 +283,6 @@ function gymPanelHTML() {
     <div class="gc-num"><b>${esc(c.name)}</b><span class="num">${esc(gymHuman(c))}</span></div>
     <div class="row wrap" style="gap:6px;justify-content:center;margin-top:8px"><button class="btn sm primary" data-act="gym-full" data-id="${c.id}">${icon('expand')}Full screen</button></div></div>`;
 }
-// full screen for the gym's scanner: white background, as big as the screen allows, screen kept awake
 let GYM_LOCK = null;
 async function gymFull(id) {
   const c = gymCards().find(x => x.id === id); if (!c) return; gymFullClose();
@@ -307,7 +294,6 @@ async function gymFull(id) {
 }
 function gymFullClose() { const el = $('#gym-full'); if (!el) return; el.remove(); if (GYM_LOCK) { GYM_LOCK.release().catch(() => {}); GYM_LOCK = null; } backDrop('gym-full'); }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') gymFullClose(); });
-// Settings
 function gymSettingsHTML() {
   const cards = gymCards(); const act = gymActive();
   return `<div class="card" id="gym-cards"><div class="card-h"><h2>${icon('dumbbell')}Gym cards</h2><button class="btn sm primary" data-act="gym-add">${icon('plus')}Add card</button></div>

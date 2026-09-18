@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
-/* ============================================================
-   FORGE 90 — Engine: state, targets, plan generation, portioning,
-   leftovers/batches, PRs and trends. (No DOM in this file.)
-   ============================================================ */
-let STORE_KEY = 'forge90.v1';          // per-user key when signed in to the server (see views-e)
+let STORE_KEY = 'forge90.v1';
 let NEW_STATE_DEFAULTS = null;
-const LAUNCH_DAYS = 90;          // the original 90-day launch block (Cycle 1)
-const PLAN_DAYS = LAUNCH_DAYS;   // kept for launch-block copy
+const LAUNCH_DAYS = 90;
+const PLAN_DAYS = LAUNCH_DAYS;
 
 /* ---------- dates ---------- */
 const pad2 = n => String(n).padStart(2, '0');
@@ -29,30 +25,30 @@ function defaultSettings() {
     trainDays: [1, 3, 5],
     startWeight: 230, startBF: 30,
     goalWeight: 180, goalBF: 15,
-    rate: 1.25,            // lb / week
-    shareIngredients: true, // plan meals so recipes share ingredients (fewer packages, less waste)
-    activity: 1.4,         // non-exercise activity multiplier on BMR
-    sessionKcal: 250,      // extra burn on a lifting day
-    proteinPerLb: 0.85,    // g per lb bodyweight (range 0.5–1.0)
-    kcalAdjust: 0,         // manual / trend-based adjustment
+    rate: 1.25,
+    shareIngredients: true,
+    activity: 1.4,
+    sessionKcal: 250,
+    proteinPerLb: 0.85,
+    kcalAdjust: 0,
     minKcal: 1800,
-    atGoal: 'maintain',    // 'maintain' = switch to maintenance calories once goal weight or BF% is reached
-    goal: 'cut',           // 'cut' | 'maintain' | 'bulk'
+    atGoal: 'maintain',
+    goal: 'cut',
     /* Bulking. Gain is set as a share of body weight per week rather than a flat pound:
        0.25–0.5 %/wk is the range trained lifters can add with most of it as lean mass, and
        the same absolute surplus means very different things at 150 lb and 250 lb.
        The surplus is capped because past roughly 500 kcal/day the extra goes on as fat,
        and the bulk stops at a body-fat ceiling, where more of every surplus calorie is
        stored rather than used. */
-    bulkPct: 0.35,         // % of body weight gained per week (0.25–0.5)
-    bulkMaxSurplus: 500,   // kcal/day ceiling on the surplus
-    bulkMaxBF: 20,         // % body fat at which the bulk stops and holds at maintenance
-    bgDim: 0.7,            // background photo dimming — fixed at 30% photo visibility
-    bgPhotos: true,        // section photos behind the glass; off = plain background
+    bulkPct: 0.35,
+    bulkMaxSurplus: 500,
+    bulkMaxBF: 20,
+    bgDim: 0.7,
+    bgPhotos: true,
     theme: 'dark',
-    restDef: 90,           // rest timer: default seconds between sets
-    restPlan: true,        // use each exercise's suggested rest (heavy sets longer), the default fills the gaps
-    restAuto: true,        // logging a set in workout mode starts the timer
+    restDef: 90,
+    restPlan: true,
+    restAuto: true,
     restSound: 'beeps', restVol: 0.8, restVib: true
   };
 }
@@ -68,7 +64,7 @@ function migrateState() {
   if (S.onboarded === undefined) S.onboarded = true;
   // research-backed extra exercises start switched off — applied once per exercise, so a user's own choice sticks
   S.exDefaults = S.exDefaults || {}; S.exOff = S.exOff || {};
-  EXTRA_EX.forEach(id => { if (S.exDefaults[id]) return; S.exDefaults[id] = 1; const per = S.exOff[id] = S.exOff[id] || []; if (!per.some(([, t]) => !t)) per.push(['0000-01-01', null]); });          // plans made before the first-run questionnaire existed
+  EXTRA_EX.forEach(id => { if (S.exDefaults[id]) return; S.exDefaults[id] = 1; const per = S.exOff[id] = S.exOff[id] || []; if (!per.some(([, t]) => !t)) per.push(['0000-01-01', null]); });
   if (!S.v || S.v < 2) { S.planEnd = S.planEnd || addDays(S.settings.startDate, LAUNCH_DAYS - 1); S.v = 2; }
   if (S.v < 4) migratePrefsV4();
 }
@@ -84,11 +80,10 @@ function migratePrefsV4() {
   Object.values(S.customFoods || {}).forEach(fixSub);
   Object.values(S.foodOverrides || {}).forEach(fixSub);
 }
-// from: a saved state object (server copy or imported backup), null for a brand-new plan, or undefined to read this browser's copy
 function loadState(from) {
   S = null;
   if (from !== undefined) S = from ? JSON.parse(JSON.stringify(from)) : null;
-  else { let raw = null; try { raw = localStorage.getItem(STORE_KEY); } catch (e) { /* storage blocked */ } if (raw) { try { S = JSON.parse(raw); } catch (e) { S = null; } } }
+  else { let raw = null; try { raw = localStorage.getItem(STORE_KEY); } catch (e) { } if (raw) { try { S = JSON.parse(raw); } catch (e) { S = null; } } }
   if (!S || !S.settings) { S = freshState(); if (NEW_STATE_DEFAULTS && NEW_STATE_DEFAULTS.theme) S.settings.theme = NEW_STATE_DEFAULTS.theme; }
   migrateState();
   rebuildCatalog(); rebuildExercises();
@@ -118,11 +113,11 @@ function migrateGrocery() {
   const keep = new Set(starts);
   Object.keys(g).forEach(k => { if (!keep.has(k)) delete g[k]; });
 }
-function saveState() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) { /* cache only when signed in; storage may be full */ } invalidate(); if (typeof onStateSaved === 'function') onStateSaved(); }
+function saveState() { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch (e) { } invalidate(); if (typeof onStateSaved === 'function') onStateSaved(); }
 
 /* ---------- food catalog (built-in + overrides + custom) ---------- */
-let SHARED_FOODS = {};        // products everyone on the server can use (barcode scans), loaded from /api/foods/shared
-let SHARED_RECIPES = {};      // the shared recipe book, loaded from /api/recipes/shared; empty in local mode
+let SHARED_FOODS = {};
+let SHARED_RECIPES = {};
 function rebuildCatalog() {
   Object.keys(ING).forEach(k => delete ING[k]);
   Object.entries(BASE_ING).forEach(([id, g]) => { const o = (S.foodOverrides || {})[id]; ING[id] = Object.assign({ id, sub: BASE_SUB[id] || 'sauces', base: true }, g, o || {}, { edited: !!o }); });
@@ -148,7 +143,7 @@ function suggestRole(k, p, c, f) { const kc = Math.max(1, k); if (p * 4 / kc >= 
 /* ---------- plan structure (Cycle 1 = 90-day launch, then repeating 13-week cycles) ---------- */
 function planEnd() { return S.planEnd || addDays(S.settings.startDate, LAUNCH_DAYS - 1); }
 function planDates() { const out = []; const n = dayDiff(S.settings.startDate, planEnd()); for (let i = 0; i <= n; i++) out.push(addDays(S.settings.startDate, i)); return out; }
-function planIndex(date) { return dayDiff(S.settings.startDate, date); }               // 0-based
+function planIndex(date) { return dayDiff(S.settings.startDate, date); }
 function inPlan(date) { return !!date && planIndex(date) >= 0 && date <= planEnd(); }
 function planWeek(date) { return Math.floor(planIndex(date) / 7) + 1; }
 function cycleOfWeek(wk) { return wk <= 13 ? 1 : 2 + Math.floor((wk - 14) / 13); }
@@ -172,7 +167,6 @@ function ensurePlanThrough(date) {
 function ensureHorizon() {
   const ref = maxISO(todayISO(), S.settings.startDate);
   const c = cycleOfWeek(planWeek(ref));
-  // always keep the current cycle plus the next one planned
   ensurePlanThrough(cycleEndDate(c + 1));
 }
 
@@ -190,8 +184,6 @@ const BASE_SEQ = {
 const SEQ_CAT = { breakfast: 'breakfast', lunch: 'lunch', dinner: 'dinner', snack1_train: 'snack', snack2_train: 'snack', snack1_rest: 'snack', snack2_rest: 'snack' };
 /* v1.2 widened the rotation; the original entries stay at the front of each list. */
 if (typeof R2_SEQ === 'object') Object.keys(R2_SEQ).forEach(k => { if (BASE_SEQ[k]) BASE_SEQ[k] = BASE_SEQ[k].concat(R2_SEQ[k].filter(id => !BASE_SEQ[k].includes(id))); });
-/* Joint planning for synced meal plans: PLAN_CTX narrows recipes to ones both people can eat, adds the partner's favorites,
-   and cooks multi-serving recipes for two (a 4-serving batch covers 2 days instead of 4). */
 let PLAN_CTX = null;
 function planAllowed(r) { if (typeof r === 'string') r = RECIPE[r]; return recipeAllowed(r) && (!PLAN_CTX || !PLAN_CTX.allowed || PLAN_CTX.allowed.has(r.id)); }
 function planFav(id) { return isFav(id) || !!(PLAN_CTX && PLAN_CTX.favs && PLAN_CTX.favs.has(id)); }
@@ -201,23 +193,23 @@ function pickSubstitute(cat, wantYield, k) {
   const same = pool.filter(r => (r.yield > 1) === (wantYield > 1)); const src = same.length ? same : pool;
   return src[k % src.length].id;
 }
-// Recipes disallowed by food preferences are swapped for allowed ones of the same meal type (batch recipes preferred for batch slots)
 function filterSeq(list, cat, key) {
   const extra = RECIPES.filter(r => r.cat === cat && r.custom && r.rotate && planAllowed(r)).map(r => r.id);
   let k = 0;
   const out = list.filter(id => RECIPE[id]).concat(extra).map(id => planAllowed(id) ? id : pickSubstitute(cat, RECIPE[id].yield, k++)).filter(Boolean);
   return weightFavs(out, cat, key);
 }
+
 /* ---------- favorites: ★ recipes come up about twice as often ---------- */
 const FAV_WEIGHT = 2;
 function isFav(id) { return !!(S && S.favRecipes && S.favRecipes[id]); }
 function weightFavs(list, cat, key) {
-  if (!key || /_train$/.test(key)) return list;            // training-day snacks are fixed (shake + pre-workout carbs)
+  if (!key || /_train$/.test(key)) return list;
   const favs = RECIPES.filter(r => r.cat === cat && planFav(r.id) && planAllowed(r)).map(r => r.id);
   if (!favs.length) return list;
   const per = favs.map(id => {
     let c = list.filter(x => x === id).length;
-    if (!c && cat === 'snack') {                          // a snack not in either rest-day list joins one of them
+    if (!c && cat === 'snack') {
       const inRest = BASE_SEQ.snack1_rest.includes(id) || BASE_SEQ.snack2_rest.includes(id);
       const home = BASE_SEQ.snack2_train.includes(id) ? 'snack2_rest' : 'snack1_rest';
       if (inRest || key !== home) return [];
@@ -234,13 +226,12 @@ function weightFavs(list, cat, key) {
   });
   return out;
 }
-// Re-plan meals from a date forward (e.g. favorites changed). Slots the user set by hand (drag, swap, pick) are kept.
 function replanMeals(fromDate) {
   const P = makePlanner(S.settings.shareIngredients !== false); let n = 0;
   planDates().forEach((d, i) => {
     if (i % 7 === 0) P.newWeek();
     const e = S.plan[d]; if (!e) return; e.m = e.m || {}; const me = e.me || {};
-    const keepAll = d < fromDate; const synced = sl => typeof syncKeyOn === 'function' && syncKeyOn(d, sl);   // shared meals are planned together with the partner
+    const keepAll = d < fromDate; const synced = sl => typeof syncKeyOn === 'function' && syncKeyOn(d, sl);
     const m = planDay(P, !!e.w, sl => (keepAll || me[sl] || synced(sl)) ? (e.m[sl] || null) : undefined);
     if (keepAll) return;
     MEAL_SLOTS.forEach(sl => { if (!me[sl] && !synced(sl) && e.m[sl] !== m[sl]) { e.m[sl] = m[sl]; n++; } });
@@ -248,14 +239,13 @@ function replanMeals(fromDate) {
   invalidate(); return n;
 }
 function markMealEdit(date, slot) { const e = S.plan[date]; if (!e || !slot) return; (e.me = e.me || {})[slot] = 1; }
-// First day that a plan-wide meal change should touch: the next plan week (this week's groceries are left alone)
 function nextPlanWeekStart() { const t = todayISO(), st = S.settings.startDate; return t < st ? st : addDays(st, 7 * planWeek(t)); }
 /* ---------- shopping model & ingredient-sharing planner ----------
    Package size P (grams / ml / items) and spoil weight w (1 = fresh, 0 = pantry) for every food. */
 function defaultPack(id, sub, g) {
   let P = FOOD_PACK[id] || SUB_PACK[sub] || (g.u ? 1 : 454);
-  if (g.u && !FOOD_PACK[id] && P > 60) P = 1;                             // per-item food in a grams-sized subgroup
-  if (!g.u && P < 20) P = g.ml ? 1000 : 454;                              // grams food in an items-sized subgroup
+  if (g.u && !FOOD_PACK[id] && P > 60) P = 1;
+  if (!g.u && P < 20) P = g.ml ? 1000 : 454;
   return P;
 }
 function packInfo(id) {
@@ -266,7 +256,6 @@ function packInfo(id) {
   if (g.r === 'V' && (g.sub === 'spices' || g.sub === 'condiments')) w = Math.min(w, .03);
   return { P, w };
 }
-// Standard-serving amount of each ingredient in one serving of a recipe
 function servingAmounts(id) { const r = RECIPE[id]; if (!r) return []; const y = Math.max(1, r.yield || 1); return r.ing.map(([i, a]) => [i, a / y]); }
 /* Shopping score for adding one serving of recipe r to this week's list (higher = cheaper):
      score = Σ_i w_i × ( min(a_i, R_i) / P_i  −  ⌈ max(0, a_i − R_i) / P_i ⌉ ) ÷ servings
@@ -279,7 +268,7 @@ function shareScore(id, basket) {
     sc += w * (Math.min(amt, R) / P - Math.ceil(Math.max(0, amt - R) / P - 1e-9)); });
   return sc / y;
 }
-const SHARE_WINDOW = 3;   // look at the next 3 recipes in each rotation; none waits more than 2 turns
+const SHARE_WINDOW = 3;
 function makePlanner(share) {
   const Q = {}; let basket = {};
   Object.keys(BASE_SEQ).forEach(k => { Q[k] = { list: filterSeq(BASE_SEQ[k], SEQ_CAT[k], k), ptr: 0, pending: [], carry: [], last: null }; });
@@ -304,20 +293,17 @@ function makePlanner(share) {
     use(id) { servingAmounts(id).forEach(([i, a]) => { basket[i] = (basket[i] || 0) + a; }); }
   };
 }
-// Fill one day's meals from the planner. keep(slot) → a recipe id to keep instead of the planner's pick (or undefined)
 function planDay(P, isT, keep) {
   const keys = { breakfast: 'breakfast', lunch: 'lunch', dinner: 'dinner', snack1: isT ? 'snack1_train' : 'snack1_rest', snack2: isT ? 'snack2_train' : 'snack2_rest' };
   const m = {};
   MEAL_SLOTS.forEach(sl => { const gen = P.next(keys[sl]); const k = keep ? keep(sl) : undefined; const fin = k !== undefined ? k : gen; m[sl] = gen; if (fin) P.use(fin); });
   return m;
 }
-// Simulate the auto-planner over the whole plan (for comparisons); returns { date: meals }
 function simulateMeals(share) {
   const P = makePlanner(share); const out = {};
   planDates().forEach((d, i) => { if (i % 7 === 0) P.newWeek(); out[d] = planDay(P, !!(S.plan[d] && S.plan[d].w)); });
   return out;
 }
-// Shopping summary for a set of days' meals (standard servings): items, fresh packages, spoil-prone leftovers, shared ingredients
 function shoppingStats(mealsByDate) {
   const need = {}, users = {};
   Object.values(mealsByDate).forEach(m => MEAL_SLOTS.forEach(sl => { const id = m && m[sl]; if (!id || !RECIPE[id]) return;
@@ -331,8 +317,6 @@ function shoppingStats(mealsByDate) {
   return { items, packs, leftG, shared };
 }
 function makeQueue(list) { let i = 0, q = []; return () => { if (!list.length) return null; if (!q.length) { const id = list[i % list.length]; i++; const r = id && RECIPE[id]; const y = r ? r.yield : 1; for (let k = 0; k < y; k++) q.push(id); } return q.shift(); }; }
-// Assign sessions to training days: each phase runs its Push/Pull/Legs sequence in a rolling order that continues across
-// weeks (so any number of training days works) and restarts when a new phase begins.
 /* ---------- training styles ----------
    Three switches: strength, hypertrophy, cardio. With both lifting styles on, the program is
    exactly what it has always been — the S and H rows in each template stand as written. Turn one
@@ -349,12 +333,10 @@ function styleRow(type, sets, reps, rest) {
   if (type === 'T' || (s && h)) return { type, sets, reps, rest };
   const want = s ? 'S' : 'H';
   if (want === type) return { type, sets, reps, rest };
-  const rr = repRange(reps);   // declared further down; always returns a [lo, hi] pair
+  const rr = repRange(reps);
   if (want === 'S') { const lo = clamp(Math.round(rr[0] * 0.55), 3, 8); return { type: 'S', sets, reps: `${lo}–${lo + 2}`, rest: Math.max(rest, 150) }; }
   const lo = clamp(Math.round(rr[0] * 1.6), 8, 15); return { type: 'H', sets, reps: `${lo}–${lo + 4}`, rest: Math.min(rest, 90) };
 }
-/* ---------- cardio ----------
-   kcal/min = MET x 3.5 x kg / 200. An estimate from body weight and the clock, nothing more. */
 function cardioKcal(kind, minutes, lb) {
   const c = CARDIO[kind]; if (!c) return 0;
   const w = +lb > 0 ? +lb : (S && S.settings ? S.settings.startWeight : 180);
@@ -406,7 +388,6 @@ function assignWorkouts(plan, settings, dates, fromDate, overwrite) {
   }
   assignCardio(plan, settings, dates, fromDate, overwrite);
 }
-// Re-plan workouts from a date forward (e.g. training days changed). Snacks follow the new training/rest pattern.
 function rescheduleWorkouts(fromDate) {
   const dates = planDates(); const before = {};
   dates.forEach(d => { before[d] = !!(S.plan[d] && S.plan[d].w); });
@@ -435,16 +416,11 @@ function rebuildExercises() {
   });
   invalidate();
 }
-// Variations for a slot in a given plan week (custom exercises join the rotation from the week they were added)
-/* ---------- exercises switched off ----------
-   S.exOff = { exerciseId: [[fromWeekStart, toWeekStart|null], …] } — periods keep past weeks showing what was actually planned.
-   Muscle groups for the "keep at least one on" rule: the library groups, with rear delts on their own (they're trained on pull days). */
 const MUSCLE_GROUPS = ['Chest', 'Back', 'Shoulders', 'Rear delts', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'];
 function exGroupOf(e) { if (!e) return null; if (e.group === 'Shoulders' && (e.primary || []).includes('rearDelt')) return 'Rear delts'; return e.group; }
 function exOffOn(id, date) { const p = (S.exOff || {})[id]; return !!p && p.some(([f, t]) => date >= f && (!t || date < t)); }
 function exOffNow(id) { const p = (S.exOff || {})[id]; return !!p && p.some(([, t]) => !t); }
 function planWeekStart(wk) { return addDays(S.settings.startDate, ((wk || 1) - 1) * 7); }
-/* program swaps: S.slotSwap[slot] = [[fromId, toId, fromWeekStart, untilWeekStart|null], …] — "use Y where the rotation has X" */
 function slotSwapsOn(slot, wStart) { return ((S.slotSwap || {})[slot] || []).filter(([a, b, f, t]) => EX[b] && wStart >= f && (!t || wStart < t)); }
 function slotVars(slot, wk) {
   const base = SLOTS[slot].vars; const cx = CUSTOM_SLOT[slot];
@@ -456,8 +432,6 @@ function slotVars(slot, wk) {
   if (!S.exOff || !Object.keys(S.exOff).length) return all;
   const on = all.filter(id => pinned.has(id) || !exOffOn(id, wStart));
   if (on.length) return on;
-  // every variation for this slot is switched off → borrow switched-on exercises from the same muscle group,
-  // preferring ones that train the same muscles (keeps push and pull sessions separate)
   const g = exGroupOf(EX[base[0]]); const prim = new Set(base.flatMap(id => EX[id].primary || []));
   const pool = Object.values(EX).filter(e => exGroupOf(e) === g && !exOffOn(e.id, wStart) && (!e.custom || !e.since || e.since <= wEnd));
   pool.sort((a, b) => (b.primary || []).filter(m => prim.has(m)).length - (a.primary || []).filter(m => prim.has(m)).length || a.name.localeCompare(b.name));
@@ -481,9 +455,6 @@ function generatePlan(settings, through, existing) {
   });
   return plan;
 }
-// Swap planned meals (from a date onward) that are no longer allowed
-/* Returns { n, empty }: how many meals were swapped, and any category that had no legal
-   recipe left. Callers warn about `empty` — silently nulling a meal loses the day's calories. */
 function substitutePlan(fromDate) {
   let n = 0; const map = {}; const counters = {}; const empty = {};
   Object.keys(S.plan).sort().forEach(d => {
@@ -491,7 +462,7 @@ function substitutePlan(fromDate) {
     MEAL_SLOTS.forEach(slot => {
       const id = m[slot]; if (!id || (RECIPE[id] && recipeAllowed(id))) return;
       if (!(id in map)) { const cat = RECIPE[id] ? RECIPE[id].cat : SLOT_CAT[slot]; counters[cat] = counters[cat] || 0; map[id] = pickSubstitute(cat, RECIPE[id] ? RECIPE[id].yield : 1, counters[cat]++); }
-      if (map[id] == null) { empty[RECIPE[id] ? RECIPE[id].cat : SLOT_CAT[slot]] = true; return; }   // nothing left to swap to: keep the meal rather than blanking the day
+      if (map[id] == null) { empty[RECIPE[id] ? RECIPE[id].cat : SLOT_CAT[slot]] = true; return; }
       m[slot] = map[id]; n++;
     });
   });
@@ -514,7 +485,7 @@ function sessionRows(inst) {
     let vi = pi >= 0 ? pi : type === 'T' ? 0 : ((wk - 1 + (off || 0)) % vars.length + vars.length) % vars.length;
     for (let k = 0; k < vars.length && used.has(vars[vi]); k++) vi = (vi + 1) % vars.length;   // don't repeat an exercise within a session
     used.add(vars[vi]); const planned = EX[vars[vi]];
-    const ex = daySw[i] && EX[daySw[i]] ? EX[daySw[i]] : planned;   // swapped for this day only
+    const ex = daySw[i] && EX[daySw[i]] ? EX[daySw[i]] : planned;
     const prog = S.slotSwap ? slotSwapsOn(slot, wStart).find(x => x[1] === planned.id) : null;
     const sr = styleRow(type, sets, reps, rest);
     const rir = sr.type === 'T' ? 'Top set @ 1 RIR' : (t.phase === 4 ? '3–4' : RIR[sr.type][wip - 1]);
@@ -527,7 +498,6 @@ function repRange(reps) { const m = String(reps).match(/(\d+)\D+(\d+)/); if (m) 
 
 /* ---------- bodyweight stats ---------- */
 function sortedWeights() { return S.weights.slice().sort((a, b) => a.d < b.d ? -1 : 1); }
-// Latest weigh-in on/before date. Missing BF is estimated by holding the last known lean mass constant.
 function statsOn(date) {
   const ws = sortedWeights();
   let w = S.settings.startWeight, bf = S.settings.startBF, est = false, src = 'start';
@@ -544,7 +514,6 @@ function latestStats() { return statsOn(null); }
 
 /* ---------- energy targets (Katch–McArdle) ---------- */
 const goalKind = () => { const g = S.settings.goal; return g === 'bulk' || g === 'maintain' ? g : 'cut'; };
-// lb/week the plan expects the scale to move: negative cutting, positive bulking, 0 at maintenance
 function planRate(w) {
   const st = S.settings; const k = goalKind();
   if (k === 'maintain') return 0;
@@ -581,15 +550,12 @@ function targetsFor(w, bf, isTrain) {
   const fatPct = bulking ? 0.25 : 0.27;
   let pr = Math.round(st.proteinPerLb * w);
   let fat = Math.max(Math.round(0.3 * w), Math.round(kr * fatPct / 9));
-  /* At a low calorie floor a big lifter's protein and fat minimums can exceed the target on
-     their own. Carbs clamped at zero used to hide that and the macros stopped summing to the
-     number on screen, so trim fat first (down to its floor) and then protein, and flag it. */
   let over = pr * 4 + fat * 9 - kr;
   const fatFloor = Math.round(0.3 * w);
   if (over > 0) { const cut = Math.min(over, Math.max(0, (fat - fatFloor) * 9)); fat -= Math.round(cut / 9); over -= cut; }
-  const protFloor = Math.round(0.5 * w);            // the bottom of the app's own 0.5–1.0 g/lb band
+  const protFloor = Math.round(0.5 * w);
   if (over > 0) { const cut = Math.min(over, Math.max(0, (pr - protFloor) * 4)); pr -= Math.round(cut / 4); over -= cut; }
-  const macroSqueeze = over > 0;                    // even at both floors the target is unreachable
+  const macroSqueeze = over > 0;
   const carbs = Math.max(0, Math.round((kr - pr * 4 - fat * 9) / 4));
   return { fat, carbs, lbm, bmr: Math.round(bmr), maint: Math.round(maint), weeklyMaint: Math.round(weeklyMaint), deficit: Math.round(deficit),
            surplus: Math.round(surplus), kind, bulking, bfCap: kind === 'bulk' && bf >= (+st.bulkMaxBF || 20),
@@ -613,7 +579,7 @@ function computeAll() {
   if (_cache) return _cache;
   const days = {};
   planDates().forEach(d => { days[d] = computeDay(d); });
-  if (typeof attachPartner === 'function') attachPartner(days);        // meal sync: partner's portions of shared meals
+  if (typeof attachPartner === 'function') attachPartner(days);
   const batches = computeBatches(days);
   _cache = { days, batches };
   return _cache;
@@ -634,11 +600,9 @@ function computeDay(date) {
   const extras = (entry.x || []).map((x, i) => x && ING[x.id] && +x.amt > 0 ? { i, id: x.id, amt: +x.amt, slot: DAY_SLOTS.includes(x.slot) ? x.slot : 'snack1', m: ingMacros(x.id, +x.amt) } : null).filter(Boolean);
   const exM = extras.reduce((a, x) => addM(a, x.m), zeroM());
   const factor = (role, pF, cF) => role === 'P' ? pF : (role === 'C' || role === 'F') ? cF : 1;
-  // snap count-based items (eggs, pears, tortillas…) to a practical fraction. the step follows the recipe's own
   // per-serving amount, so a quarter-pear serving stays a quarter and is never floored up to a half.
   const unitStep = base => [1, 0.5, 0.25, 0.125].find(s => Math.abs(base / s - Math.round(base / s)) < 1e-9) || (base < 1 ? base : 0.25);
   const roundUnit = (base, a) => { const step = unitStep(base); return Math.max(step, Math.round(a / step) * step); };
-  // solve protein factor (pF) and carb/fat factor (cF); pass 2 locks count-based items (eggs, tortillas…) to whole units
   function solve(unitAmt) {
     const sum = { P: zeroM(), CF: zeroM(), V: zeroM(), X: addM(zeroM(), exM) };
     lines.forEach((l, i) => {
@@ -686,11 +650,9 @@ function dayUse(A, d, mine, extras = mine) {
   return out;
 }
 
-/* Leftovers: group occurrences of multi-serving recipes into batches.
-   A leftover joins the current batch while it has room and is within the recipe's keep window. */
 function keepDays(r) { if (r.keep) return r.keep; if (r.id === 'boiled_eggs') return 6; return r.storage === 'freezer' ? 60 : r.storage === 'fridge' ? 4 : 1; }
 function computeBatches(days) {
-  const occ = {}; // recipeId -> [{date, slot}]
+  const occ = {};
   Object.keys(days).sort().forEach(d => {
     days[d].meals.forEach((m, i) => { if (m.r.yield > 1) (occ[m.r.id] = occ[m.r.id] || []).push({ date: d, slot: m.slot, order: DAY_SLOTS.indexOf(m.slot), n: m.partner ? 2 : 1 }); });
   });
@@ -708,7 +670,6 @@ function computeBatches(days) {
   });
   list.forEach(b => {
     const r = RECIPE[b.rid];
-    // batch ingredient totals = sum of each member's scaled portion
     const amounts = {};
     let acc = 0;
     b.members.forEach((o, idx) => {
@@ -726,10 +687,8 @@ function computeBatches(days) {
 /* ---------- friendly amounts ---------- */
 const TBSP = { olive_oil: 13.5, sesame_oil: 13.6, honey: 21, pb: 16, light_mayo: 15, soy_sauce: 16, chia: 12, cocoa: 5.4, pb2: 6.5, sriracha: 6, ketchup: 17, cornstarch: 8, parmesan: 5, teriyaki: 18, syrup_sf: 15 };
 const CUP = { greek_yogurt: 245, cottage: 226, rice: 158, sushi_rice: 160, quinoa: 185, berries: 140, oats: 80, granola: 60, marinara: 250, crushed_tomatoes: 240, salsa: 260, fairlife: 240, egg_whites: 243, black_beans: 172, kidney_beans: 177, corn: 145, edamame: 155, pineapple: 165, spinach: 30, broccoli: 90, stir_fry_veg: 130, cheese_shred: 113, feta: 150, cherry_tomato: 150, carrots: 128, romaine: 47, green_beans: 110, cucumber: 120 };
-// measuring-cup fractions: what a kitchen measure actually reads
 const FRAC_CUP = [[0, ''], [0.25, '¼'], [0.33, '⅓'], [0.5, '½'], [0.67, '⅔'], [0.75, '¾'], [1, '']];
 // count fractions: a serving is (units ÷ yield), so every denominator up to 8 needs a glyph or the text
-// rounds away from the macros it is printed beside
 const FRAC_UNIT = [[0, ''], [0.125, '⅛'], [0.167, '⅙'], [0.2, '⅕'], [0.25, '¼'], [0.33, '⅓'], [0.375, '⅜'], [0.4, '⅖'], [0.5, '½'], [0.6, '⅗'], [0.625, '⅝'], [0.67, '⅔'], [0.75, '¾'], [0.8, '⅘'], [0.833, '⅚'], [0.875, '⅞'], [1, '']];
 function fracStr(x, fr = FRAC_CUP) {
   const w = Math.floor(x + 1e-6); const f = x - w;
@@ -741,7 +700,6 @@ function amountText(id, amt) {
   const g = ING[id];
   if (g.u) {
     // let fracStr pick the nearest fraction it can actually render, so the text matches the macros beside it.
-    // the old half-unit floor showed a quarter-pear serving as "½ pear" while charging it a quarter's macros.
     const n = Math.max(0.125, amt);
     const lab = n <= 1 ? g.u : g.u + (g.u.endsWith('ch') ? 'es' : 's');
     return { main: fracStr(n, FRAC_UNIT) + ' ' + lab, sub: '' };
@@ -805,7 +763,7 @@ function suggestion(exId, reps, beforeDate) {
 
 /* ---------- trend & projections ---------- */
 function linreg(pts) { const n = pts.length; if (n < 2) return null; let sx = 0, sy = 0, sxx = 0, sxy = 0; pts.forEach(([x, y]) => { sx += x; sy += y; sxx += x * x; sxy += x * y; }); const den = n * sxx - sx * sx; if (!den) return null; const m = (n * sxy - sx * sy) / den; return { m, b: (sy - m * sx) / n }; }
-const TREND_STALE_DAYS = 10;                        // a trend older than this says nothing about today
+const TREND_STALE_DAYS = 10;
 function weightTrend() {
   const ws = sortedWeights(); if (ws.length < 3) return null;
   const last = ws[ws.length - 1].d;
@@ -814,17 +772,17 @@ function weightTrend() {
   const pts = ws.filter(x => x.d >= from).map(x => [dayDiff(from, x.d), x.w]);
   if (pts.length < 3 || pts[pts.length - 1][0] - pts[0][0] < 7) return null;
   const lr = linreg(pts); if (!lr) return null;
-  const rate = -lr.m * 7;                       // lb lost per week (negative while gaining)
+  const rate = -lr.m * 7;
   const kind = goalKind(); const st0 = latestStats() || {};
   let advice = null, delta = 0;
   if (kind === 'maintain') {
-    const drift = -rate;                        // lb/wk on the scale
+    const drift = -rate;
     if (Math.abs(drift) <= 0.35) advice = `Holding steady: ${drift >= 0 ? '+' : ''}${drift.toFixed(2)} lb/wk. Maintenance calories look right.`;
     else { delta = drift > 0 ? -150 : 150; advice = `You’re ${drift > 0 ? 'gaining' : 'losing'} ${Math.abs(drift).toFixed(2)} lb/wk while aiming to hold. ${delta > 0 ? 'Add' : 'Trim'} ${Math.abs(delta)} kcal/day.`; }
     return { rate, advice, delta, points: pts.length, kind };
   }
   if (kind === 'bulk') {
-    const gain = -rate;                         // lb/wk gained
+    const gain = -rate;
     const target = bulkLb(st0.w);
     if (gain < target * 0.5) { delta = gain < 0 ? 300 : 200; advice = `You’re gaining ${gain.toFixed(2)} lb/wk against a ${target.toFixed(2)} lb/wk target. Add ${delta} kcal/day.`; }
     else if (gain > target * 1.6) { delta = -150; advice = `You’re gaining ${gain.toFixed(2)} lb/wk — faster than the ${target.toFixed(2)} lb/wk target, and the extra is mostly fat. Trim ${-delta} kcal/day.`; }
@@ -843,11 +801,10 @@ function movingAvg(ws, days = 7) {
 function projection() {
   const st = latestStats(); const kind = goalKind();
   const ws0 = sortedWeights(); const staleBy = ws0.length ? dayDiff(ws0[ws0.length - 1].d, todayISO()) : null;
-  const signed = planRate(st.w);                                  // negative cutting, positive bulking
+  const signed = planRate(st.w);
   const rate = Math.abs(signed) || 0.0001;
   const toGoal = kind === 'bulk' ? Math.max(0, S.settings.goalWeight - st.w) : Math.max(0, st.w - S.settings.goalWeight);
   const weeks = toGoal / rate;
-  // measure forward from today, not from a weigh-in that might be months old
   const refDate = maxISO(ws0.length ? ws0[ws0.length - 1].d : S.settings.startDate, todayISO());
   const ref = maxISO(maxISO(todayISO(), refDate), S.settings.startDate);
   const launchEnd = addDays(S.settings.startDate, LAUNCH_DAYS - 1);
@@ -856,7 +813,6 @@ function projection() {
   const daysLeft = Math.max(0, dayDiff(refDate, endPlan));
   const endW = kind === 'bulk' ? Math.min(S.settings.goalWeight, st.w + rate * daysLeft / 7) : Math.max(S.settings.goalWeight, st.w - rate * daysLeft / 7);
   const goalDate = addDays(refDate, Math.round(weeks * 7));
-  // weight at goal BF if lean mass is held
   const wAtGoalBF = st.lbm / (1 - S.settings.goalBF / 100);
   return { weeks, goalDate, endW, endPlan, cyc, wAtGoalBF, lbm: st.lbm, kind, rate: signed, staleBy, stale: staleBy != null && staleBy > TREND_STALE_DAYS, reached: goalReached(st.w, st.bf) };
 }

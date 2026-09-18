@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
+
 /* ============================================================
    FORGE 90 — Views: dashboard, calendar (drag & drop), day detail
    ============================================================ */
@@ -9,8 +10,6 @@ function woChip(date, e, extraCls = '') {
   const t = TEMPLATES[e.w.t];
   return `<div class="chip wo ${extraCls}" style="--k:${KIND_VAR(t.kind)}" draggable="true" data-drag="workout" data-date="${date}" data-tip-wo="${date}">${icon(t.icon)}<span class="nm">${esc(t.short)}</span></div>`;
 }
-/* A day can hold both a lifting session and a cardio one. The cardio chip sits beside the
-   lifting chip rather than replacing it, and a day with neither is the rest day. */
 function cdChip(date, e, extraCls = '') {
   const c = dayCardio(e); if (!c) return '';
   const k = CARDIO[c.k];
@@ -49,7 +48,6 @@ function viewDashboard() {
     ${tile('To goal', 'flame', fmt(Math.abs(cur.w - st.goalWeight), 1), 'lb', null, true, goalKind() === 'maintain' ? 'Holding at maintenance' : `≈ ${fmt(pj.weeks, 0)} weeks at ${fmt(Math.abs(planRate(cur.w)), 2)} lb/wk ${goalKind() === 'bulk' ? 'gain' : 'loss'}`)}
   </div>`;
 
-  // today card
   let wo = '';
   if (day.entry.w) {
     const t = TEMPLATES[day.entry.w.t]; const rows = sessionRows(day.entry.w);
@@ -69,7 +67,6 @@ function viewDashboard() {
       <div>${macroBars(day.totals, day.tg)}<div class="tiny muted" style="margin-top:6px">Portion multipliers: protein ×${day.pF.toFixed(2)} · carbs/fats ×${day.cF.toFixed(2)}</div></div></div>
     <div style="margin-top:12px">${meals}${extrasHTML(day, null)}</div></div>`;
 
-  // outlook
   const outlook = `<div class="card"><div class="card-h"><h2>Goal outlook</h2></div>
     <div class="grid g2" style="gap:12px">
       <div><div class="tiny muted">${pj.cyc === 1 ? 'End of 90 days' : 'End of cycle ' + pj.cyc} (${fmtDate(pj.endPlan, { month: 'short', day: 'numeric' })})</div><div style="font-size:22px;font-weight:700" class="num">~${fmt(pj.endW, 0)} lb</div></div>
@@ -79,13 +76,11 @@ function viewDashboard() {
     ${trend ? `<div class="note ${trend.delta ? 'warn' : ''}" style="margin-top:8px">${icon('trend')}<span>${esc(trend.advice)} ${trend.delta ? `<button class="btn sm" data-act="apply-trend" data-delta="${trend.delta}" style="margin-left:6px">Apply ${trend.delta > 0 ? '+' : ''}${trend.delta} kcal</button>` : ''}</span></div>` : ''}
     <hr class="sep"><h3 style="margin-bottom:10px">Quick weigh-in</h3>${weighForm()}</div>`;
 
-  // next 7 days
   const days7 = Array.from({ length: 7 }, (_, i) => addDays(focus, i)).filter(inPlan);
   const strip = `<div class="card"><div class="card-h"><h2>Next 7 days</h2><a class="btn sm ghost" href="#/calendar">Calendar ${icon('right')}</a></div><div class="strip7">
     ${days7.map(d => { const x = A.days[d]; return `<a href="#/day/${d}" class="cell ${x.isTrain ? 'train' : ''} ${d === today ? 'today' : ''}" style="min-height:0;text-decoration:none"><div class="cell-head"><span class="dn">${parseISO(d).getDate()}</span><span class="dt">${DOW[parseISO(d).getDay()]}</span></div>
       ${dayHasWork(x.entry) ? dayChips(d, x.entry).replace('draggable="true"', '') : '<div class="rest-lbl">Rest</div>'}<div class="cell-foot"><div class="k">${fmt(x.totals.k)}<span>kcal</span></div></div></a>`; }).join('')}</div></div>`;
 
-  // PRs
   const prs = recentPRs(6);
   const prCard = `<div class="card"><div class="card-h"><h2>Recent PRs</h2><a class="btn sm ghost" href="#/progress">All progress ${icon('right')}</a></div>
     ${prs.length ? `<table class="tbl">${prs.map(p => `<tr><td><span class="prb">${icon('trophy')}PR</span></td><td><span class="ex-name" data-tip-ex="${p.ex}">${esc(EX[p.ex].name)}</span></td><td>${fmt(p.set.w)} lb × ${p.set.r}</td><td class="muted">e1RM ${fmt(p.best)}</td><td class="muted">${fmtDate(p.d)}</td></tr>`).join('')}</table>`
@@ -93,7 +88,6 @@ function viewDashboard() {
 
   const hero = `<div class="hero">${heroArt()}<div class="eyebrow">${eyebrow}</div><h1 style="margin-top:6px">${title}</h1><p>${esc(ph.summary)}</p>
       <div class="weekbar">${bars}</div><div class="weekbar-l"><span>${fmtDate(cStart, { month: 'short', day: 'numeric' })}</span>${barLabels}<span>${fmtDate(cEnd, { month: 'short', day: 'numeric' })}</span></div></div>`;
-  // panels in the order (and with the ones hidden) the user picked — see views-k
   return dashLayoutHTML({ hero, stats: tiles, today: todayCard, outlook, gym: gymPanelHTML(), week: strip, prs: prCard }, syncInviteNote() + bfEstimateNote());
 }
 function recentPRs(n) {
@@ -118,9 +112,6 @@ function monthGrid(ym) {
   const out = []; for (let d = new Date(s); d <= e; d.setDate(d.getDate() + 1)) out.push(iso(d)); return out;
 }
 function mondayOf(date) { const d = parseISO(date); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return iso(d); }
-/* A plan date with no entry (undo after a rebuild, a sparse imported backup, a deleted recipe)
-   used to throw here and take the whole render down with it, leaving the app frozen until a
-   reload. Hand back an empty day instead and let the UI draw it as blank. */
 function planCell(date) { const e = S.plan[date]; return e && typeof e === 'object' ? (e.m ? e : Object.assign({ m: {} }, e)) : { m: {} }; }
 function cellHTML(date, A, big, monthNum) {
   const dd = parseISO(date);
@@ -168,7 +159,7 @@ function agendaHTML(dates, A) {
   return `<div class="agenda">${rows || '<div class="card empty-state">No plan days in this range.</div>'}</div>`;
 }
 function viewCalendar() {
-  if (isPhone() && !UI.phCal) { UI.phCal = 1; UI.calView = 'week'; saveUI(); }        // phones start on the week list (Month stays one tap away)
+  if (isPhone() && !UI.phCal) { UI.phCal = 1; UI.calView = 'week'; saveUI(); }
   const A = computeAll(); const st = S.settings;
   const start = st.startDate, end = planEnd();
   const t = todayISO(); const anchor = inPlan(t) ? t : (t < start ? start : end);
@@ -265,13 +256,11 @@ function applyDrop(d, type, tDate, tSlot, copy) {
     if (d.from === 'lib') { pushUndo('add workout'); tE.w = { t: d.t, wk: planWeek(tDate) }; commitPlan(`${TEMPLATES[d.t].name} → ${fmtDate(tDate)}`); return; }
     if (d.date === tDate) return;
     pushUndo('move workout'); const src = S.plan[d.date]; const a = src.w, b = tE.w;
-    // the session takes on the week it lands in, so RIR targets and variations match the header
     tE.w = a ? Object.assign({}, a, { wk: planWeek(tDate) }) : null;
     if (!copy) src.w = b ? Object.assign({}, b, { wk: planWeek(d.date) }) : null;
     commitPlan(copy ? `Copied workout to ${fmtDate(tDate)}` : b ? `Swapped workouts: ${fmtDate(d.date)} ↔ ${fmtDate(tDate)}` : `Moved workout to ${fmtDate(tDate)}`);
     return;
   }
-  // meals
   const rid = d.from === 'lib' ? d.rid : S.plan[d.date].m[d.slot]; if (!rid) return;
   if (type !== 'slot') {
     if (d.from === 'cal') tSlot = d.slot;
@@ -298,8 +287,6 @@ function dessertAddHTML(date, day) {
   return `<div class="dessert-add"><button type="button" class="btn sm ghost" data-act="dessert-add" data-d="${date}">${icon('plus')}Add a dessert</button>
     <span class="tiny muted">Desserts are never planned for you. Add one and the rest of the day resizes to fit it.${n ? '' : ' No dessert recipes yet — add one under Foods &amp; recipes.'}</span></div>`;
 }
-/* The cardio card is its own thing: no sets, no RIR, just what it is, how long, and the way in
-   to the stopwatch. A day can show this next to a lifting card, or on its own. */
 function cardioCardHTML(date, e) {
   const c = dayCardio(e); const t0 = todayISO();
   if (!c) return cardioOn() && date >= t0 ? `<div class="card cd-card empty"><div class="card-h"><h2>Cardio</h2></div>
@@ -327,7 +314,6 @@ function viewDay(date) {
     <div class="row wrap">${phasePill(wk)}<span class="pill ${day.isTrain ? 'acc' : ''}">${day.isTrain ? 'Training day' : 'Rest day'}</span>${dayCardio(e) ? `<span class="pill cd-pill">${icon('heart')}Cardio</span>` : ''}</div><div class="spacer"></div>${syncBtnHTML()}
     <a class="btn icon ${prev ? '' : 'hidden'}" href="#/day/${prev}">${icon('left')}</a><a class="btn icon ${next ? '' : 'hidden'}" href="#/day/${next}">${icon('right')}</a></div>`;
 
-  // workout
   const opts = `<option value="">— Rest day —</option>` + (e.w && TEMPLATES[e.w.t] && TEMPLATES[e.w.t].legacy ? `<option value="${e.w.t}" selected>${esc(TEMPLATES[e.w.t].name)} (earlier plan)</option>` : '') + ALL_PHASES.map(p => `<optgroup label="${p.name}">${p.templates.map(k => `<option value="${k}" ${e.w && e.w.t === k ? 'selected' : ''}>${esc(TEMPLATES[k].name)}</option>`).join('')}</optgroup>`).join('');
   let woCard;
   if (e.w) {
@@ -348,7 +334,6 @@ function viewDay(date) {
 
   const cdCard = cardioCardHTML(date, e);
 
-  // nutrition
   const st = day.stats; const tg = day.tg;
   const mealsHTML = DAY_SLOTS.map(slot => {
     const m = day.meals.find(x => x.slot === slot);
@@ -390,10 +375,8 @@ function setInputsHTML(date, r) {
 const swapBtnHTML = (date, r, back) => `<button type="button" class="swap-btn ${r.daySwap ? 'on' : ''}" data-act="swap-day" data-date="${date}" data-i="${r.i}"${back ? ` data-back="${back}"` : ''} title="Swap ${esc(r.ex.name)} for this day" aria-label="Swap ${esc(r.ex.name)} for this day">${icon('loop')}</button>`;
 const typeBadge = r => `<span class="type-${r.type.toLowerCase()}">${r.type === 'S' ? 'S' : r.type === 'T' ? 'TEST' : 'H'}</span>`;
 const hintHTML = (date, r, sug) => `<div class="hint" id="hint-${r.ex.id}">${prBadge(date, r.ex.id)}${sug ? icon('zap') + `<span>${esc(sug.text)}</span>` : `<span class="muted">First time — pick a weight you can do for the target reps at RIR ${esc(r.rir)}.</span>`}</div>`;
-/* sets logged (reps entered) for a session, counting only the planned sets */
 function loggedSets(date, rows) { let done = 0, total = 0; rows.forEach(r => { const l = (S.logs[date] || {})[r.ex.id] || []; total += r.sets; for (let k = 0; k < r.sets; k++) if (l[k] && +l[k].r > 0) done++; }); return { done, total }; }
 function exLogged(date, r) { const l = (S.logs[date] || {})[r.ex.id] || []; for (let k = 0; k < r.sets; k++) if (!(l[k] && +l[k].r > 0)) return false; return true; }
-/* dashboard "Today" set logger */
 function todayLogHTML(date, rows) {
   const c = loggedSets(date, rows); const rest = r => r.rest >= 120 ? (r.rest / 60) + ' min' : r.rest + ' s';
   return `<div class="tlog" data-tlog="${date}"><div class="tlog-h"><h3>Log sets</h3><span class="tiny muted">weight × reps — saves as you type</span><span class="pill ${c.done >= c.total ? 'acc' : ''}" id="tlog-count">${c.done} / ${c.total} sets</span></div>
@@ -401,7 +384,6 @@ function todayLogHTML(date, rows) {
       <div class="tlog-sets"><div class="sets">${setInputsHTML(date, r)}</div>${hintHTML(date, r, suggestion(r.ex.id, r.reps, date))}</div></div>`).join('')}
     <div class="row wrap tlog-foot"><button class="btn ${S.done[date] ? 'primary' : ''}" data-act="toggle-done" data-date="${date}">${icon('check')}${S.done[date] ? 'Workout completed' : 'Mark workout complete'}</button><a class="btn ghost sm" href="#/day/${date}">Full day view ${icon('right')}</a></div></div>`;
 }
-/* live refresh of the counters after a set is typed in (no full re-render, so focus stays put) */
 function refreshLogProgress(date, exId) {
   document.querySelectorAll(`[data-log^="${date}|${exId}|"]`).forEach(inp => { const k = +inp.dataset.log.split('|')[2]; const s = ((S.logs[date] || {})[exId] || [])[k]; const st = inp.closest('.set'); if (st) st.classList.toggle('logged', !!(s && +s.r > 0)); });
   const box = document.querySelector(`[data-tlog="${date}"]`); const e = S.plan[date]; if (!box || !e || !e.w) return;

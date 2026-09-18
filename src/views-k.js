@@ -5,7 +5,6 @@
    Customize editor (drag, or the up/down buttons on touch screens)
    ================================================================ */
 
-// id, name, width ('full' spans the page; half-width panels side by side share a row), short description
 const DASH_PANELS = [
   ['hero', 'Cycle overview', 'full', 'Day count, phase and the 13-week bar'],
   ['stats', 'Body stats', 'full', 'Weight, body fat, lean mass, trend and distance to goal'],
@@ -15,7 +14,6 @@ const DASH_PANELS = [
   ['week', 'Next 7 days', 'full', 'The coming week at a glance'],
   ['prs', 'Recent PRs', 'half', 'Your latest personal records']
 ];
-// the phone's Today page has its own panels and its own saved layout (see views-l)
 const LAYOUTS = {
   dash: { key: 'dashLayout', panels: () => DASH_PANELS, title: 'Customize dashboard', defHidden: {}, where: 'dashboard' },
   today: { key: 'todayLayout', panels: () => TODAY_PANELS, title: 'Customize Today', defHidden: { gym: 1 }, where: 'Today page' }
@@ -23,7 +21,6 @@ const LAYOUTS = {
 const layoutOf = L => LAYOUTS[L] || LAYOUTS.dash;
 const DASH_DEFAULT = DASH_PANELS.map(p => p[0]);
 const dashInfo = (id, L) => layoutOf(L).panels().find(p => p[0] === id);
-// saved order with unknown panels dropped and new ones slotted in where they sit by default
 function dashOrder(L) {
   const C = layoutOf(L), def = C.panels().map(p => p[0]);
   const Ls = (S && S[C.key]) || {}; const saved = (Ls.order || []).filter((id, i, a) => dashInfo(id, L) && a.indexOf(id) === i);
@@ -31,7 +28,6 @@ function dashOrder(L) {
   return saved;
 }
 const dashHidden = (id, L) => { const C = layoutOf(L), h = ((S && S[C.key]) || {}).hidden; return h && id in h ? !!h[id] : !!C.defHidden[id]; };
-// runs of half-width panels share a row: the first takes the wide column, the rest stack beside it
 function dashLayoutHTML(html, notes) {
   const vis = dashOrder().filter(id => !dashHidden(id) && html[id]); const wrap = id => `<section class="dash-p" data-panel="${id}">${html[id]}</section>`;
   const out = []; let i = 0;

@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
-/* ============================================================
-   FORGE 90 — Comprehensive food database + food-group tree
-   Values per 100 g (or per 100 ml where noted, or per unit when a unit is given),
-   approximated from USDA FoodData Central / typical US labels. Any food can be edited in the app.
-   ============================================================ */
 
 /* ---------- food groups: category → subcategory ---------- */
 const FOOD_CATS = [
@@ -29,7 +24,6 @@ const SUB_CAT = {}; const SUB_LABEL = {};
 FOOD_CATS.forEach(c => c.subs.forEach(([id, l]) => { SUB_CAT[id] = c.id; SUB_LABEL[id] = l; }));
 const AISLES = ['Meat & Seafood', 'Dairy & Eggs', 'Produce', 'Grains & Bread', 'Frozen', 'Pantry', 'Snacks', 'Beverages', 'Deli & Prepared'];
 
-// Subgroups for the original foods
 const BASE_SUB = {
   chicken_breast: 'chicken_white', chicken_thigh: 'chicken_dark', turkey_937: 'turkey', beef_937: 'beef_lean', sirloin: 'beef_lean', pork_tenderloin: 'pork', canadian_bacon: 'pork',
   deli_turkey: 'deli', jerky: 'jerky', ahi: 'raw_fish', salmon: 'raw_fish', tuna_can: 'canned_tuna', salmon_fillet: 'fatty_fish', shrimp: 'shellfish',
@@ -61,11 +55,7 @@ const CAT_AISLE = { meat: 'Meat & Seafood', seafood: 'Meat & Seafood', eggs: 'Da
 const SUB_AISLE = { takeout: 'Deli & Prepared', soups: 'Pantry' };
 function defaultRole(sub, k, p, c, f) { if (P_SUBS.includes(sub)) return 'P'; if (F_SUBS.includes(sub)) return 'F'; if (V_SUBS.includes(sub) && k < 90) return 'V'; if (k < 25) return 'V'; return 'C'; }
 
-/* ---------- the list ----------
-   [id, name, sub, kcal, protein, carbs, fat, options]
-   options: { u: 'unit name', g: grams per unit } → values are per unit · { ml: true } → per 100 ml · { a: aisle } · { r: role } */
 const MORE_FOODS = [
-  // Chicken
   ['chicken_tenders', 'Chicken tenderloins, raw', 'chicken_white', 112, 23, 0, 1.7],
   ['chicken_breast_cooked', 'Chicken breast, cooked', 'chicken_white', 165, 31, 0, 3.6],
   ['rotisserie_chicken', 'Rotisserie chicken meat, no skin', 'chicken_white', 170, 26, 0, 7],
@@ -74,11 +64,9 @@ const MORE_FOODS = [
   ['chicken_drumstick', 'Chicken drumsticks, skinless, raw', 'chicken_dark', 116, 19.4, 0, 3.7],
   ['chicken_thigh_skin', 'Chicken thighs, bone-in with skin, raw', 'chicken_dark', 221, 15.5, 0, 17.3],
   ['chicken_wings', 'Chicken wings, raw', 'chicken_dark', 191, 17.5, 0, 12.8],
-  // Turkey
   ['turkey_breast', 'Turkey breast cutlets, raw', 'turkey', 114, 23.7, 0, 1.5],
   ['ground_turkey_99', 'Ground turkey 99% lean, raw', 'turkey', 106, 23, 0, 1.3],
   ['ground_turkey_85', 'Ground turkey 85/15, raw', 'turkey', 212, 18.6, 0, 15],
-  // Beef
   ['beef_955', 'Ground beef 95/5, raw', 'beef_lean', 137, 21.4, 0, 5],
   ['beef_9010', 'Ground beef 90/10, raw', 'beef_lean', 176, 20, 0, 10],
   ['eye_round', 'Eye of round steak, raw', 'beef_lean', 125, 23.4, 0, 3.3],
@@ -89,22 +77,18 @@ const MORE_FOODS = [
   ['ny_strip', 'NY strip steak, raw', 'beef_fatty', 216, 20.7, 0, 14.6],
   ['chuck_roast', 'Chuck roast / stew meat, raw', 'beef_fatty', 190, 19, 0, 12.3],
   ['brisket', 'Beef brisket, raw', 'beef_fatty', 250, 17.4, 0, 19.5],
-  // Pork
   ['pork_chop', 'Pork loin chop, boneless, raw', 'pork', 150, 21.5, 0, 6.8],
   ['pork_shoulder', 'Pork shoulder (butt), raw', 'pork', 230, 17, 0, 17.8],
   ['ground_pork', 'Ground pork, raw', 'pork', 263, 16.9, 0, 21.2],
   ['pork_ribs', 'Pork spare ribs, raw', 'pork', 277, 15.5, 0, 23.4],
-  // Lamb & game
   ['lamb_leg', 'Leg of lamb, raw', 'lamb', 160, 20.5, 0, 8.5],
   ['lamb_ground', 'Ground lamb, raw', 'lamb', 282, 16.6, 0, 23.4],
   ['bison_ground', 'Ground bison 90/10, raw', 'lamb', 168, 19.4, 0, 9.7],
   ['venison', 'Venison, raw', 'lamb', 120, 23, 0, 2.4],
-  // Deli
   ['deli_ham', 'Deli ham', 'deli', 106, 17.5, 1.8, 3],
   ['deli_chicken', 'Deli chicken breast', 'deli', 88, 17.6, 1.8, 1],
   ['roast_beef_deli', 'Deli roast beef', 'deli', 115, 18.6, 0.6, 4.3],
   ['salami', 'Salami', 'deli', 407, 22.6, 1.9, 33.7],
-  // Bacon & sausages
   ['bacon', 'Bacon, cooked', 'sausage', 43, 3, 0.1, 3.3, { u: 'slice', g: 8 }],
   ['turkey_bacon', 'Turkey bacon', 'sausage', 218, 17, 3, 15],
   ['turkey_sausage', 'Turkey breakfast sausage', 'sausage', 196, 16, 1, 14],
@@ -113,10 +97,8 @@ const MORE_FOODS = [
   ['italian_sausage', 'Italian sausage, raw', 'sausage', 300, 14.3, 1.4, 26.6],
   ['hot_dog', 'Beef hot dog', 'sausage', 145, 5, 1.2, 13.2, { u: 'hot dog', g: 45 }],
   ['pepperoni', 'Pepperoni', 'sausage', 504, 19.3, 1.2, 46.3],
-  // Jerky
   ['turkey_jerky', 'Turkey jerky', 'jerky', 282, 42, 18, 3.5, { a: 'Snacks' }],
   ['meat_stick', 'Beef meat stick', 'jerky', 100, 6, 1, 8, { u: 'stick', g: 28, a: 'Snacks' }],
-  // Seafood
   ['yellowtail', 'Sushi-grade yellowtail (hamachi)', 'raw_fish', 146, 23.1, 0, 5.2],
   ['imitation_crab', 'Imitation crab (surimi)', 'raw_fish', 95, 7.6, 15, 0.5],
   ['tuna_albacore', 'Canned albacore tuna in water, drained', 'canned_tuna', 128, 23.6, 0, 3, { a: 'Pantry' }],
@@ -136,11 +118,9 @@ const MORE_FOODS = [
   ['lobster', 'Lobster meat, cooked', 'shellfish', 89, 19, 0, 0.9],
   ['mussels', 'Mussels, raw', 'shellfish', 86, 11.9, 3.7, 2.2],
   ['oysters', 'Oysters, raw', 'shellfish', 81, 9.5, 5, 2.3],
-  // Eggs
   ['egg_boiled', 'Hard-boiled egg, peeled', 'whole_eggs', 78, 6.3, 0.6, 5.3, { u: 'egg', g: 50 }],
   ['egg_jumbo', 'Jumbo eggs', 'whole_eggs', 90, 7.9, 0.5, 6, { u: 'egg', g: 63 }],
   ['egg_substitute', 'Egg substitute (Egg Beaters)', 'egg_whites', 48, 10, 2, 0, { ml: true }],
-  // Dairy
   ['milk_whole', 'Whole milk', 'milk', 61, 3.2, 4.8, 3.3, { ml: true }],
   ['milk_2', '2% milk', 'milk', 50, 3.3, 4.8, 2, { ml: true }],
   ['milk_skim', 'Skim milk', 'milk', 34, 3.4, 5, 0.1, { ml: true }],
@@ -173,13 +153,11 @@ const MORE_FOODS = [
   ['half_half', 'Half-and-half', 'butter_cream', 131, 3.1, 4.3, 11.5, { ml: true }],
   ['sour_cream', 'Sour cream', 'butter_cream', 198, 2.4, 4.6, 19.4],
   ['sour_cream_light', 'Light sour cream', 'butter_cream', 136, 3.5, 7.1, 10.6],
-  // Plant proteins
   ['silken_tofu', 'Silken tofu', 'soy', 55, 4.8, 2.9, 2.7],
   ['tempeh', 'Tempeh', 'soy', 192, 20.3, 7.6, 10.8],
   ['seitan', 'Seitan', 'seitan', 120, 24, 4, 1.5],
   ['plant_burger', 'Plant-based burger patty', 'seitan', 212, 16.8, 8, 12.4, { a: 'Frozen' }],
   ['meatless_crumbles', 'Meatless crumbles', 'seitan', 145, 16, 5.5, 5.5, { a: 'Frozen' }],
-  // Beans & legumes
   ['pinto_beans', 'Pinto beans, cooked', 'beans', 143, 9, 26.2, 0.7],
   ['white_beans', 'White beans (cannellini/great northern), cooked', 'beans', 118, 8.3, 21.1, 0.4],
   ['refried_beans', 'Fat-free refried beans', 'beans', 77, 4.6, 13.8, 0],
@@ -188,7 +166,6 @@ const MORE_FOODS = [
   ['chickpeas', 'Chickpeas, cooked', 'lentils', 164, 8.9, 27.4, 2.6],
   ['split_peas', 'Split peas, cooked', 'lentils', 118, 8.3, 21.1, 0.4],
   ['hummus', 'Hummus', 'lentils', 166, 7.9, 14.3, 9.6, { a: 'Produce' }],
-  // Rice & grains
   ['brown_rice', 'Brown rice, cooked', 'rice', 123, 2.7, 25.6, 1, { dry: 0.33, dryName: 'Brown rice, uncooked' }],
   ['wild_rice', 'Wild rice, cooked', 'rice', 101, 4, 21.3, 0.3, { dry: 0.33, dryName: 'Wild rice, uncooked' }],
   ['microwave_rice', 'Microwave rice cup, cooked', 'rice', 140, 2.8, 30, 1],
@@ -234,7 +211,6 @@ const MORE_FOODS = [
   ['almond_flour', 'Almond flour', 'baking', 571, 21.4, 21.4, 50, { a: 'Pantry' }],
   ['panko', 'Panko breadcrumbs', 'baking', 395, 13, 80, 3, { a: 'Pantry' }],
   ['frozen_waffle', 'Frozen whole-grain waffle', 'baking', 94, 3, 15, 2.5, { u: 'waffle', g: 35, a: 'Frozen' }],
-  // Fruit
   ['strawberries', 'Strawberries', 'berries', 32, 0.7, 7.7, 0.3],
   ['blueberries', 'Blueberries', 'berries', 57, 0.7, 14.5, 0.3],
   ['raspberries', 'Raspberries', 'berries', 52, 1.2, 11.9, 0.7],
@@ -260,7 +236,6 @@ const MORE_FOODS = [
   ['dried_cranberries', 'Dried cranberries', 'dried_fruit', 308, 0.1, 82.4, 1.4, { a: 'Pantry' }],
   ['prunes', 'Prunes', 'dried_fruit', 240, 2.2, 63.9, 0.4, { a: 'Pantry' }],
   ['guacamole', 'Guacamole', 'avocado', 150, 2, 8.5, 13],
-  // Vegetables
   ['kale', 'Kale', 'leafy', 35, 2.9, 4.4, 1.5],
   ['spring_mix', 'Spring mix salad greens', 'leafy', 20, 1.8, 3.3, 0.3],
   ['arugula', 'Arugula', 'leafy', 25, 2.6, 3.7, 0.7],
@@ -290,7 +265,6 @@ const MORE_FOODS = [
   ['eggplant', 'Eggplant', 'other_veg', 25, 1, 5.9, 0.2],
   ['mixed_veg', 'Mixed vegetables, frozen', 'other_veg', 65, 3.3, 13.5, 0.5, { a: 'Frozen', r: 'C' }],
   ['artichoke', 'Artichoke hearts, canned', 'other_veg', 47, 3.3, 10.5, 0.2, { a: 'Pantry' }],
-  // Nuts & seeds
   ['peanuts', 'Dry-roasted peanuts', 'peanuts', 585, 24.4, 21.3, 49.7],
   ['almonds', 'Almonds', 'tree_nuts', 579, 21.2, 21.6, 49.9],
   ['almond_butter', 'Almond butter', 'tree_nuts', 614, 21, 18.8, 55.5],
@@ -304,7 +278,6 @@ const MORE_FOODS = [
   ['pumpkin_seeds', 'Pumpkin seeds (pepitas)', 'seeds', 559, 30.2, 10.7, 49],
   ['sunflower_seeds', 'Sunflower seeds', 'seeds', 584, 20.8, 20, 51.5],
   ['sesame_seeds', 'Sesame seeds', 'seeds', 573, 17.7, 23.5, 49.7],
-  // Oils & dressings
   ['avocado_oil', 'Avocado oil', 'oils', 884, 0, 0, 100],
   ['coconut_oil', 'Coconut oil', 'oils', 892, 0, 0, 99],
   ['canola_oil', 'Canola oil', 'oils', 884, 0, 0, 100],
@@ -314,7 +287,6 @@ const MORE_FOODS = [
   ['balsamic_vinaigrette', 'Balsamic vinaigrette', 'dressings', 300, 0.5, 12, 27],
   ['light_ranch', 'Light Greek-yogurt ranch', 'dressings', 150, 3, 8, 11],
   ['olives', 'Olives', 'olives', 115, 0.8, 6.3, 10.7],
-  // Protein products
   ['whey_isolate', 'Whey protein isolate', 'whey', 370, 88, 3, 1.5],
   ['casein', 'Casein protein powder', 'other_protein', 360, 80, 8, 2],
   ['plant_protein', 'Plant protein powder (pea/rice)', 'other_protein', 380, 75, 8, 6],
@@ -323,7 +295,6 @@ const MORE_FOODS = [
   ['protein_bar_30', 'High-protein bar (~30 g protein)', 'bars', 290, 30, 25, 9, { u: 'bar', g: 68, a: 'Snacks' }],
   ['rtd_shake', 'Ready-to-drink protein shake (30 g)', 'rtd', 160, 30, 5, 3, { u: 'bottle', g: 325, a: 'Beverages' }],
   ['core_power', 'Ultra-filtered milk protein shake (26 g)', 'rtd', 170, 26, 8, 4.5, { u: 'bottle', g: 414, a: 'Beverages' }],
-  // Sauces & pantry
   ['bbq_sauce', 'BBQ sauce', 'sauces', 172, 0.8, 40.8, 0.6],
   ['buffalo_sauce', 'Buffalo hot sauce', 'sauces', 11, 0.5, 1.8, 0.4],
   ['pesto', 'Basil pesto', 'sauces', 420, 5, 9, 42, { r: 'F' }],
@@ -343,7 +314,6 @@ const MORE_FOODS = [
   ['taco_seasoning', 'Taco / fajita seasoning', 'spices', 290, 5, 55, 5, { r: 'V' }],
   ['garlic_powder', 'Garlic powder', 'spices', 331, 16.6, 72.7, 0.7, { r: 'V' }],
   ['cinnamon', 'Cinnamon', 'spices', 247, 4, 81, 1.2, { r: 'V' }],
-  // Sweets & snacks
   ['maple_syrup', 'Maple syrup', 'sweeteners', 260, 0, 67, 0.1],
   ['sugar', 'Sugar', 'sweeteners', 387, 0, 100, 0],
   ['brown_sugar', 'Brown sugar', 'sweeteners', 380, 0.1, 98, 0],
@@ -358,7 +328,6 @@ const MORE_FOODS = [
   ['gummies', 'Gummy candy', 'sweets', 343, 6.9, 77, 0],
   ['potato_chips', 'Potato chips', 'chips', 536, 7, 53, 34.6],
   ['tortilla_chips', 'Tortilla chips', 'chips', 489, 7, 64, 23],
-  // Drinks
   ['orange_juice', 'Orange juice', 'juice', 45, 0.7, 10.4, 0.2, { ml: true }],
   ['apple_juice', 'Apple juice', 'juice', 46, 0.1, 11.3, 0.1, { ml: true }],
   ['sports_drink', 'Sports drink', 'juice', 24, 0, 6, 0, { ml: true }],
@@ -369,7 +338,6 @@ const MORE_FOODS = [
   ['cola', 'Regular cola', 'soda', 42, 0, 10.6, 0, { ml: true }],
   ['light_beer', 'Light beer', 'alcohol', 29, 0.2, 1.3, 0, { ml: true }],
   ['red_wine', 'Red wine', 'alcohol', 85, 0.1, 2.6, 0, { ml: true }],
-  // ---- expanded list (v4) ----
   ['chicken_breast_skin', 'Chicken breast, with skin, raw', 'chicken_white', 172, 20.8, 0, 9.3],
   ['ground_chicken_breast', 'Ground chicken breast, raw', 'chicken_white', 110, 23, 0, 1.5],
   ['grilled_chicken_strips', 'Grilled chicken strips, precooked', 'chicken_white', 130, 24, 1, 3],
@@ -675,7 +643,6 @@ MORE_FOODS.forEach(([id, n, sub, k, p, c, f, o = {}]) => {
   BASE_ING[id] = g; BASE_SUB[id] = sub;
 });
 
-/* ---------- food emoji list for the recipe editor (Unicode "Food & Drink", Emoji ≤ 15.0) ---------- */
 const FOOD_EMOJI = [
   ['Fruit', [['🍇', 'grapes'], ['🍈', 'melon'], ['🍉', 'watermelon'], ['🍊', 'orange tangerine'], ['🍋', 'lemon'], ['🍌', 'banana'], ['🍍', 'pineapple'], ['🥭', 'mango'], ['🍎', 'red apple'], ['🍏', 'green apple'], ['🍐', 'pear'], ['🍑', 'peach'], ['🍒', 'cherries'], ['🍓', 'strawberry'], ['🫐', 'blueberries'], ['🥝', 'kiwi'], ['🍅', 'tomato'], ['🫒', 'olive'], ['🥥', 'coconut']]],
   ['Vegetables', [['🥑', 'avocado'], ['🍆', 'eggplant'], ['🥔', 'potato'], ['🥕', 'carrot'], ['🌽', 'corn'], ['🌶️', 'hot pepper chili'], ['🫑', 'bell pepper'], ['🥒', 'cucumber pickle'], ['🥬', 'leafy greens lettuce'], ['🥦', 'broccoli'], ['🧄', 'garlic'], ['🧅', 'onion'], ['🍄', 'mushroom'], ['🥜', 'peanuts'], ['🫘', 'beans'], ['🌰', 'chestnut'], ['🫚', 'ginger root'], ['🫛', 'pea pod edamame']]],
@@ -712,7 +679,6 @@ const SUB_W = {
   peanuts: .03, tree_nuts: .05, seeds: .03, oils: 0, dressings: .1, olives: .1, whey: .02, other_protein: .02, bars: 0, rtd: .05,
   sauces: .3, condiments: .03, spices: 0, frozen_meals: .1, takeout: 1, soups: .05, sweeteners: 0, sweets: .2, chips: .1, juice: .4, zero_drinks: .05, soda: .05, alcohol: .05
 };
-// Specific foods that differ from their subgroup
 const FOOD_PACK = {
   spinach: 142, romaine: 283, bell_pepper: 450, onion: 1360, red_onion: 1360, garlic: 60, potato: 2270, sweet_potato: 900, cucumber: 300, cherry_tomato: 283, celery: 454, carrots: 454,
   broccoli: 340, asparagus: 454, green_beans: 340, avocado: 170, pineapple: 454, banana: 6, berries: 454, corn: 340, stir_fry_veg: 454, edamame: 340, tofu: 397,

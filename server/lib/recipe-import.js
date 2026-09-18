@@ -105,7 +105,7 @@ const oneLine = (s, max) => clean(s, max).replace(/\n+/g, ' ');
 const arr = v => v == null ? [] : Array.isArray(v) ? v : [v];
 const txt = v => { if (v == null) return ''; if (typeof v === 'string' || typeof v === 'number') return String(v); if (Array.isArray(v)) return v.map(txt).filter(Boolean).join(', '); if (typeof v === 'object') return txt(v.name || v.text || v['@value'] || ''); return ''; };
 
-function minutes(v) {                  // "PT1H30M", "P0DT0H20M", "1 hour 30 minutes", "45 min", 45
+function minutes(v) {
   if (v == null || v === '') return 0; if (typeof v === 'number') return Math.round(v);
   const s = String(v).trim(); let m = s.match(/^P(?:(\d+)D)?T?(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+)S)?$/i);
   if (m) return Math.round((+m[1] || 0) * 1440 + (+m[2] || 0) * 60 + (+m[3] || 0));
@@ -167,7 +167,7 @@ function meta(html, key) {
   const re = new RegExp(`<meta\\b[^>]*(?:property|name)\\s*=\\s*["']${key}["'][^>]*>`, 'i'); const tag = (html.match(re) || [])[0]; if (!tag) return '';
   return oneLine((tag.match(/content\s*=\s*"([^"]*)"/i) || tag.match(/content\s*=\s*'([^']*)'/i) || [])[1] || '', 200);
 }
-function microdata(html) {            // older sites: itemprop="recipeIngredient" / "ingredients"
+function microdata(html) {
   const ing = []; const re = /<(\w+)\b[^>]*itemprop\s*=\s*["'](?:recipeIngredient|ingredients)["'][^>]*>([\s\S]*?)<\/\1>/gi; let m;
   while ((m = re.exec(html)) && ing.length < 80) { const t = oneLine(m[2], 300); if (t) ing.push({ text: t }); }
   if (!ing.length) return null;
@@ -200,13 +200,12 @@ function fromJsonLd(r, pageUrl, html) {
 const ING_HEAD = /^\s*(?:\d+[.)]\s*)?(ingredients?|what you(?:'|’)?ll need)\b/i;
 const STEP_HEAD = /^\s*(?:\d+[.)]\s*)?(instructions?|directions?|method|steps|how to make)\b/i;
 const STOP_HEAD = /^\s*(?:\d+[.)]\s*)?(instructions?|directions?|method|steps|how to make|notes?|tips?|equipment|supplies|nutrition|related|comments?|you may also|leave a)\b/i;
-// depth-aware: blogs nest lists inside list items, and a lazy regex would stop at the inner close tag
 function closeAt(html, start, tag) {
   const re = new RegExp(`<(/?)${tag}\\b[^>]*>`, 'gi'); re.lastIndex = start; let d = 0, m;
   while ((m = re.exec(html))) { if (m[1]) { if (--d === 0) return re.lastIndex; } else d++; if (d > 24) break; }
   return -1;
 }
-function liFlat(block) {                 // every item in document order; a parent keeps its own text, its sub-items follow
+function liFlat(block) {
   const out = []; const re = /<li\b[^>]*>/gi; let m;
   while ((m = re.exec(block)) && out.length < 80) {
     const end = closeAt(block, m.index, 'li');
@@ -220,7 +219,7 @@ function listsIn(html) {
   while ((m = re.exec(html))) {
     const end = closeAt(html, m.index, m[1]); if (end < 0) continue;
     out.push({ at: m.index, end, items: liFlat(html.slice(m.index, end)) });
-    re.lastIndex = end;                  // nested lists belong to the one we just took
+    re.lastIndex = end;
   }
   return out;
 }
@@ -230,7 +229,7 @@ function fromHtml(html, pageUrl) {
   const heads = []; let m;
   const hre = /<(h[1-6])\b[^>]*>([\s\S]*?)<\/\1>/gi;
   while ((m = hre.exec(body))) heads.push({ at: m.index, end: hre.lastIndex, t: oneLine(m[2], 120) });
-  const bre = /<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi;          // plenty of blogs just bold the word
+  const bre = /<(strong|b)\b[^>]*>([\s\S]*?)<\/\1>/gi;
   while ((m = bre.exec(body))) heads.push({ at: m.index, end: bre.lastIndex, t: oneLine(m[2], 120) });
   heads.sort((a, b) => a.at - b.at);
   if (!heads.length) return null;
@@ -243,7 +242,6 @@ function fromHtml(html, pageUrl) {
   if (!ih) return null;
   const ingredients = ih.l.items.map(i => ({ text: i.text })).slice(0, 80);
 
-  // garnish/tools lists usually follow straight on; the method starts after that run
   let tail = ih.l.end;
   for (;;) { const nx = lists.find(l => l.at >= tail && l.at - tail < 600 && realList(l)); if (!nx) break; tail = nx.end; }
 
@@ -299,7 +297,7 @@ async function mealieGet(cfg, pathAndQuery) {
 async function mealieTest(cfg) {
   const me = await mealieGet(cfg, '/api/users/self');
   if (!me || typeof me !== 'object' || !(me.username || me.email || me.id)) throw new ImportErr(502, 'That address answered, but it doesn’t look like Mealie.');
-  let version = ''; try { const a = await mealieGet(cfg, '/api/app/about'); version = String(a.version || '').slice(0, 20); } catch (e) { /* older builds */ }
+  let version = ''; try { const a = await mealieGet(cfg, '/api/app/about'); version = String(a.version || '').slice(0, 20); } catch (e) { }
   return { user: String(me.fullName || me.username || me.email || '').slice(0, 80), group: String(me.groupSlug || me.group || '').slice(0, 80), version };
 }
 async function mealieSearch(cfg, q, page) {

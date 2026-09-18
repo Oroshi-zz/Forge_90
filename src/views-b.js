@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
-/* ============================================================
-   FORGE 90 — Views: workout plan, diet, grocery & prep, progress,
-   settings; router, actions, init
-   ============================================================ */
 
 /* ---------------- WORKOUT PLAN ---------------- */
 const EX_GROUPS = ['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'];
-// Average direct sets per week for each muscle group, given the number of training days
 function weeklySets() {
   const n = S.settings.trainDays.length;
   const out = {}; EX_GROUPS.forEach(g => out[g] = ALL_PHASES.map(() => 0));
@@ -113,6 +108,7 @@ function viewDiet() {
     <div class="grid g2">${lossRateCardHTML()}${bodyGoalsCardHTML()}<div style="grid-column:1/-1">${nutritionCardHTML()}</div></div>
     <div class="note" style="margin-top:12px">${icon('info')}<span>These are the same settings as on the Settings page — changing them here updates your targets and every portion on the calendar. Browse, favorite and edit recipes in <a href="#/foods">Foods &amp; recipes</a>.</span></div>`;
 }
+
 /* ---------- recipe details: popup, full page and print ---------- */
 function recipeParts(rid) {
   const r = RECIPE[rid]; if (!r) return null; const m = RPS(rid);
@@ -141,7 +137,7 @@ function recipeModal(rid) {
     <div class="row wrap" style="justify-content:flex-end;margin-top:14px;gap:6px">${x.blocked ? `<span style="margin-right:auto">${x.blocked}</span>` : ''}
       <button class="btn" data-act="recipe-dup" data-rid="${rid}">Duplicate</button>${recipeMayEdit(r) ? `<button class="btn primary" data-act="recipe-edit" data-rid="${rid}">${icon('edit')}Edit recipe</button>` : ''}</div>`);
 }
-let REC_FROM = '';                        // where "Back" goes from the full-page recipe
+let REC_FROM = '';
 function viewRecipe(rid) {
   const x = recipeParts(rid);
   if (!x) return `<div class="page-head"><div class="t"><h1>Recipe not found</h1><p>It may have been deleted. <a href="#/foods">Back to Foods &amp; recipes</a></p></div></div>`;
@@ -167,9 +163,6 @@ function recipePrintHTML(rid) {
     ${links.length ? `<section class="pr-links"><h2>Source</h2>${links.map(l => `<div>${esc(l.title || l.site || '')}${l.title ? ' — ' : ''}${esc(l.url)}</div>`).join('')}</section>` : ''}
     <footer>${esc(appTitle())} · printed ${esc(fmtDate(todayISO(), { month: 'short', day: 'numeric', year: 'numeric' }))} · amounts are one standard serving; your daily portions are sized to your targets in the app.</footer></article>`;
 }
-/* Every printable sheet goes through here: build it, swap the page for it, print, tidy up.
-   Recipes were the only thing with a print layout; the shopping list, the prep schedule and a
-   day's workout all came out as a screenshot of the app. */
 function printSheet(html) {
   if (!html) { toast('There’s nothing to print here'); return; }
   let el = $('#print-area'); if (!el) { el = document.createElement('div'); el.id = 'print-area'; document.body.appendChild(el); }
@@ -181,7 +174,6 @@ function printSheet(html) {
 function printRecipe(rid) { if (!RECIPE[rid]) return; printSheet(recipePrintHTML(rid)); }
 const prFoot = note => `<footer>${esc(appTitle())} · printed ${esc(fmtDate(todayISO(), { month: 'short', day: 'numeric', year: 'numeric' }))}${note ? ' · ' + esc(note) : ''}</footer>`;
 const prWeekMeta = G => `Week ${G.wk} · ${fmtDate(G.wd[0], { month: 'short', day: 'numeric' })} to ${fmtDate(G.wd[G.wd.length - 1], { month: 'short', day: 'numeric' })}`;
-/* Shopping list: aisle by aisle, with a box to tick and what the pantry already covers. */
 function groceryPrintHTML(G) {
   const { GL, got } = G;
   const aisles = {}; GL.rows.forEach(r => { const a = ING[r.id].a; (aisles[a] = aisles[a] || []).push(r); });
@@ -196,7 +188,6 @@ function groceryPrintHTML(G) {
     <div class="pr-cols pr-flow">${cols || '<div>Nothing planned this week.</div>'}</div>
     ${prFoot('rice and quinoa are listed uncooked; seasonings, garlic, citrus and cooking spray are not listed')}</article>`;
 }
-/* Prep schedule: what to batch cook on which day, what it covers, and the cook-fresh meals. */
 function prepPrintHTML(G) {
   const { cooks, singles, carried } = G;
   const cookRows = cooks.slice().sort((a, b) => a.d < b.d ? -1 : 1).map(({ d, m, b }) =>
@@ -229,11 +220,9 @@ function workoutPrintHTML(date) {
 }
 
 /* ---------------- GROCERY & PREP ---------------- */
-// everything the shopping list and the prep schedule need for the selected week (Grocery page, and on phones the List and Prep tabs)
 function groceryWeek() {
   const A = computeAll(); const dates = planDates();
   const cur = inPlan(todayISO()) ? planWeek(todayISO()) : 1;
-  // the saved week is only a within-visit choice; once the calendar has moved on, follow it
   if (!UI.groWeek || UI.groWeekFor !== cur) { UI.groWeek = cur; UI.groWeekFor = cur; }
   const wk = Math.min(UI.groWeek, Math.ceil(dates.length / 7)); const wd = dates.slice((wk - 1) * 7, wk * 7);
   const totals = {}; const cooks = []; const singles = [];
@@ -305,7 +294,6 @@ function moneySaverHTML(wd) {
   const actual = shoppingStats(real(wd));
   const other = shoppingStats(pick(sim));
   const dPk = other.packs - actual.packs, dIt = other.items - actual.items, dLb = (other.leftG - actual.leftG) / 453.6;
-  // the next 4 plan weeks from the selected one
   const all = planDates(); const i0 = all.indexOf(wd[0]); let pk4 = 0, n4 = 0;
   for (let w = 0; w < 4; w++) { const days = all.slice(i0 + w * 7, i0 + w * 7 + 7); if (days.length < 7) break; n4++;
     const a = shoppingStats(real(days)), o = shoppingStats(Object.fromEntries(days.map(d => [d, sim[d] || {}]))); pk4 += on ? o.packs - a.packs : a.packs - o.packs; }
@@ -363,7 +351,6 @@ function viewProgress() {
   const sel = logged.length ? `<select class="inp" data-input="pr-ex" aria-label="Exercise">${['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'].map(g => { const xs = logged.filter(e => EX[e].group === g); return xs.length ? `<optgroup label="${g}">${xs.map(e => `<option value="${e}" ${UI.prEx === e ? 'selected' : ''}>${esc(EX[e].name)}</option>`).join('')}</optgroup>` : ''; }).join('')}</select>` : '';
   const sessRows = UI.prEx ? exerciseHistory(UI.prEx).slice().reverse().map(h => `<tr><td>${fmtDate(h.d)}</td><td>${h.sets.map(s => `${fmt(+s.w, 1)}×${s.r}`).join(', ')}</td><td class="num">${isBW(UI.prEx) ? h.best + ' reps' : fmt(h.best)}</td><td class="num">${fmt(h.vol)}</td><td>${h.pr ? `<span class="prb">${icon('trophy')}PR</span>` : ''}</td></tr>`).join('') : '';
   const exOpts = Object.values(EX).sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name)).map(e => `<option value="${e.id}">${e.group} — ${esc(e.name)}</option>`).join('');
-  // tiles: now, and the change over the chosen range
   const before = R.key === 'all' ? { w: st.startWeight, bf: st.startBF, lbm: st.startWeight * (1 - st.startBF / 100) } : statsOn(addDays(R.from, -1));
   const sign = (v, d = 1) => (v > 0 ? '+' : v < 0 ? '−' : '±') + fmt(Math.abs(v), d);
   const rate = R.key === '14' ? rateOver(R.from) : (weightTrend() || {}).rate; const hasW = ws.length > 0;
@@ -371,12 +358,11 @@ function viewProgress() {
   const tile = (lbl, val, unit, delta, good) => `<div class="card stat ptile"><div class="lbl">${lbl}</div><div class="val">${val}<small>${unit}</small></div><div class="delta ${delta == null ? 'neu' : good ? 'good' : 'bad'}">${delta == null ? '&nbsp;' : delta}</div></div>`;
   const tiles = `<div class="grid g4 ptiles">${tile('Weight', fmt(cur.w, 1), 'lb', hasW ? `${sign(dW)} lb ${R.label}` : null, dW <= 0)}${tile('Body fat', fmt(cur.bf, 1), '%' + (cur.est ? ' est.' : ''), hasW ? `${sign(dB)} pts ${R.label}` : null, dB <= 0)}
     ${tile('Lean mass', fmt(cur.lbm, 1), 'lb', hasW ? `${sign(dL)} lb · ${dL >= -1 ? 'holding' : 'dropping'}` : null, dL >= -1)}${tile('Weekly trend', rate != null ? sign(-rate, 2) : '—', 'lb/wk', goalKind() === 'maintain' ? 'Plan: hold' : `Plan ${sign(planRate(cur.w), 2)} lb/wk`, true).replace('delta good', 'delta neu')}</div>`;
-  // where the 7-day average sits against the plan line, and when the goal lands at this pace
   let pace = '';
   if (ws.length > 1) {
     const last = ws[ws.length - 1]; const avg = movingAvg(ws).slice(-1)[0].v; const gap = planLine().at(last.d) - avg;
     const lr = rate != null && rate > 0.05 ? rate : null; const when = lr ? addDays(last.d, Math.round(Math.max(0, cur.w - st.goalWeight) / lr * 7)) : null;
-    const bulking = goalKind() === 'bulk'; const ahead = bulking ? gap < 0 : gap > 0;   // "ahead" is up when bulking, down when cutting
+    const bulking = goalKind() === 'bulk'; const ahead = bulking ? gap < 0 : gap > 0;
     const moved = lr == null ? '' : bulking ? `Gaining <b>${fmt(-lr, 2)} lb/week</b> (plan ${fmt(planRate(cur.w), 2)}). ` : goalKind() === 'maintain' ? `Scale moving <b>${sign(-lr, 2)} lb/week</b> (plan: hold). ` : `Losing <b>${fmt(lr, 2)} lb/week</b> (plan ${fmt(st.rate, 2)}). `;
     pace = `<div class="note ${Math.abs(gap) <= 0.3 || ahead ? 'acc' : 'warn'}" style="margin-top:12px">${icon('trend')}<span>${moved}The 7-day average is ${Math.abs(gap) <= 0.3 ? '<b>on the plan line</b>' : `<b>${fmt(Math.abs(gap), 1)} lb ${gap > 0 ? 'above' : 'below'}</b> the plan`}.${when && (bulking ? cur.w < st.goalWeight : cur.w > st.goalWeight) ? ` At this pace you reach ${st.goalWeight} lb around <b>${esc(fmtDate(when, { month: 'long', year: 'numeric' }))}</b>.` : ''}</span></div>`;
   }
@@ -432,12 +418,7 @@ function rateInfoHTML(rate) {
   return `<div class="grid g3" style="gap:10px"><div><div class="tiny muted">Daily deficit</div><b class="num" style="font-size:18px">−${fmt(deficit)} kcal</b></div><div><div class="tiny muted">Training / rest day</div><b class="num" style="font-size:18px">${fmt(tT.kcal)} / ${fmt(tR.kcal)}</b></div><div><div class="tiny muted">Reach ${st.goalWeight} lb</div><b style="font-size:18px">${fmtDate(when, { month: 'short', year: 'numeric' })}</b></div></div>
     <div class="tiny muted" style="margin-top:6px">${fmt(pct, 2)}% of body weight per week · portions on the calendar resize automatically.</div>${flag}`;
 }
-/* settings cards shared by Settings and the Diet plan */
 const setField = (lbl, name, val, attrs = '', hint = '') => `<div class="field"><label>${lbl}</label><input class="inp" name="${name}" value="${esc(val)}" ${attrs}>${hint ? `<span class="tiny muted">${hint}</span>` : ''}</div>`;
-/* Three switches, and the program is re-prescribed rather than replaced. With both lifting
-   styles on it is the program as written; with one on, the rows that used the other style are
-   re-prescribed at matching reps and rests. Cardio is its own slot on a day, not a replacement
-   for the lifting one. */
 const STYLE_DEFS = [
   ['strength', 'Strength', 'dumbbell', 'Heavier work in the 3 to 8 rep range with longer rests. Trains how much you can lift.'],
   ['hypertrophy', 'Hypertrophy', 'flame', 'Moderate loads for 8 to 20 reps with shorter rests. Trains how much muscle you carry.'],
@@ -463,8 +444,6 @@ function trainingCardHTML(coll) {
   return coll ? `<div class="card ${collCls('styles')}" data-coll="styles"><div class="card-h">${collHead('styles', 'Training style & days', pill)}</div><div class="coll-body">${body}</div></div>`
     : `<div class="card"><div class="card-h"><h2>Training style &amp; days</h2>${pill}</div>${body}</div>`;
 }
-/* Every style change re-plans from today forward: sessions, cardio placement and the rest-day
-   snacks that follow whether a day has a lifting session. Past days are left as they happened. */
 function styleApply(msg) {
   const from = maxISO(todayISO(), S.settings.startDate);
   rescheduleWorkouts(from); saveState(); render();
@@ -509,8 +488,6 @@ function lossRateCardHTML() { const st = S.settings; const k = goalKind(); const
         <input type="range" min="0.25" max="2" step="0.05" value="${st.rate}" data-input="rate" style="margin:6px 0 4px">
         <div class="row" style="justify-content:space-between" ><span class="tiny muted">0.25</span><span class="tiny muted">1.0</span><span class="tiny muted">2.0 lb/wk</span></div>
         <div id="rate-info" style="margin-top:10px">${rateInfoHTML(st.rate)}</div></div>`; }
-/* What the chosen gain rate means in calories, and the two guard rails that matter:
-   too fast and the surplus goes on as fat; too high a body fat and it does the same. */
 function bulkInfoHTML(pct) {
   const st = S.settings; const cur = latestStats();
   const lb = Math.min(cur.w * pct / 100, (+st.bulkMaxSurplus || 500) * 7 / 3500);
@@ -583,7 +560,8 @@ function moneyCardHTML() {
       <div class="small sub">When on, the planner orders each week’s meals so recipes reuse the same fresh ingredients — fewer packages to buy and less food going bad. Variety and favorites are unchanged. See the formula and this week’s savings on <a href="#/grocery">Grocery & prep</a>. Package sizes can be edited on any food.</div></div>`;
 }
 function foodPrefsCardHTML() { return `<div class="card"><div class="card-h"><h2>Food preferences</h2><a class="btn sm" href="#/foods">Manage foods & recipes ${icon('right')}</a></div>${foodPrefsHTML()}</div>`; }
-function settingsFootHTML() { return `<div class="tiny muted" style="margin-top:14px;text-align:center">FORGE 90 ${APP_VERSION} · <a href="${SOURCE_URL}/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0</a> · <a href="${SOURCE_URL}" target="_blank" rel="noopener">Source code</a></div>`; }
+function settingsFootHTML() { return `<div style="margin-top:16px;text-align:center"><button type="button" class="btn sm ghost" data-act="tour-run">${icon('info')}Take the tour</button></div>
+  <div class="tiny muted" style="margin-top:14px;text-align:center">FORGE 90 ${APP_VERSION} · <a href="${SOURCE_URL}/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0</a> · <a href="${SOURCE_URL}" target="_blank" rel="noopener">Source code</a></div>`; }
 
 /* ---------------- router ---------------- */
 const NAV = [['', 'Dashboard', 'grid'], ['calendar', 'Calendar', 'cal'], ['workouts', 'Workout plan', 'dumbbell'], ['diet', 'Diet plan', 'food'], ['foods', 'Foods & recipes', 'book'], ['grocery', 'Grocery & prep', 'cart'], ['pantry', 'Pantry', 'box'], ['progress', 'Progress', 'trend'], ['settings', 'Settings', 'sliders']];
@@ -602,12 +580,11 @@ function sideFoot() {
   const tg = $('#side-toggle'); if (tg) { const c = !!UI.navCollapsed; tg.innerHTML = icon(c ? 'sideR' : 'sideL'); tg.title = c ? 'Expand menu' : 'Collapse menu'; tg.setAttribute('aria-label', tg.title); tg.setAttribute('aria-expanded', String(!c)); }
 }
 function effTheme() { const t = document.documentElement.dataset.theme; return t === 'system' ? (window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark') : t; }
-const appTitle = () => (typeof AUTH !== 'undefined' && AUTH.config && AUTH.config.appName) || 'FORGE 90';   // Admin → App settings → App name
+const appTitle = () => (typeof AUTH !== 'undefined' && AUTH.config && AUTH.config.appName) || 'FORGE 90';
 function render() {
-  if (!$('#view')) return;                                  // sign-in screen is showing
+  if (!$('#view')) return;
   const h = location.hash.replace(/^#\/?/, ''); const [page, arg] = h.split('/');
   const phone = isPhone(); document.body.classList.toggle('phone', phone);
-  // phones: Plan and Kitchen remember the tab you were on; big screens have no Prep or Plan pages of their own
   if (page === 'plan') { location.replace('#/' + (phone ? (UI.lastPlan || 'calendar') : 'calendar')); return; }
   if (page === 'kitchen') { location.replace('#/' + (phone ? (UI.lastKit || 'grocery') : 'grocery')); return; }
   if (page === 'prep' && !phone) { location.replace('#/grocery'); return; }
@@ -707,7 +684,7 @@ function shiftCal(n) {
 }
 document.addEventListener('click', e => {
   const a = e.target.closest('[data-act]');
-  const link = e.target.closest('a[href]'); if (a && link && link !== a && a.contains(link)) return;   // real links inside clickable cards
+  const link = e.target.closest('a[href]'); if (a && link && link !== a && a.contains(link)) return;
   if (a) { const fn = ACT[a.dataset.act]; if (fn) { e.preventDefault(); fn(a, e); } return; }
   const go = e.target.closest('[data-go]');
   if (go && !e.target.closest('select,input,button,a')) location.hash = '#/day/' + go.dataset.go;
@@ -726,7 +703,6 @@ document.addEventListener('change', e => {
   }
   const inp = el.dataset.input;
   if (inp === 'day-wo') { pushUndo('change workout'); const d = el.dataset.date; S.plan[d].w = el.value ? { t: el.value, wk: planWeek(d) } : null; commitPlan(el.value ? `Session set to ${TEMPLATES[el.value].name}` : 'Changed to a rest day'); }
-  /* by: 'user' marks a hand-picked cardio session so re-planning leaves it alone */
   if (inp === 'day-cardio') { pushUndo('change cardio'); const d = el.dataset.date;
     if (el.value && CARDIO[el.value]) { const cur = S.plan[d].c || {}; S.plan[d].c = { k: el.value, min: cur.min || cardioPlan().minutes, by: 'user' }; }
     else delete S.plan[d].c;
@@ -774,7 +750,7 @@ document.addEventListener('input', e => {
   if (e.target.dataset.input === 'rate') { const v = +e.target.value; const pill = $('#rate-pill'); if (pill) pill.textContent = fmt(v, 2) + ' lb / week'; const prev = S.settings.rate; S.settings.rate = v; const ri = $('#rate-info'); if (ri) ri.innerHTML = rateInfoHTML(v); S.settings.rate = prev; }
   if (e.target.dataset.input === 'bulkpct') { const v = +e.target.value; const pill = $('#rate-pill'); if (pill) pill.textContent = fmt(v, 2) + ' % / week'; const prev = S.settings.bulkPct; S.settings.bulkPct = v; const ri = $('#rate-info'); if (ri) ri.innerHTML = bulkInfoHTML(v); S.settings.bulkPct = prev; }
   if (e.target.dataset.input === 'bg-dim') document.documentElement.style.setProperty('--dim', 1 - e.target.value);
-  if (e.target.dataset.input === 'recq') { UI.recQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('[data-input="recq"]'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) { /* search inputs */ } } return; }
+  if (e.target.dataset.input === 'recq') { UI.recQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('[data-input="recq"]'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) { } } return; }
   if (e.target.dataset.input === 'foodq') { UI.foodQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('[data-input="foodq"]'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
   if (e.target.dataset.input === 'libq') { UI.libQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('[data-input="libq"]'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } } });
 document.addEventListener('submit', e => {
@@ -789,7 +765,7 @@ document.addEventListener('submit', e => {
   } else if (kind === 'plan') {
     const sd = fd.get('startDate'); const td = S.settings.trainDays;
     confirmBox('Rebuild the plan?', `Day 1 becomes ${fmtDate(sd, { weekday: 'long', month: 'long', day: 'numeric' })} with training on ${td.map(i => DOW[i]).join(', ')}. Calendar edits are replaced; logs are kept.`, 'Rebuild', () => {
-      const go = () => { pushUndo('rebuild', { startDate: S.settings.startDate, planEnd: S.planEnd }); S.settings.startDate = sd; S.plan = {}; S.planEnd = null; ensureHorizon(); if (syncActive()) syncApplyAgreed();     // shared meals stay as agreed with the partner
+      const go = () => { pushUndo('rebuild', { startDate: S.settings.startDate, planEnd: S.planEnd }); S.settings.startDate = sd; S.plan = {}; S.planEnd = null; ensureHorizon(); if (syncActive()) syncApplyAgreed();
         UI.calMonth = null; UI.calWeek = null; UI.groWeek = null; UI.groWeekFor = null; S.grocery = {}; saveUI(); saveState(); render(); toast('Plan rebuilt'); };
       if (syncActive()) syncFetch(true).then(go); else go(); });
   } else if (kind === 'body' || kind === 'nut') {
@@ -803,7 +779,6 @@ document.addEventListener('submit', e => {
       pr.age = fd.get('age') === '' ? null : +fd.get('age');
       pr.sex = String(fd.get('sex') || '') || null;
       const nick = String(fd.get('nick') || '').trim(); if (nick) pr.nick = nick;
-      // re-estimate last, after the plain fields are in, and only while no measured figure has been given
       if (S.settings.bfEstimated) { const est = deurenbergBF(+S.settings.startWeight, pr.heightIn, pr.age, pr.sex === 'm'); if (est != null) S.settings.startBF = est; }
     }
     saveState(); render(); toast('Saved — targets and portions recalculated');

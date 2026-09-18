@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: AGPL-3.0-or-later
    Copyright (C) 2026 Oroshi-zz */
+
 /* ============================================================
    FORGE 90 — styles
    ============================================================ */
@@ -29,7 +30,6 @@
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, .55);
   color-scheme: dark;
 }
-/* the accent picker in Appearance: a swatch per color, each painted with that color's own steps */
 .acc-pick { display: flex; flex-wrap: wrap; gap: 8px; }
 .acc-sw { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); color: var(--muted); cursor: pointer; font: inherit; }
 .acc-sw > i { width: 26px; height: 26px; border-radius: 50%; background: linear-gradient(135deg, var(--sw), var(--sw2)); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12); }
@@ -45,7 +45,6 @@
 .dessert-add { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
 .dessert-add .tiny { flex: 1 1 260px; min-width: 0; }
 
-/* a cardio card in the exercise library: same frame as a lift, an icon where the muscle map goes */
 .cd-ex .cd-ic { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; flex: none; border-radius: 12px; background: color-mix(in srgb, var(--kcal) 14%, transparent); color: var(--kcal); }
 .cd-ex .cd-ic svg { width: 22px; height: 22px; }
 .cd-ex { align-items: flex-start; }
@@ -66,7 +65,6 @@
 .cd-grp { display: flex; flex-direction: column; gap: 5px; }
 .ph-cd .block { margin-top: 12px; }
 
-/* cardio mode: stopwatch, laps, estimated burn */
 .cw .cw-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; padding: 4px 16px 16px; overscroll-behavior: contain; }
 .cw-clock { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .cw-clock > b { font-size: clamp(48px, 16vw, 84px); line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
@@ -84,11 +82,6 @@
 .set-togs { display: flex; flex-direction: column; gap: 10px; }
 .set-tog b svg { width: 15px; height: 15px; vertical-align: -3px; margin-right: 5px; }
 
-/* ---------- accent colors ----------
-   The five accent tokens and the background glow, redefined per color. Lime stays the default
-   and sets no attribute. Each color is picked separately for light and dark: the light steps are
-   dark enough to read as text on a near-white page, the dark steps light enough on a near-black
-   one, and --accent-ink flips so text on a primary button stays legible either way. */
 :root[data-accent="red"] { --accent: #e11d48; --accent-2: #be123c; --accent-ink: #ffffff; --accent-text: #be123c; --accent-soft: rgba(225, 29, 72, .14); --bg-glow1: rgba(225, 29, 72, .10); }
 :root[data-accent="blue"] { --accent: #2563eb; --accent-2: #1d4ed8; --accent-ink: #ffffff; --accent-text: #1d4ed8; --accent-soft: rgba(37, 99, 235, .14); --bg-glow1: rgba(37, 99, 235, .10); }
 :root[data-accent="purple"] { --accent: #7c3aed; --accent-2: #6d28d9; --accent-ink: #ffffff; --accent-text: #6d28d9; --accent-soft: rgba(124, 58, 237, .14); --bg-glow1: rgba(124, 58, 237, .10); }
@@ -223,7 +216,6 @@ input, select, textarea { font: inherit; color: var(--text); }
 input[type=range] { accent-color: var(--accent-2); width: 100%; }
 .pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 600; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
 .pill.acc { background: var(--accent-soft); color: var(--accent-text); }
-/* recipe editor as a page */
 .re-page .card { max-width: 980px; }
 .re-page .page-head { align-items: flex-start; }
 .re-food { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
@@ -388,7 +380,6 @@ body.dragging-cal .float-trash { transform: translateX(-50%) translateY(0); }
 .set .x { color: var(--muted); font-size: 11px; }
 .hint { font-size: 11.5px; color: var(--text-2); margin-top: 6px; display: flex; gap: 6px; align-items: flex-start; }
 .set.logged { border-color: color-mix(in srgb, var(--accent-2) 55%, var(--line)); }
-/* dashboard Today → Log sets */
 .tlog { margin-top: 14px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--surface-2) 55%, transparent); padding: 12px 12px 10px; }
 .tlog-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
 .tlog-h h3 { margin: 0; font-size: 15px; }
@@ -530,7 +521,6 @@ details ol li { margin: 3px 0; }
 .cal.week .chip .l1 { display: flex; gap: 6px; align-items: flex-start; min-width: 0; }
 .cal.week .chip .l1 .nm { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .cal.week .chip .l2 { display: flex; gap: 6px; align-items: center; justify-content: space-between; padding-left: 22px; }
-/* collapsible sidebar */
 .app { transition: grid-template-columns .2s ease; }
 .side-toggle { margin-left: auto; width: 30px; height: 30px; flex: none; display: grid; place-items: center; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
 .side-toggle:hover { background: var(--surface-3); color: var(--text); }
@@ -588,8 +578,6 @@ details ol li { margin: 3px 0; }
 .stack { background: transparent; }
 .inp, select.inp, textarea.inp { background: var(--surface-2); }
 select.inp option, select.inp optgroup { background: var(--solid); color: var(--text); }
-/* The hero is a dark panel in both themes, so its accent is lifted toward white to stay legible
-   whichever accent is picked. The phase bar keeps its own colours: they identify the phase. */
 .hero { --hero-accent: color-mix(in srgb, var(--accent) 80%, #fff);
   background: radial-gradient(620px 320px at 88% -12%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 62%), linear-gradient(135deg, rgba(14, 22, 30, .74) 0%, rgba(16, 28, 44, .55) 60%, rgba(12, 16, 26, .45) 100%); border-color: rgba(255, 255, 255, .1); }
 .page-head h1 { text-shadow: 0 2px 18px rgba(var(--tint), .7); }
@@ -598,14 +586,12 @@ select.inp option, select.inp optgroup { background: var(--solid); color: var(--
 .p5 { background: rgba(213, 81, 129, .7) !important; } .p5b { background: var(--k-mixed); }
 .weekbar i.p5 { background: rgba(213, 81, 129, .65); }
 
-/* switches */
 .switch { width: 38px; height: 22px; border-radius: 99px; border: 1px solid var(--line-2); background: var(--surface-3); position: relative; cursor: pointer; flex: none; padding: 0; transition: background .15s; }
 .switch i { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--muted); transition: transform .15s, background .15s; }
 .switch.on { background: var(--accent-2); border-color: transparent; }
 .switch.on i { transform: translateX(16px); background: #fff; }
 .switch[disabled] { opacity: .4; cursor: default; }
 
-/* food preferences — vertical checkbox tree */
 .fp-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .fp-search { position: relative; flex: 1 1 220px; max-width: 340px; display: block; }
 .fp-search svg { position: absolute; left: 10px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
@@ -638,7 +624,6 @@ select.inp option, select.inp optgroup { background: var(--solid); color: var(--
 .fp-tag { font-style: normal; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--accent-text); }
 @media (max-width: 600px) { .fp-row.l1 { padding-left: 14px; } .fp-foods { padding-left: 46px; columns: 1; } .fp-row .fp-n { font-size: 11px; } .fp-row.l0 .fp-n { display: none; } }
 
-/* foods & recipes */
 .recipe-row { display: flex; gap: 12px; align-items: center; padding: 12px; }
 .recipe-row .mac { display: flex; gap: 8px; margin-top: 2px; }
 .art.sm { height: 56px; width: 56px; flex: none; border-radius: 12px; font-size: 28px; display: grid; place-items: center; background: radial-gradient(60px 40px at 30% 20%, rgba(255, 255, 255, .35), transparent 70%), linear-gradient(135deg, var(--g1), var(--g2)); }
@@ -652,22 +637,16 @@ select.inp option, select.inp optgroup { background: var(--solid); color: var(--
 .re-preview { box-shadow: none; }
 @media (max-width: 720px) { .re-row { flex-wrap: wrap; } .re-row .re-m { width: auto; } }
 
-/* backgrounds manager */
 .bg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
 .bg-item { display: flex; gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-2); }
 .bg-thumb { width: 84px; height: 60px; border-radius: 9px; background-size: cover; background-position: center; flex: none; border: 1px solid var(--line); }
 
-
-/* ============================================================
-   v4 — readability, training-day picker, exercise editor, compact calendar
-   ============================================================ */
 .muted, .tiny.muted, .small.muted { color: var(--muted); }
 .cell-head .dt, .cal.week .slot-l, .lib-ph, .stat .lbl svg, .ex-meta, .cell-foot .k span { color: var(--muted); }
 .ex-card span, .lib-item span { color: var(--text-2); }
 .chart .ax { fill: var(--text-2); }
 .weekbar i.p1 { background: rgba(57, 135, 229, .7); } .weekbar i.p2 { background: rgba(25, 158, 112, .75); } .weekbar i.p3 { background: rgba(133, 119, 230, .8); }
 
-/* training day picker */
 .td-pick { gap: 8px; }
 .td { position: relative; cursor: pointer; }
 .td input { position: absolute; opacity: 0; pointer-events: none; }
@@ -675,7 +654,6 @@ select.inp option, select.inp optgroup { background: var(--solid); color: var(--
 .td.on span, .td input:checked + span { background: var(--accent); color: var(--accent-ink); border-color: transparent; box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent); }
 .td input:focus-visible + span { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 
-/* exercise cards: edit + add */
 .ex-card { position: relative; }
 .ex-edit { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 8px; border: 1px solid var(--line-2); background: var(--glass-strong); color: var(--text); display: grid; place-items: center; cursor: pointer; }
 .ex-edit svg { width: 14px; height: 14px; }
@@ -695,7 +673,6 @@ select.inp option, select.inp optgroup { background: var(--solid); color: var(--
 .mus.on.secondary { background: var(--mm-secondary); color: var(--text); border-color: transparent; }
 @media (max-width: 640px) { .xe-top { grid-template-columns: 1fr; } .xe-map { max-width: 200px; } }
 
-/* compact calendar (agenda) */
 .agenda { display: flex; flex-direction: column; gap: 10px; }
 .ag-day { display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 12px; padding: 12px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface);
   -webkit-backdrop-filter: blur(12px) saturate(140%); backdrop-filter: blur(12px) saturate(140%); cursor: pointer; }
@@ -719,7 +696,6 @@ select.inp option, select.inp optgroup { background: var(--solid); color: var(--
 .compact-note { font-size: 12.5px; color: var(--text-2); margin-bottom: 10px; }
 @media (max-width: 520px) { .ag-day { grid-template-columns: 48px minmax(0, 1fr); padding: 10px; gap: 10px; } .ag-meals { grid-template-columns: 1fr; } .ag-date b { font-size: 19px; } }
 
-/* recipe editor — emoji dropdown & tag picker */
 .emo-field { position: relative; }
 .emo-btn { display: flex; align-items: center; justify-content: space-between; gap: 4px; width: 100%; cursor: pointer; padding: 0 8px 0 12px; }
 .emo-btn .emo-cur { font-size: 22px; line-height: 1; }
@@ -744,7 +720,6 @@ select.inp option, select.inp optgroup { background: var(--solid); color: var(--
 .tag-chip.on { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent-2) 55%, transparent); color: var(--text); }
 .tag-chip.on svg { color: var(--accent-text); }
 
-/* favorites, sorting & recipe links */
 .fav-btn { width: 32px; height: 32px; flex: none; display: grid; place-items: center; border-radius: 9px; border: 1px solid var(--line-2); background: var(--surface-2); color: var(--muted); cursor: pointer; transition: color .15s, background .15s, transform .12s; }
 .fav-btn svg { width: 17px; height: 17px; fill: none; }
 .fav-btn:hover { color: #f5b400; border-color: color-mix(in srgb, #f5b400 50%, transparent); }
@@ -775,7 +750,6 @@ select.inp option, select.inp optgroup { background: var(--solid); color: var(--
 .re-link { display: grid; grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1.4fr) auto auto; gap: 6px; align-items: center; margin-bottom: 6px; }
 @media (max-width: 600px) { .re-link { grid-template-columns: 28px minmax(0, 1fr) auto auto; } .re-link input[data-re="link-url"] { grid-column: 2 / 3; grid-row: 2; } .sortbar { margin-left: 0; } }
 
-/* clickable recipe rows, quick edit, money saver, food editor defaults */
 .recipe-row.just-saved { border-color: var(--accent-2); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-2) 35%, transparent); animation: justSaved 2.4s ease-out 1 forwards; }
 @keyframes justSaved { 0%, 55% { background: color-mix(in srgb, var(--accent-2) 16%, transparent); } 100% { background: none; } }
 @media (prefers-reduced-motion: reduce) { .recipe-row.just-saved { animation: none; } }
@@ -857,7 +831,6 @@ select.inp option, select.inp optgroup { background: var(--solid); color: var(--
 .pw-rules { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; color: var(--muted); margin-top: 7px; }
 .pw-rules span { display: inline-flex; align-items: center; gap: 4px; } .pw-rules svg { width: 12px; height: 12px; } .pw-rules .ok { color: var(--accent-text); }
 .reset-timer { color: var(--accent-text); font-weight: 600; }
-/* user chip in the side menu */
 .user-chip { position: relative; display: flex; align-items: center; gap: 6px; padding: 0 0 12px; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
 .uc-main { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; text-decoration: none; color: inherit; border-radius: 10px; padding: 4px; margin: -4px; }
 .uc-main:hover { background: var(--surface-3); }
@@ -868,7 +841,6 @@ select.inp option, select.inp optgroup { background: var(--solid); color: var(--
 .sync-dot { position: absolute; left: 27px; top: 23px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--solid); background: #22c55e; }
 .sync-dot.saving { background: #f59e0b; } .sync-dot.offline { background: #ef4444; }
 @media (min-width: 861px) { body.compact .user-chip { flex-direction: column; } body.compact .uc-t, body.compact .uc-out { display: none; } body.compact .uc-main { justify-content: center; margin: 0; } }
-/* account & admin */
 .card-h h2 { display: flex; align-items: center; gap: 8px; } .card-h h2 svg { width: 18px; height: 18px; color: var(--accent-text); }
 .acc-id { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .sess-row, .ev-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
@@ -896,7 +868,6 @@ select.inp option, select.inp optgroup { background: var(--solid); color: var(--
 .adm-acts svg, .danger-zone svg { width: 15px; height: 15px; }
 @media (max-width: 860px) { .adm-tabs button span { display: none; } }
 
-/* exercise on/off */
 .ex-card.off { opacity: .55; border-style: dashed; }
 .ex-card.off:hover { opacity: .85; }
 .ex-tog { display: inline-flex; align-items: center; gap: 7px; margin-top: 7px; cursor: pointer; }
@@ -909,7 +880,6 @@ select.inp option, select.inp optgroup { background: var(--solid); color: var(--
 #toast .toast-x:hover { opacity: 1; background: color-mix(in srgb, var(--solid) 15%, transparent); }
 #toast .toast-x svg { width: 14px; height: 14px; }
 
-/* sign-in page: photo panel + form */
 body.auth-page { background: var(--bg); }
 .auth-split { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(440px, .85fr); min-height: 100vh; }
 .auth-hero { position: relative; overflow: hidden; background: #07090c; min-height: 100vh; }
@@ -985,7 +955,6 @@ body.auth-page { background: var(--bg); }
 .sync-gro { align-items: flex-start; }
 @media (max-width: 600px) { .sync-row { grid-template-columns: 1fr; gap: 6px; } }
 
-/* background photos switched off (Settings → Appearance) */
 body.no-bg #bg { background: radial-gradient(900px 600px at 100% 0%, var(--bg-glow1), transparent 60%), radial-gradient(800px 600px at 0% 100%, var(--bg-glow2), transparent 60%), var(--bg); }
 body.no-bg #bg::after, body.no-bg #bg .bg-layer { display: none; }
 body.no-bg .card, body.no-bg .side, body.no-bg .lib, body.no-bg .hero { -webkit-backdrop-filter: none; backdrop-filter: none; }
@@ -993,7 +962,6 @@ body.no-bg .card, body.no-bg .side, body.no-bg .lib, body.no-bg .hero { -webkit-
 .set-tog > span { flex: 1; display: grid; gap: 2px; min-width: 0; }
 .set-tog input { position: absolute; opacity: 0; width: 1px; height: 1px; }
 
-/* Admin → Server & proxy */
 .px-checks { display: grid; gap: 2px; }
 .px-row { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); align-items: flex-start; }
 .px-row:first-child { border-top: 0; }
@@ -1075,7 +1043,6 @@ body.no-bg .card, body.no-bg .side, body.no-bg .lib, body.no-bg .hero { -webkit-
 .pr .pr-steps ol { padding-left: 6mm; margin: 0; } .pr .pr-steps li { margin: 1.5mm 0; }
 .pr .pr-links { margin-top: 5mm; font-size: 9pt; color: #333; word-break: break-all; }
 .pr footer { margin-top: 8mm; font-size: 8pt; color: #777; border-top: 1px solid #ddd; padding-top: 2mm; }
-/* shopping list, prep schedule and workout sheets share the recipe sheet's type and rules */
 .pr section + section { margin-top: 5mm; }
 .pr small { color: #666; }
 .pr td .q, .pr td small { font-weight: 400; }
@@ -1207,7 +1174,6 @@ details.dmeal-note .ing-list { margin-top: 6px; }
 .sr-t { flex: 1; min-width: 0; display: grid; }
 .sr-t b { display: block; }
 .sr-t .tiny { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* counter shared by the scanner list and the review sheet */
 .qstep { display: flex; align-items: center; gap: 2px; flex: none; }
 .qstep .btn.icon { width: 28px; height: 28px; padding: 0; }
 .qstep .btn.icon svg { width: 13px; height: 13px; color: inherit; }
@@ -1230,7 +1196,6 @@ details.dmeal-note .ing-list { margin-top: 6px; }
 .qa-modal .qa-food b { flex: 1; min-width: 0; }
 .qa-mac { margin: 14px 0 6px; font-size: 15px; font-variant-numeric: tabular-nums; }
 .qp-modal { width: min(560px, 100%); }
-/* the online (Open Food Facts) tab of the food picker */
 .seg.sm button { padding: 5px 10px; font-size: 12.5px; }
 .qp-empty { display: flex; align-items: center; gap: 10px; padding: 22px 14px; color: var(--muted); font-size: 13px; }
 .qp-empty svg { width: 18px; height: 18px; flex: none; }
@@ -1430,7 +1395,6 @@ li.done .wo-set .n { background: var(--accent-2); color: #fff; }
 .wo-li .t { flex: 1; display: flex; flex-direction: column; min-width: 0; } .wo-li small { color: var(--muted); }
 .wo-li .ok { color: var(--good); display: grid; }
 body.wo-on { overflow: hidden; }
-/* in workout mode messages drop in from the top, clear of the sets and the timer */
 body.wo-on #toast { top: calc(10px + env(safe-area-inset-top)); bottom: auto; transform: translateX(-50%) translateY(-160px); }
 body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
 
@@ -1452,7 +1416,6 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
 .rt.done { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .rt.done small { color: var(--accent-ink); }
 .rt.done button { background: rgba(15, 26, 2, .12); color: var(--accent-ink); }
-/* while it's going off, the stop button is the obvious target */
 .rt.done .go.stop { background: var(--accent-ink); color: var(--accent); animation: rt-throb 1s ease-in-out infinite; }
 .rt-pill.done { background: var(--accent); color: var(--accent-ink); animation: rt-throb 1s ease-in-out infinite; }
 .rt-pill.done svg { width: 16px; height: 16px; }
@@ -1463,7 +1426,6 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
 .rt-pill b { font-family: 'Space Grotesk', sans-serif; font-size: 16px; }
 .rt-pill svg { width: 16px; height: 16px; }
 
-/* rest timer settings */
 .rs-def { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 12px; }
 .rs-lbl { font-weight: 800; letter-spacing: .1em; text-transform: uppercase; align-self: flex-start; }
 .big-num { display: flex; align-items: center; justify-content: center; gap: 12px; }
@@ -1485,11 +1447,28 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
 .eqz i { width: 3px; height: 6px; border-radius: 2px; background: currentColor; animation: eqb .55s ease-in-out infinite alternate; }
 .eqz i:nth-child(2) { animation-delay: -.18s; } .eqz i:nth-child(3) { animation-delay: -.36s; }
 @keyframes eqb { to { height: 18px; } }
+/* ---------- first-run tour ----------
+   The ring dims the page with one huge spread shadow, so the cut-out is the element itself and
+   nothing has to be measured twice. A transparent blocker sits under it to stop stray clicks from
+   moving the app out from under the step. */
+.tour { position: fixed; inset: 0; z-index: 100; }
+.tour-block { position: fixed; inset: 0; }
+.tour-ring { position: fixed; border-radius: 14px; pointer-events: none; outline: 2px solid var(--accent); outline-offset: 2px;
+  box-shadow: 0 0 0 9999px rgba(4, 7, 13, .66); transition: left .2s ease, top .2s ease, width .2s ease, height .2s ease; }
+.tour-card { position: fixed; left: 50%; top: 50%; width: min(340px, calc(100vw - 32px)); padding: 16px 16px 12px; border-radius: 16px;
+  background: var(--solid); color: var(--text); border: 1px solid var(--line-2); box-shadow: var(--shadow-lg); }
+.tour-card.center { left: 50%; top: 50%; transform: translate(-50%, -50%); }
+.tour-card h3 { margin: 4px 0 6px; font-size: 17px; }
+.tour-card p { margin: 0; color: var(--text-2); font-size: 13.5px; line-height: 1.5; }
+.tour-n { font-size: 10.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--accent-text); }
+.tour-acts { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
+@media (prefers-reduced-motion: reduce) { .tour-ring { transition: none; } }
+
 /* Settings cards pack like masonry rather than sitting in grid rows. A grid stretched every card to
    the height of the tallest in its row, so the short gym card left a hole beside the rest timer.
    Columns let each card take its own height and the ones under it move up to meet it; a card that
    grows later just pushes its own column down, with no re-render needed. */
-.set-cards { columns: 2; column-gap: 16px; margin-bottom: 16px; }   /* the last card's own margin is swallowed by the column box */
+.set-cards { columns: 2; column-gap: 16px; margin-bottom: 16px; }
 .set-cards > .card { break-inside: avoid; -webkit-column-break-inside: avoid; margin: 0 0 16px; }
 @media (max-width: 720px) { .set-cards { columns: 1; } }
 .rs-alarm { justify-content: flex-start; margin-bottom: 6px; }
@@ -1498,7 +1477,6 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
 .modal.rest-modal { width: min(460px, 100%); }
 @media (prefers-reduced-motion: reduce) { .eqz i { animation: none; height: 12px; } }
 
-/* charts: a finger can drag across them without scrolling sideways */
 .chart svg { touch-action: pan-y; }
 .chart:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; border-radius: 8px; }
 
@@ -1524,17 +1502,14 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
   body.wo-on .tabbar { display: none; }
   .wo-in { border: 0; }
 
-  /* popups become sheets that slide up from the bottom */
   #modal { place-items: end center; padding: 0; align-items: end; }
   #modal .modal { width: 100%; max-width: 100%; max-height: 92vh; border-radius: 22px 22px 0 0; padding: 6px 16px calc(22px + env(safe-area-inset-bottom)); border-bottom: 0; animation: sheet-up .26s cubic-bezier(.2, .8, .2, 1); }
   .sh-hdl { display: grid; place-items: center; height: 26px; margin: 0 -16px 4px; cursor: grab; touch-action: none; }
   .sh-hdl i { width: 40px; height: 5px; border-radius: 4px; background: var(--line-2); }
 
-  /* page headers are compact; the tab names already say where you are */
   .page-head { margin-bottom: 14px; gap: 10px; }
   .page-head h1 { font-size: 22px; }
   .page-head p { display: none; }
-  /* the title sits on its own line rather than being squeezed beside the buttons */
   .page-head .t { flex: 1 0 100%; min-width: 0; }
   .page-head .t h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .page-head .t { min-width: 0; }
@@ -1544,7 +1519,6 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
   .hub-seg a.on { background: var(--solid); color: var(--text); box-shadow: var(--shadow); }
   body.phone .hub-seg + .page-head h1 { font-size: 18px; }
 
-  /* bigger tap targets */
   .btn { min-height: 40px; padding: 8px 14px; }
   .btn.sm { min-height: 36px; padding: 6px 11px; font-size: 12.5px; }
   .btn.icon { min-width: 40px; min-height: 40px; justify-content: center; }
@@ -1554,7 +1528,6 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
   .grid.g2, .g-half, .g-split { gap: 12px; }
   .set-cards { column-gap: 12px; margin-bottom: 12px; } .set-cards > .card { margin-bottom: 12px; }
 
-  /* fixes: the day view and Foods & recipes no longer scroll sideways */
   .day-head { flex-wrap: wrap; }
   .recipe-row .pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   /* the actions get their own row, so the title and macros keep the full width
@@ -1568,7 +1541,6 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
 @keyframes sheet-up { from { transform: translateY(100%); } }
 @media (prefers-reduced-motion: reduce) { #modal .modal { animation: none; } }
 
-/* Today (phone) */
 .ph-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .ph-day { display: flex; align-items: center; gap: 4px; flex: 1; min-width: 0; }
 .ph-day .d { flex: 1; min-width: 0; text-align: center; display: flex; flex-direction: column; }
@@ -1652,7 +1624,6 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
 .ph-week .w7 .dn svg { width: 11px; height: 11px; }
 .ph-cust { display: flex; align-items: center; justify-content: center; gap: 10px; }
 
-/* + sheet, weigh-in sheet, meal swap sheet */
 .qa-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
 .qa-grid button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; min-height: 96px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface-3); font-weight: 650; font-size: 13px; text-align: center; padding: 8px; cursor: pointer; color: var(--text); }
 .qa-grid button svg { width: 26px; height: 26px; color: var(--accent-text); }
@@ -1673,7 +1644,6 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
 .ms-star { color: #e0a526; display: grid; } .ms-star svg { width: 16px; height: 16px; fill: currentColor; }
 .modal.ms-modal { width: min(560px, 100%); }
 
-/* Kitchen · List (phone) */
 .pg-tools { gap: 6px; margin-bottom: 12px; } .pg-tools .inp { flex: 1; min-width: 0; }
 .pg-chips { display: flex; gap: 6px; overflow-x: auto; margin: 0 -16px 12px; padding: 0 16px; scrollbar-width: none; }
 .pg-chips::-webkit-scrollbar { display: none; }
@@ -1703,7 +1673,6 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
 body.phone:has(.pg-dock) .main { padding-bottom: calc(176px + env(safe-area-inset-bottom)); }
 body.phone:has(.pg-dock) #toast { bottom: calc(160px + env(safe-area-inset-bottom)); }
 
-/* You (phone) */
 .you-top { display: flex; align-items: center; gap: 12px; margin: 4px 0 16px; }
 .you-top .me { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
 .you-top .me .avatar { width: 52px; height: 52px; font-size: 18px; }
@@ -1725,7 +1694,6 @@ body.phone:has(.pg-dock) #toast { bottom: calc(160px + env(safe-area-inset-botto
 .back-lnk svg { width: 16px; height: 16px; }
 .set-group { display: flex; flex-direction: column; gap: 14px; }
 
-/* Progress page */
 .prange button { min-height: 34px; }
 .ptiles .stat .delta { min-height: 18px; }
 .cons { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 8px 10px; align-items: center; }

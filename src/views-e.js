@@ -1,16 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
-/* ============================================================
-   FORGE 90 — accounts: sign-in screens, server sync, account settings, admin console
-   When the page is served by server.js the app requires an account; opened as a plain
-   file it runs in single-user "local mode" exactly as before.
-   ============================================================ */
 const AUTH = { mode: 'local', user: null, config: null, rev: 0, syncT: null, pending: false, inflight: false, sync: 'ok', lastPw: null, savedAt: null };
 async function api(method, url, body) {
   let r;
   try { r = await fetch(url, { method, credentials: 'same-origin', headers: body !== undefined || method !== 'GET' ? { 'Content-Type': 'application/json', 'X-F90': '1' } : {}, body: body !== undefined ? JSON.stringify(body) : (method !== 'GET' ? '{}' : undefined) }); }
   catch (e) { const x = new Error('Can’t reach the FORGE 90 server. Check your connection.'); x.status = 0; throw x; }
-  let j = null; try { j = await r.json(); } catch (e) { /* not JSON */ }
+  let j = null; try { j = await r.json(); } catch (e) { }
   if (!r.ok) { const x = new Error((j && j.error) || `Request failed (${r.status})`); x.status = r.status; x.data = j; throw x; }
   return j;
 }
@@ -59,10 +54,10 @@ async function boot() {
 async function startApp() {
   let st; try { st = await api('GET', '/api/state'); } catch (e) { if (e.status === 401) return showAuth('login'); if (e.data && e.data.mustChange) return showAuth('first'); return showAuth('down'); }
   AUTH.rev = st.rev || 0; AUTH.savedAt = st.updatedAt; STORE_KEY = 'forge90.v1:' + AUTH.user.id;
-  let legacy = null; if (!st.state) { try { legacy = localStorage.getItem('forge90.v1'); } catch (e) { /* ignore */ } }
-  loadUI();                                          // UI state is per account, not per browser
+  let legacy = null; if (!st.state) { try { legacy = localStorage.getItem('forge90.v1'); } catch (e) { } }
+  loadUI();
   AUTH.booting = true; loadState(st.state || null); AUTH.booting = false;
-  if (!st.state) pushState();                       // first save for a brand-new account
+  if (!st.state) pushState();
   if (location.pathname !== '/') history.replaceState(null, '', '/' + location.hash);
   applyTheme();
   if (!S.onboarded) {
@@ -82,14 +77,13 @@ function afterStart() {
 }
 async function logout() {
   if (AUTH.pending || AUTH.inflight) { clearTimeout(AUTH.syncT); await pushState().catch(() => {}); }
-  try { await api('POST', '/api/logout'); } catch (e) { /* ignore */ }
-  try { localStorage.removeItem(STORE_KEY); } catch (e) { /* ignore */ }
+  try { await api('POST', '/api/logout'); } catch (e) { }
+  try { localStorage.removeItem(STORE_KEY); } catch (e) { }
   AUTH.user = null; S = null; undoStack.length = 0; STORE_KEY = 'forge90.v1'; showAuth('login', { info: 'You’re signed out.' });
 }
 
 /* ---------- sign-in, invite, forgot, reset, first sign-in ---------- */
 let AS = { screen: 'login' };
-// Sign-in page photo (Unsplash License): a personal trainer coaching a man through a push-up
 const AUTH_PHOTO = { url: 'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?auto=format&fit=crop&w=1800&q=75', page: 'https://unsplash.com/photos/R0y_bEUjiOM', who: 'Jonathan Borba',
   fallback: 'radial-gradient(900px 600px at 30% 20%, #2d4a1a, transparent 60%), linear-gradient(160deg, #141b10, #07090c)' };
 function pwMeter(pw) {
@@ -283,7 +277,7 @@ Object.assign(ACT, {
       <form data-form="acc-del" style="margin-top:12px">${pwField('password', 'Your password', 'current-password')}<div class="row" style="justify-content:flex-end;margin-top:14px"><button type="button" class="btn" data-act="close-modal">Cancel</button><button class="btn danger" type="submit">${icon('trash')}Delete forever</button></div></form>`, 'sm'); }
 });
 document.addEventListener('submit', async e => { const f = e.target; if (!f.dataset || f.dataset.form !== 'acc-del') return; e.preventDefault();
-  try { await api('DELETE', '/api/account', { password: new FormData(f).get('password') }); try { localStorage.removeItem(STORE_KEY); } catch (x) { /* ignore */ } AUTH.user = null; S = null; showAuth('login', { info: 'Your account was deleted.' }); } catch (x) { toast(x.message); } });
+  try { await api('DELETE', '/api/account', { password: new FormData(f).get('password') }); try { localStorage.removeItem(STORE_KEY); } catch (x) { } AUTH.user = null; S = null; showAuth('login', { info: 'Your account was deleted.' }); } catch (x) { toast(x.message); } });
 
 /* ---------- admin console (#/admin) ---------- */
 const ADM = { tab: 'overview', users: null, invites: null, settings: null, stats: null, audit: null, q: '', filter: 'all', evType: '', evUser: '' };
@@ -399,7 +393,6 @@ function admTabHTML() {
       <div class="card"><div class="card-h"><h2>Server</h2></div><table class="tbl"><tbody><tr><td>Data folder</td><td class="small"><code>${esc(s.dataDir)}</code></td></tr><tr><td>Stored data</td><td class="num">${kb(s.dataBytes)}</td></tr><tr><td>Accounts</td><td class="num">${s.users} · ${s.invites || 0} invited · ${s.disabled} disabled</td></tr><tr><td>FORGE 90</td><td>${esc(s.version || APP_VERSION)}</td></tr><tr><td>License</td><td><a href="${SOURCE_URL}/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0</a> · <a href="${SOURCE_URL}" target="_blank" rel="noopener">Source code</a></td></tr><tr><td>Node.js</td><td>${esc(s.node)}</td></tr><tr><td>Up for</td><td>${s.uptime > 86400 ? fmt(s.uptime / 86400, 1) + ' days' : s.uptime > 3600 ? fmt(s.uptime / 3600, 1) + ' h' : Math.round(s.uptime / 60) + ' min'}</td></tr></tbody></table></div></div>`; }
   return '';
 }
-/* Admin → Server & proxy: what the server sees for this very request, with fixes for common reverse-proxy mistakes */
 const urlHost = u => { try { return new URL(u).host.toLowerCase(); } catch (e) { return ''; } };
 function trustSuggestion(peer) { const m = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(peer || ''); if (m && +m[1] === 172 && +m[2] >= 16 && +m[2] <= 31) return `${m[1]}.${m[2]}.0.0/16`; return peer || 'your-proxy-ip'; }
 function admProxyHTML() {
@@ -450,8 +443,8 @@ function admUserModal(id) {
   const u = (ADM.users || []).find(x => x.id === id); if (!u) return closeModal(); const me = u.id === AUTH.user.id;
   const info = [['Joined', when(u.createdAt)], ['Last sign-in', u.lastLoginAt ? `${when(u.lastLoginAt)}${u.lastLoginIp ? ' · ' + esc(u.lastLoginIp) : ''}` : 'never'], ['Password changed', ago(u.pwChangedAt)], ['Signed-in devices', u.sessions], ['Plan data', u.dataBytes ? `${kb(u.dataBytes)} · saved ${ago(u.dataUpdatedAt)}` : 'none yet'], ['Failed sign-ins', u.failed]];
   const iAmOwner = !!(AUTH.user && AUTH.user.owner);
-  const locked = u.owner && !iAmOwner;                       // the owner is off limits to other admins
-  const noAdminAct = !iAmOwner && u.role === 'admin';        // only the owner changes another admin's access
+  const locked = u.owner && !iAmOwner;
+  const noAdminAct = !iAmOwner && u.role === 'admin';
   const why = locked ? ' disabled title="Only the owner can change the owner account"' : '';
   const whyAdm = noAdminAct ? ' disabled title="Only the owner can change an administrator’s access"' : '';
   modal(`<div class="adm-user-modal"><div class="row" style="align-items:flex-start">${avatarHTML(u, 'lg')}<div style="flex:1;min-width:0"><h2>${esc(u.name)}${me ? ' <span class="pill">You</span>' : ''}</h2><div class="small muted">${esc(u.email)}</div><div class="row wrap" style="gap:6px;margin-top:6px">${u.owner ? '<span class="pill own">Owner</span>' : ''}<span class="pill ${u.role === 'admin' ? 'acc' : ''}">${u.role === 'admin' ? 'Administrator' : 'Member'}</span>${statusPill(u)}</div></div><button class="btn icon ghost" data-act="close-modal">${icon('x')}</button></div>

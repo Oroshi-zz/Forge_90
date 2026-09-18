@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
+
 /* ============================================================
    FORGE 90 — Custom exercise editor (exercise library + cards)
    ============================================================ */
@@ -71,7 +72,6 @@ Object.assign(ACT, {
     delete S.customExercises[x.id]; rebuildExercises(); saveState(); render(); toast('Exercise deleted'); }, true); }
 });
 
-/* ---------------- quick edit (dashboard): change a day's workout and meals without leaving the page ---------------- */
 let QE = null;
 function quickEdit(date, focus) { QE = { date, focus: focus || 'meals' }; renderQuickEdit(); }
 function renderQuickEdit() {
@@ -128,7 +128,7 @@ function toggleExercise(id, on) {
   const e = EX[id]; if (!e) return; const g = exGroupOf(e);
   if (!on && !Object.values(EX).some(x => x.id !== id && exGroupOf(x) === g && !exOffNow(x.id))) { toast(`Keep at least one ${g.toLowerCase()} exercise switched on — switch another one on first.`); render(); return; }
   let from = curPlanWeekStart();
-  if (!on) {   // already logged this week? then the change starts next week so today's log stays with the exercise
+  if (!on) {
     const logged = Object.keys(S.logs || {}).some(d => d >= from && d <= todayISO() && (S.logs[d][id] || []).some(x => x && (x.w != null || x.r != null)));
     if (logged) from = addDays(from, 7);
   }

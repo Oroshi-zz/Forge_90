@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
 'use strict';
-/* ============================================================
-   FORGE 90 server — accounts, sign-in, admin console API, per-user plan storage,
-   and password-reset email over SMTP (Gmail). Node 18+, no npm packages needed.
-   Start:  node server.js     (settings in .env next to this file)
-   ============================================================ */
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -24,7 +19,7 @@ const MAIL = require('./lib/email');
     if (process.env[m[1]] === undefined) process.env[m[1]] = v;
   }
 })(path.join(__dirname, '.env'));
-(function loadEnv2(file) {   // also read a .env in the repository root (one level up) when running from source
+(function loadEnv2(file) {
   if (!fs.existsSync(file)) return;
   for (const raw of fs.readFileSync(file, 'utf8').split(/\r?\n/)) { const line = raw.trim(); if (!line || line.startsWith('#')) continue; const m = line.match(/^([A-Za-z0-9_]+)\s*=\s*(.*)$/); if (!m) continue; let v = m[2].trim(); if (/^(['"]).*\1$/.test(v)) v = v.slice(1, -1); if (process.env[m[1]] === undefined) process.env[m[1]] = v; }
 })(path.join(__dirname, '..', '.env'));
@@ -33,10 +28,6 @@ const PORT = +ENV.PORT || 8090;
 const HOST = ENV.HOST || '0.0.0.0';
 const DATA = path.resolve(ENV.DATA_DIR || path.join(__dirname, 'data'));
 const PUBLIC = path.join(__dirname, 'public');
-/* Reverse proxy (Nginx Proxy Manager, SWAG, Traefik…). TRUST_PROXY:
-     unset / false  → no proxy: use the connecting address, ignore X-Forwarded-* headers
-     true           → trust whatever connects (use the address the proxy added — the last X-Forwarded-For entry)
-     IPs / CIDRs    → only trust X-Forwarded-* from these proxies, e.g. 172.18.0.0/16 (recommended) */
 const TP_RAW = String(ENV.TRUST_PROXY || '').trim();
 const TP_MODE = /^(1|true|yes|on)$/i.test(TP_RAW) ? 'all' : /^(0|false|no|off|)$/i.test(TP_RAW) ? 'off' : 'list';
 const TP_LIST = new net.BlockList(); const TP_BAD = [];
@@ -46,9 +37,9 @@ if (TP_MODE === 'list') TP_RAW.split(/[\s,]+/).filter(Boolean).forEach(x => {
   if (bits == null) TP_LIST.addAddress(a, fam === 6 ? 'ipv6' : 'ipv4'); else TP_LIST.addSubnet(a, bits, fam === 6 ? 'ipv6' : 'ipv4');
 });
 if (TP_BAD.length) console.warn('  TRUST_PROXY: ignoring', TP_BAD.join(', '), '(not an IP address or CIDR range)');
-const RESET_MINUTES = 30;                        // password-reset links expire after 30 minutes
-const INVITE_DAYS = 7;                           // account invites expire after 7 days
-const VERSION = (() => { for (const f of [path.join(__dirname, 'VERSION'), path.join(__dirname, '..', 'VERSION')]) { try { return 'v' + fs.readFileSync(f, 'utf8').trim().replace(/^v/i, ''); } catch (e) { /* try next */ } } return 'v1.0'; })();
+const RESET_MINUTES = 30;
+const INVITE_DAYS = 7;
+const VERSION = (() => { for (const f of [path.join(__dirname, 'VERSION'), path.join(__dirname, '..', 'VERSION')]) { try { return 'v' + fs.readFileSync(f, 'utf8').trim().replace(/^v/i, ''); } catch (e) { } } return 'v1.0'; })();
 const MAX_STATE_BYTES = 12 * 1024 * 1024;
 
 /* ---------- storage: data/db.json + data/state/<userId>.json ---------- */
@@ -58,14 +49,14 @@ const DEFAULT_SETTINGS = () => ({
   appName: 'FORGE 90',
   appUrl: ENV.APP_URL || '',
   security: { pwMinLength: 10, pwRequireMix: true, lockThreshold: 5, lockMinutes: 15, autoResetOnLock: true, sessionHours: 12, rememberDays: 30, notifyPasswordChange: true, requireHttps: true },
-  email: {},        // only the values an admin changed in Admin → Email; everything else comes from the environment (.env / Docker)
+  email: {},
   defaults: { theme: 'dark' }
 });
 function deepMerge(base, over) { if (!over || typeof over !== 'object' || Array.isArray(over)) return over === undefined ? base : over; const out = Object.assign({}, base); for (const k of Object.keys(over)) out[k] = (base && typeof base[k] === 'object' && !Array.isArray(base[k])) ? deepMerge(base[k], over[k]) : over[k]; return out; }
 let db = { version: 1, users: [], sessions: [], resets: [], invites: [], syncs: [], audit: [], settings: {} };
 if (fs.existsSync(DBF)) { try { db = JSON.parse(fs.readFileSync(DBF, 'utf8')); } catch (e) { console.error('Could not read', DBF, e.message); process.exit(1); } }
-if (db.settings && db.settings.email && !db.settings.emailV2) { const p = db.settings.email.pass; db.settings.email = p ? { pass: p } : {}; }   // older builds copied .env into db.json
-db.settings = deepMerge(DEFAULT_SETTINGS(), db.settings || {}); db.settings.emailV2 = true; delete db.settings.registration;   // accounts are invite-only now
+if (db.settings && db.settings.email && !db.settings.emailV2) { const p = db.settings.email.pass; db.settings.email = p ? { pass: p } : {}; }
+db.settings = deepMerge(DEFAULT_SETTINGS(), db.settings || {}); db.settings.emailV2 = true; delete db.settings.registration;
 ['users', 'sessions', 'resets', 'invites', 'syncs', 'audit'].forEach(k => { if (!Array.isArray(db[k])) db[k] = []; });
 function writeAtomic(file, data) { const tmp = `${file}.${process.pid}.tmp`; fs.writeFileSync(tmp, data, { mode: 0o600 }); fs.renameSync(tmp, file); }
 let saveT = null;
@@ -106,14 +97,13 @@ const admins = () => db.users.filter(u => u.role === 'admin' && u.status === 'ac
    owner out or hollow out the admin list by accident. Recovery: node server.js --make-owner <email> */
 const ownerId = () => db.settings.ownerId || null;
 const isOwner = u => !!u && !!ownerId() && u.id === ownerId();
-function ensureOwner() {                       // upgrading an existing server: the oldest admin takes it
+function ensureOwner() {
   if (ownerId() && db.users.some(u => u.id === ownerId())) return;
   const cand = db.users.filter(u => u.role === 'admin').sort((a2, b2) => (a2.createdAt || 0) - (b2.createdAt || 0))[0];
   if (!cand) return;
   db.settings.ownerId = cand.id; saveDb();
   audit('owner_set', { userId: cand.id, detail: 'owner (longest-standing administrator)' });
 }
-// guards used by the admin user routes
 function ownerGuard(ctx, u) { if (isOwner(u) && !isOwner(ctx.me.u)) err(403, 'That’s the owner account. Only the owner can change it.'); }
 function adminChangeGuard(ctx, u) { if (u.role === 'admin' && !isOwner(ctx.me.u)) err(403, 'Only the owner can change another administrator’s access.'); }
 const isLocked = u => !!(u.lockedUntil && u.lockedUntil > now());
@@ -128,17 +118,15 @@ const normIp = ip => String(ip || '').trim().replace(/^::ffff:(\d+\.\d+\.\d+\.\d
 function ipTrusted(ip) { if (TP_MODE === 'all') return true; if (TP_MODE !== 'list') return false; ip = normIp(ip); const f = net.isIP(ip); return !!f && TP_LIST.check(ip, f === 6 ? 'ipv6' : 'ipv4'); }
 const peerIp = req => normIp(req.socket.remoteAddress);
 const fromProxy = req => ipTrusted(peerIp(req));
-// The visitor's address. Entries a client puts in X-Forwarded-For itself come first, so read from the right: the proxy appends the real address last.
 function clientIp(req) {
   const peer = peerIp(req); if (!fromProxy(req)) return peer;
   const xff = String(req.headers['x-forwarded-for'] || '').split(',').map(normIp).filter(ip => net.isIP(ip));
   if (!xff.length) { const xr = normIp(req.headers['x-real-ip']); return net.isIP(xr) ? xr : peer; }
   if (TP_MODE === 'all') return xff[xff.length - 1];
-  for (let i = xff.length - 1; i >= 0; i--) if (!ipTrusted(xff[i])) return xff[i];      // step back past our own proxies
+  for (let i = xff.length - 1; i >= 0; i--) if (!ipTrusted(xff[i])) return xff[i];
   return xff[0];
 }
 function isHttps(req) { return !!req.socket.encrypted || (fromProxy(req) && /^https$/i.test(String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim())); }
-/* "Require HTTPS": plain-HTTP visits to any other address (e.g. http://192.168.1.10:8090) are sent to the https:// App address */
 function httpsTarget() { const u = String(db.settings.appUrl || ENV.APP_URL || '').trim().replace(/\/+$/, ''); return /^https:\/\/[^\s/]+/i.test(u) ? u : null; }
 const httpsEnvOff = () => /^(0|false|no|off)$/i.test(ENV.REQUIRE_HTTPS || '');
 function requireHttpsOn() { return !httpsEnvOff() && db.settings.security.requireHttps !== false && !!httpsTarget(); }
@@ -179,11 +167,11 @@ const EMAIL_KEYS = ['host', 'port', 'security', 'user', 'fromName', 'fromEmail']
 function mailConfig() {
   const d = emailDefaults(), o = db.settings.email || {}; const out = {};
   EMAIL_KEYS.forEach(k => { out[k] = o[k] != null && o[k] !== '' ? o[k] : d[k]; });
-  out.pass = String(o.pass || ENV.SMTP_PASS || '').replace(/\s+/g, '');          // Google shows app passwords as 4 groups of 4
+  out.pass = String(o.pass || ENV.SMTP_PASS || '').replace(/\s+/g, '');
   return out;
 }
 function emailReady() { const e = mailConfig(); return !!(e.host && e.fromEmail && (!e.user || e.pass)); }
-let LOGO_PNG = null; try { LOGO_PNG = fs.readFileSync(path.join(PUBLIC, 'email-logo.png')); } catch (e) { /* optional */ }
+let LOGO_PNG = null; try { LOGO_PNG = fs.readFileSync(path.join(PUBLIC, 'email-logo.png')); } catch (e) { }
 function friendlySmtp(e, host) {
   const m = String(e && e.message || e);
   if (/535|534|Username and Password not accepted|Application-specific password/i.test(m) && /gmail|google/i.test(host)) return m + ' — Gmail needs an App Password (Google account → Security → 2-Step Verification → App passwords), not the normal account password.';
@@ -195,11 +183,9 @@ async function deliver(to, toName, msg) {
   const e = mailConfig(); if (!emailReady()) throw new Error('Email isn’t set up yet (Admin → Email).');
   try { return await sendMailRaw(e, to, toName, msg); } catch (x) { throw new Error(friendlySmtp(x, e.host)); }
 }
-/* A container's hostname is a random hex id, which reads as a forged HELO to strict receivers.
-   Prefer the public host from APP_URL, and fall back to something syntactically valid. */
 function heloName() {
   const h = String(ENV.APP_URL || '').replace(/^https?:\/\//i, '').split(/[/:?#]/)[0];
-  if (/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(h) && !/^[\d.]+$/.test(h)) return h;   // a bare IP is not a HELO name
+  if (/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i.test(h) && !/^[\d.]+$/.test(h)) return h;
   const d = String(mailConfig().fromEmail || '').split('@')[1];
   return d && /\./.test(d) ? d : 'forge90.local';
 }
@@ -208,8 +194,6 @@ function sendMailRaw(e, to, toName, msg) {
     heloName: heloName(), replyTo: msg.replyTo || null,
     subject: msg.subject, text: msg.text, html: msg.html, attachments: LOGO_PNG ? [{ filename: 'forge90.png', contentType: 'image/png', cid: 'logo@forge90', content: LOGO_PNG }] : [] });
 }
-/* Gmail and friends check that the From domain is the one that authenticated (SPF/DKIM alignment).
-   A mismatch is the usual reason invites land in spam, so say so where it's set. */
 function mailWarnings() {
   const e = mailConfig(); const out = [];
   const fd = String(e.fromEmail || '').split('@')[1] || '', ud = String(e.user || '').split('@')[1] || '';
@@ -225,7 +209,7 @@ function mailWarnings() {
 }
 async function sendReset(user, reason, req, extra = {}) {
   const tok = crypto.randomBytes(32).toString('base64url');
-  db.resets.forEach(r => { if (r.userId === user.id && !r.usedAt) r.usedAt = -1; });           // older links stop working
+  db.resets.forEach(r => { if (r.userId === user.id && !r.usedAt) r.usedAt = -1; });
   const expiresAt = now() + RESET_MINUTES * 60000;
   db.resets.push({ h: sha256(tok), userId: user.id, createdAt: now(), expiresAt, usedAt: null, reason, ip: clientIp(req) });
   saveDb();
@@ -325,7 +309,7 @@ route('POST', '/api/forgot', { limit: 'auth' }, async (req, res, ctx) => {
     const recent = db.resets.find(r => r.userId === u.id && now() - r.createdAt < 60000);
     if (!recent) await sendReset(u, 'forgot', req);
   }
-  send(res, 200, { ok: true, minutes: RESET_MINUTES });           // same answer whether or not the account exists
+  send(res, 200, { ok: true, minutes: RESET_MINUTES });
 });
 function findReset(tok) { const h = sha256(String(tok || '')); const r = db.resets.find(x => x.h === h); if (!r || r.usedAt || r.expiresAt < now()) return null; const u = userById(r.userId); return u && u.status !== 'disabled' ? { r, u } : null; }
 route('GET', '/api/reset/:token', async (req, res, ctx) => { const f = findReset(ctx.params.token); if (!f) err(410, 'This reset link has expired or was already used. Request a new one.'); send(res, 200, { ok: true, email: maskEmail(f.u.email), expiresAt: f.r.expiresAt }); });
@@ -339,7 +323,6 @@ route('POST', '/api/reset', { limit: 'auth' }, async (req, res, ctx) => {
   send(res, 200, { ok: true, pending: f.u.status === 'pending' });
 });
 
-/* per-user plan data */
 route('GET', '/api/state', { auth: true }, async (req, res, ctx) => send(res, 200, readState(ctx.me.u.id)));
 route('PUT', '/api/state', { auth: true, limit: 'state' }, async (req, res, ctx) => {
   const cur = readState(ctx.me.u.id); const b = ctx.body;
@@ -349,7 +332,6 @@ route('PUT', '/api/state', { auth: true, limit: 'state' }, async (req, res, ctx)
   writeAtomic(stateFile(ctx.me.u.id), JSON.stringify(next)); send(res, 200, { rev: next.rev, updatedAt: next.updatedAt });
 });
 
-/* personal account */
 function sessionList(userId, curId) { return db.sessions.filter(s => s.userId === userId && s.expiresAt > now()).sort((a, b) => b.lastSeen - a.lastSeen).map(s => ({ id: s.id, current: s.id === curId, createdAt: s.createdAt, lastSeen: s.lastSeen, ip: s.ip, ua: s.ua, remember: s.remember, expiresAt: s.expiresAt })); }
 route('GET', '/api/account', { auth: true, allowMustChange: true }, async (req, res, ctx) => {
   const u = ctx.me.u; const st = readState(u.id);
@@ -359,7 +341,6 @@ route('PATCH', '/api/account', { auth: true, allowMustChange: true }, async (req
   const u = ctx.me.u, b = ctx.body; const changes = [];
   if (b.name != null) { const n = String(b.name).trim().slice(0, 80); if (!n) err(400, 'Display name can’t be empty.'); if (n !== u.name) { u.name = n; changes.push('display name'); } }
   ['firstName', 'lastName'].forEach(k => { if (b[k] != null) { const v = String(b[k]).trim().slice(0, 40); if (v !== (u[k] || '')) { u[k] = v; changes.push(k === 'firstName' ? 'first name' : 'last name'); } } });
-  // newSignIn used to be stored and validated here with nothing ever sending that email
   if (b.notify && typeof b.notify === 'object') { u.notify = { passwordChange: !!b.notify.passwordChange }; changes.push('notifications'); }
   if (b.email != null && normEmail(b.email) !== u.email) {
     const e = normEmail(b.email); if (!validEmail(e)) err(400, 'Enter a valid email address.');
@@ -372,20 +353,17 @@ route('PATCH', '/api/account', { auth: true, allowMustChange: true }, async (req
   saveDb(); if (changes.length) audit('profile_updated', { userId: u.id, ip: clientIp(req), detail: changes.join(', ') });
   send(res, 200, { user: pubUser(u) });
 });
-/* ---------- profile pictures: DATA/avatars/<userId>-<version>.<ext> — a new upload deletes the old file ---------- */
 const AVATAR_DIR = path.join(DATA, 'avatars'); fs.mkdirSync(AVATAR_DIR, { recursive: true });
 const AVATAR_MAX = 512 * 1024;
-/* Backgrounds belong to the server, not to a person: the owner sets the look and everyone
-   sees it. Stored as files rather than in the state blob, which is pushed whole on every save. */
 const BG_DIR = path.join(DATA, 'backgrounds'); fs.mkdirSync(BG_DIR, { recursive: true });
 const BG_MAX = 400 * 1024;
 const BG_SECTIONS = ['dashboard', 'calendar', 'day', 'workouts', 'diet', 'foods', 'grocery', 'progress', 'settings'];
 const bgPath = sec => { const b = (db.settings.bg || {})[sec]; return b && b.f ? path.join(BG_DIR, path.basename(String(b.f))) : null; };
-function removeBg(sec) { const f = bgPath(sec); if (f) { try { fs.unlinkSync(f); } catch (e) { /* already gone */ } } if (db.settings.bg) delete db.settings.bg[sec]; }
+function removeBg(sec) { const f = bgPath(sec); if (f) { try { fs.unlinkSync(f); } catch (e) { } } if (db.settings.bg) delete db.settings.bg[sec]; }
 const bgMap = () => { const out = {}; Object.entries(db.settings.bg || {}).forEach(([k, b]) => { if (b && b.v) out[k] = b.u ? { v: b.v, u: b.u } : { v: b.v }; }); return out; };
 const AVATAR_TYPES = { jpg: 'image/jpeg', png: 'image/png', webp: 'image/webp' };
 const avatarPath = u => u && u.avatar ? path.join(AVATAR_DIR, path.basename(String(u.avatar))) : null;
-function removeAvatar(u) { const f = avatarPath(u); if (f) { try { fs.unlinkSync(f); } catch (e) { /* already gone */ } } delete u.avatar; delete u.avatarV; }
+function removeAvatar(u) { const f = avatarPath(u); if (f) { try { fs.unlinkSync(f); } catch (e) { } } delete u.avatar; delete u.avatarV; }
 function imageExt(buf) {
   if (buf.length > 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpg';
   if (buf.length > 8 && buf.slice(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'png';
@@ -399,7 +377,7 @@ route('PUT', '/api/account/avatar', { auth: true, maxBody: 1024 * 1024 }, async 
   const ext = imageExt(buf); if (!ext) err(400, 'That file isn’t a JPEG, PNG or WebP image.');
   const v = Date.now().toString(36); const name = `${u.id.replace(/[^A-Za-z0-9_-]/g, '')}-${v}.${ext}`;
   writeAtomic(path.join(AVATAR_DIR, name), buf);
-  const had = !!u.avatar; removeAvatar(u);                 // the old picture is deleted, not kept
+  const had = !!u.avatar; removeAvatar(u);
   u.avatar = name; u.avatarV = v; saveDb();
   audit('avatar_changed', { userId: u.id, ip: clientIp(req), detail: had ? 'replaced' : 'added' });
   send(res, 200, { user: pubUser(u) });
@@ -411,7 +389,7 @@ route('DELETE', '/api/account/avatar', { auth: true }, async (req, res, ctx) => 
 route('PUT', '/api/backgrounds/:sec', { auth: true, maxBody: 1024 * 1024 }, async (req, res, ctx) => {
   if (!isOwner(ctx.me.u)) err(403, 'Only the owner can change the backgrounds.');
   const sec = String(ctx.params.sec); if (!BG_SECTIONS.includes(sec)) err(400, 'Unknown section.');
-  if (ctx.body.url != null) {                                // a link costs no storage and is served from wherever it lives
+  if (ctx.body.url != null) {
     const u = String(ctx.body.url).trim();
     if (!/^https:\/\/[^\s<>"']{3,500}$/i.test(u)) err(400, 'Enter a full https link to an image.');
     removeBg(sec); db.settings.bg = db.settings.bg || {}; db.settings.bg[sec] = { u, v: Date.now().toString(36) }; saveDb();
@@ -424,7 +402,7 @@ route('PUT', '/api/backgrounds/:sec', { auth: true, maxBody: 1024 * 1024 }, asyn
   const ext = imageExt(buf); if (!ext) err(400, 'That file isn’t a JPEG, PNG or WebP image.');
   const v = Date.now().toString(36); const name = `${sec}-${v}.${ext}`;
   writeAtomic(path.join(BG_DIR, name), buf);
-  removeBg(sec);                                            // the old image is deleted, not kept
+  removeBg(sec);
   db.settings.bg = db.settings.bg || {}; db.settings.bg[sec] = { f: name, v }; saveDb();
   audit('background_changed', { userId: ctx.me.u.id, ip: clientIp(req), detail: sec });
   send(res, 200, { bg: bgMap() });
@@ -432,7 +410,7 @@ route('PUT', '/api/backgrounds/:sec', { auth: true, maxBody: 1024 * 1024 }, asyn
 route('DELETE', '/api/backgrounds/:sec', { auth: true }, async (req, res, ctx) => {
   if (!isOwner(ctx.me.u)) err(403, 'Only the owner can change the backgrounds.');
   const sec = String(ctx.params.sec); if (!BG_SECTIONS.includes(sec)) err(400, 'Unknown section.');
-  if ((db.settings.bg || {})[sec]) { removeBg(sec); saveDb(); audit('background_changed', { userId: ctx.me.u.id, ip: clientIp(req), detail: sec + ' reset' }); }   // a link has no file, but still has an entry
+  if ((db.settings.bg || {})[sec]) { removeBg(sec); saveDb(); audit('background_changed', { userId: ctx.me.u.id, ip: clientIp(req), detail: sec + ' reset' }); }
   send(res, 200, { bg: bgMap() });
 });
 route('GET', '/api/background/:sec', { auth: true }, async (req, res, ctx) => {
@@ -444,7 +422,7 @@ route('GET', '/api/background/:sec', { auth: true }, async (req, res, ctx) => {
   res.end(buf);
 });
 route('GET', '/api/avatar/:id', { auth: true }, async (req, res, ctx) => {
-  const u = userById(ctx.params.id); const f = avatarPath(u); if (!f || (ctx.query.v && ctx.query.v !== u.avatarV)) err(404, 'No picture.');   // an old version's URL stops working once it's replaced
+  const u = userById(ctx.params.id); const f = avatarPath(u); if (!f || (ctx.query.v && ctx.query.v !== u.avatarV)) err(404, 'No picture.');
   let buf; try { buf = fs.readFileSync(f); } catch (e) { err(404, 'No picture.'); }
   const type = AVATAR_TYPES[path.extname(f).slice(1)] || 'application/octet-stream';
   res.writeHead(200, Object.assign({}, SEC_HEADERS, { 'Content-Type': type, 'Content-Length': buf.length, 'Cache-Control': 'private, max-age=31536000, immutable', 'Content-Security-Policy': "default-src 'none'" }));
@@ -471,7 +449,7 @@ route('DELETE', '/api/account', { auth: true, limit: 'auth' }, async (req, res, 
   if (u.role === 'admin' && admins().length <= 1) err(400, 'You’re the only administrator. Make someone else an admin before deleting your account.');
   deleteUser(u); audit('account_deleted', { userId: u.id, ip: clientIp(req), detail: u.email }); setCookie(res, req, '', 0); send(res, 200, { ok: true });
 });
-function deleteUser(u) { removeAvatar(u); const sy = syncOf(u.id); if (sy) dropSync(sy); db.users = db.users.filter(x => x !== u); db.sessions = db.sessions.filter(s => s.userId !== u.id); db.resets = db.resets.filter(r => r.userId !== u.id); try { fs.unlinkSync(stateFile(u.id)); } catch (e) { /* none */ } saveDb(); }
+function deleteUser(u) { removeAvatar(u); const sy = syncOf(u.id); if (sy) dropSync(sy); db.users = db.users.filter(x => x !== u); db.sessions = db.sessions.filter(s => s.userId !== u.id); db.resets = db.resets.filter(r => r.userId !== u.id); try { fs.unlinkSync(stateFile(u.id)); } catch (e) { } saveDb(); }
 
 /* ---------- meal-plan sync between two accounts ----------
    A sync links two users. Both agree which meal slots are shared. `agreed` holds the shared meal for every
@@ -487,14 +465,14 @@ const partnerId = (s, me) => s.a === me ? s.b : s.a;
 function cleanSlots(o) { const out = {}; SYNC_SLOTS.forEach(k => { out[k] = !!(o && o[k]); }); if (!SYNC_SLOTS.some(k => out[k])) err(400, 'Share at least one meal.'); return out; }
 function syncEvent(s, by, type, text) { s.events.push({ id: uid(), t: now(), by, type, text: String(text).slice(0, 300) }); if (s.events.length > 40) s.events.splice(0, s.events.length - 40); }
 function bumpSync(s) { s.rev = (s.rev || 0) + 1; saveDb(); }
-function dropSync(s) { db.syncs = db.syncs.filter(x => x !== s); [s.a, s.b].forEach(u => { try { fs.unlinkSync(snapFile(s.id, u)); } catch (e) { /* none */ } }); saveDb(); }
-function pruneSync(s) {                          // forget days that are over
+function dropSync(s) { db.syncs = db.syncs.filter(x => x !== s); [s.a, s.b].forEach(u => { try { fs.unlinkSync(snapFile(s.id, u)); } catch (e) { } }); saveDb(); }
+function pruneSync(s) {
   const cut = new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10);
   let n = 0; Object.keys(s.agreed).forEach(k => { if (k.slice(0, 10) < cut) { delete s.agreed[k]; n++; } }); Object.keys(s.div).forEach(k => { if (k.slice(0, 10) < cut) delete s.div[k]; });
   const before = s.changes.length; s.changes = s.changes.filter(c => c.date >= cut); return n || before !== s.changes.length;
 }
 function syncView(s, me) {
-  const p = userById(partnerId(s, me)); let snapAt = null; try { snapAt = fs.statSync(snapFile(s.id, partnerId(s, me))).mtimeMs; } catch (e) { /* none yet */ }
+  const p = userById(partnerId(s, me)); let snapAt = null; try { snapAt = fs.statSync(snapFile(s.id, partnerId(s, me))).mtimeMs; } catch (e) { }
   return { id: s.id, status: s.status, role: s.by === me ? 'requester' : 'recipient', partner: p ? { id: p.id, name: p.name, email: p.email, avatarUrl: avatarUrl(p) } : null,
     slots: s.slots, slotReq: s.slotReq, since: s.since, agreed: s.agreed, through: s.through, div: s.div, baseRev: s.baseRev, rev: s.rev,
     changesIn: s.changes.filter(c => c.from !== me), changesOut: s.changes.filter(c => c.from === me), events: s.events.slice(-20), grocery: s.grocery, pantry: { on: !!(s.pantry && s.pantry.on), items: (s.pantry && s.pantry.on && s.pantry.items) || [], rev: (s.pantry && s.pantry.rev) || 0, by: (s.pantry && s.pantry.by) || null }, partnerSnapAt: snapAt, createdAt: s.createdAt, activeAt: s.activeAt };
@@ -535,13 +513,13 @@ route('POST', '/api/sync/respond', { auth: true }, async (req, res, ctx) => {
   if (p) syncMail(req, p, `${me.name} accepted meal-plan sync`, 'Your meal plans are synced', [`${me.name} accepted — your shared meals and shopping list are now combined.`, 'Changes either of you make to a shared meal show up for the other person to accept.']);
   send(res, 200, { sync: syncView(s, me.id) });
 });
-route('DELETE', '/api/sync', { auth: true }, async (req, res, ctx) => {      // cancel a request or unsync
+route('DELETE', '/api/sync', { auth: true }, async (req, res, ctx) => {
   const me = ctx.me.u; const s = needSync(ctx); const p = userById(partnerId(s, me.id)); const was = s.status;
   dropSync(s); audit(was === 'active' ? 'sync_ended' : 'sync_cancelled', { userId: me.id, ip: clientIp(req), detail: p ? p.email : '' });
   if (p && was === 'active') syncMail(req, p, `${me.name} stopped syncing meal plans`, 'Meal sync ended', [`${me.name} stopped syncing meal plans with you. Your current meals stay as they are, and from now on your plans change independently.`]);
   send(res, 200, { sync: null });
 });
-route('POST', '/api/sync/slots', { auth: true }, async (req, res, ctx) => {    // propose / approve / decline a change to the shared meals
+route('POST', '/api/sync/slots', { auth: true }, async (req, res, ctx) => {
   const me = ctx.me.u; const s = needSync(ctx, 'active'); const b = ctx.body;
   if (b.approve != null) {
     if (!s.slotReq || s.slotReq.by === me.id) err(409, 'There’s no change to approve.');
@@ -558,9 +536,9 @@ route('PUT', '/api/sync/snapshot', { auth: true, limit: 'state' }, async (req, r
   writeAtomic(snapFile(s.id, ctx.me.u.id), JSON.stringify(Object.assign(snap, { at: now() }))); bumpSync(s); send(res, 200, { ok: true, rev: s.rev });
 });
 route('GET', '/api/sync/partner', { auth: true }, async (req, res, ctx) => {
-  const s = needSync(ctx); let snap = null; try { snap = JSON.parse(fs.readFileSync(snapFile(s.id, partnerId(s, ctx.me.u.id)), 'utf8')); } catch (e) { /* not yet */ } send(res, 200, { snap });
+  const s = needSync(ctx); let snap = null; try { snap = JSON.parse(fs.readFileSync(snapFile(s.id, partnerId(s, ctx.me.u.id)), 'utf8')); } catch (e) { } send(res, 200, { snap });
 });
-route('POST', '/api/sync/baseline', { auth: true, limit: 'state' }, async (req, res, ctx) => {   // shared meals planned together (start of sync, new weeks, newly shared meals)
+route('POST', '/api/sync/baseline', { auth: true, limit: 'state' }, async (req, res, ctx) => {
   const me = ctx.me.u; const s = needSync(ctx, 'active'); const b = ctx.body;
   if (b.baseRev != null && +b.baseRev !== s.baseRev) return send(res, 409, { sync: syncView(s, me.id) });
   if (!b.meals || typeof b.meals !== 'object') err(400, 'Missing meals');
@@ -569,13 +547,13 @@ route('POST', '/api/sync/baseline', { auth: true, limit: 'state' }, async (req, 
   s.changes = s.changes.filter(c => !(b.meals[c.date + '|' + c.slot] !== undefined));
   s.baseRev++; bumpSync(s); send(res, 200, { sync: syncView(s, me.id) });
 });
-route('POST', '/api/sync/changes', { auth: true, limit: 'state' }, async (req, res, ctx) => {    // my edits to shared meals
+route('POST', '/api/sync/changes', { auth: true, limit: 'state' }, async (req, res, ctx) => {
   const me = ctx.me.u; const s = needSync(ctx, 'active'); const list = Array.isArray(ctx.body.changes) ? ctx.body.changes.slice(0, 400) : [];
   let n = 0;
   list.forEach(c => {
     if (!c || !isoDate(c.date) || !SYNC_SLOTS.includes(c.slot) || !s.slots[c.slot] || !ridOk(c.rid) || c.date < s.since) return;
     const k = c.date + '|' + c.slot; s.changes = s.changes.filter(x => !(x.from === me.id && x.date === c.date && x.slot === c.slot));
-    if (c.rid === (s.agreed[k] === undefined ? null : s.agreed[k])) { n++; return; }                 // back to the shared meal → nothing to approve
+    if (c.rid === (s.agreed[k] === undefined ? null : s.agreed[k])) { n++; return; }
     delete s.div[k];
     const rec = c.recipe && typeof c.recipe === 'object' && JSON.stringify(c.recipe).length < 20000 ? c.recipe : null;
     const foods = c.foods && typeof c.foods === 'object' && JSON.stringify(c.foods).length < 40000 ? c.foods : null;
@@ -584,7 +562,7 @@ route('POST', '/api/sync/changes', { auth: true, limit: 'state' }, async (req, r
   if (s.changes.length > 1500) s.changes.splice(0, s.changes.length - 1500);
   if (n) bumpSync(s); send(res, 200, { sync: syncView(s, me.id) });
 });
-route('POST', '/api/sync/resolve', { auth: true }, async (req, res, ctx) => {    // accept / decline the partner's changes, or cancel my own
+route('POST', '/api/sync/resolve', { auth: true }, async (req, res, ctx) => {
   const me = ctx.me.u; const s = needSync(ctx, 'active'); const b = ctx.body; const ids = new Set(Array.isArray(b.ids) ? b.ids : []);
   if (!['accept', 'decline', 'cancel'].includes(b.action)) err(400, 'Unknown action');
   const done = []; const pn = (userById(partnerId(s, me.id)) || {}).name || 'Your partner';
@@ -602,7 +580,7 @@ route('POST', '/api/sync/resolve', { auth: true }, async (req, res, ctx) => {   
   }
   send(res, 200, { done, sync: syncView(s, me.id) });
 });
-route('PUT', '/api/sync/grocery', { auth: true }, async (req, res, ctx) => {       // shared shopping-list check-offs
+route('PUT', '/api/sync/grocery', { auth: true }, async (req, res, ctx) => {
   // { week, id, got } for one tick, or { week, set: { id: 1 | 0 | null } } for many (0 = unticked on purpose, for items the pantry covers)
   const s = needSync(ctx, 'active'); const b = ctx.body;
   const changes = b.set && typeof b.set === 'object' && !Array.isArray(b.set) ? Object.entries(b.set).slice(0, 500) : Array.isArray(b.ids) ? b.ids.slice(0, 500).map(id => [id, b.got ? 1 : null]) : [[b.id, b.got ? 1 : null]];
@@ -612,7 +590,6 @@ route('PUT', '/api/sync/grocery', { auth: true }, async (req, res, ctx) => {    
   bumpSync(s); send(res, 200, { ok: true, rev: s.rev });
 });
 
-/* shared household pantry (optional, either synced user can switch it on or off) */
 const PANTRY_MAX = 600;
 function cleanPantryItem(it) {
   if (!it || typeof it !== 'object') err(400, 'Bad pantry item');
@@ -640,7 +617,6 @@ route('POST', '/api/sync/pantry', { auth: true, limit: 'state' }, async (req, re
     else if (o.op === 'set') { const it = P.items.find(x => x.id === o.id); if (it) { if (o.qty != null) it.qty = Math.max(0, Math.min(1e6, Math.round(+o.qty * 100) / 100 || 0)); if (o.exp !== undefined) it.exp = o.exp && isoDate(o.exp) ? o.exp : null; if (o.food && /^[A-Za-z0-9_.:-]{1,80}$/.test(o.food) && !/^(__proto__|constructor|prototype)$/.test(o.food)) it.food = o.food; } }
     else if (o.op === 'del') P.items = P.items.filter(x => x.id !== o.id);
   });
-  // automatic use-up: each person sends what their own planned meals used, once per day
   const c = ctx.body.consume;
   if (c && isoDate(c.through) && c.use && typeof c.use === 'object') {
     P.used = P.used || {}; const last = P.used[me] || '';
@@ -697,8 +673,6 @@ route('GET', '/api/barcode/:code', { auth: true }, async (req, res, ctx) => {
   try { off = await PROD.offLookup(code); } catch (e) { offError = e.message; }
   send(res, 200, { gtin: code, suggest: off, error: offError });
 });
-/* Name search against the same Open Food Facts catalog the scanner uses, for loose produce,
-   anything already out of its packaging, and labels the camera will not read. */
 route('GET', '/api/foods/search', { auth: true }, async (req, res, ctx) => {
   if (limited('foodsearch:' + ctx.me.u.id, 120, 10 * 60000)) err(429, 'Too many searches. Wait a few minutes.');
   const q = String(ctx.query.q || '').trim();
@@ -839,7 +813,6 @@ route('POST', '/api/import/url', { auth: true }, async (req, res, ctx) => {
   send(res, 200, { recipe: await impCall(() => IMP.importFromUrl(u)) });
 });
 
-/* administrator */
 function adminUserRow(u) {
   const st = (() => { try { return fs.statSync(stateFile(u.id)); } catch (e) { return null; } })();
   return Object.assign(pubUser(u), { locked: isLocked(u), lockedUntil: isLocked(u) ? u.lockedUntil : null, failed: u.failed || 0, lastLoginIp: u.lastLoginIp || null, sessions: db.sessions.filter(s => s.userId === u.id && s.expiresAt > now()).length, dataBytes: st ? st.size : 0, dataUpdatedAt: st ? st.mtimeMs : null, pwChangedAt: u.pwChangedAt || u.createdAt });
@@ -850,10 +823,10 @@ function inviteRow(i) { return { id: i.id, email: i.email, name: i.name || '', r
 async function sendInvite(inv, req, actor) {
   if (!emailReady()) err(400, 'Set up email first (Admin → Email) — invites are sent by email.');
   const tok = crypto.randomBytes(32).toString('base64url'); const prev = { h: inv.h, sentAt: inv.sentAt, expiresAt: inv.expiresAt };
-  inv.h = sha256(tok); inv.sentAt = now(); inv.expiresAt = now() + INVITE_DAYS * 86400000;      // a new link replaces the old one
+  inv.h = sha256(tok); inv.sentAt = now(); inv.expiresAt = now() + INVITE_DAYS * 86400000;
   const link = `${baseUrl(req)}/invite?token=${tok}`;
   const msg = MAIL.inviteEmail({ name: inv.name, email: inv.email, inviter: actor.name, role: inv.role, link, days: INVITE_DAYS, expiresAt: new Date(inv.expiresAt), appUrl: baseUrl(req), appName: db.settings.appName, inviterEmail: actor.email });
-  if (actor.email && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(actor.email)) msg.replyTo = actor.email;   // a real person to reply to reads far less like bulk mail
+  if (actor.email && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(actor.email)) msg.replyTo = actor.email;
   try { await deliver(inv.email, inv.name, msg); inv.sends = (inv.sends || 0) + 1; saveDb(); }
   catch (e) { Object.assign(inv, prev); audit('invite_failed', { actorId: actor.id, ip: clientIp(req), detail: `${inv.email}: ${e.message}`.slice(0, 300) }); err(502, 'The invite email couldn’t be sent: ' + e.message); }
 }
@@ -891,7 +864,7 @@ route('PATCH', '/api/admin/users/:id', { admin: true }, async (req, res, ctx) =>
     u.role = b.role; log.push('role → ' + b.role); audit('role_changed', { userId: u.id, actorId: me.id, ip: clientIp(req), detail: b.role }); }
   if (b.status != null && b.status !== u.status) {
     if (!['active', 'disabled', 'pending'].includes(b.status)) err(400, 'Unknown status.');
-    if (b.status !== 'active') adminChangeGuard(ctx, u);          // disabling an admin is a demotion by another name
+    if (b.status !== 'active') adminChangeGuard(ctx, u);
     if (lastAdmin && b.status !== 'active') err(400, 'There has to be at least one active administrator.');
     if (u.id === me.id && b.status !== 'active') err(400, 'You can’t disable your own account.');
     const was = u.status; u.status = b.status; if (b.status !== 'active') revokeSessions(u.id);
@@ -942,11 +915,11 @@ route('PATCH', '/api/admin/settings', { admin: true }, async (req, res, ctx) => 
     if (x.requireHttps != null) q.requireHttps = !!x.requireHttps;
     changed.push('security'); }
   if (b.email) { const x = b.email, q = s.email = s.email || {}; const d = emailDefaults();
-    const put = (k, v) => { if (String(v) === String(d[k])) delete q[k]; else q[k] = v; };   // only store what differs from the environment
+    const put = (k, v) => { if (String(v) === String(d[k])) delete q[k]; else q[k] = v; };
     ['host', 'user', 'fromName', 'fromEmail'].forEach(k => { if (x[k] != null) put(k, String(x[k]).trim().slice(0, 200)); });
     if (x.port != null) put('port', int(x.port, 1, 65535, 'Port'));
     if (x.security != null) { if (!['tls', 'starttls', 'none'].includes(x.security)) err(400, 'Unknown connection security.'); put('security', x.security); }
-    if (x.pass) q.pass = String(x.pass).replace(/\s+/g, '');          // Google shows app passwords with spaces
+    if (x.pass) q.pass = String(x.pass).replace(/\s+/g, '');
     if (x.clearPass) delete q.pass;
     if (x.useEnv) EMAIL_KEYS.concat('pass').forEach(k => delete q[k]);
     const fe = mailConfig().fromEmail; if (fe && !validEmail(normEmail(fe))) err(400, 'From address isn’t a valid email.');
@@ -978,7 +951,7 @@ route('GET', '/api/admin/audit', { admin: true }, async (req, res, ctx) => {
 });
 route('GET', '/api/admin/stats', { admin: true }, async (req, res) => {
   const day = now() - 86400000; const a = db.audit.filter(x => x.t > day);
-  let bytes = 0; try { fs.readdirSync(path.join(DATA, 'state')).forEach(f => { bytes += fs.statSync(path.join(DATA, 'state', f)).size; }); bytes += fs.statSync(DBF).size; } catch (e) { /* ignore */ }
+  let bytes = 0; try { fs.readdirSync(path.join(DATA, 'state')).forEach(f => { bytes += fs.statSync(path.join(DATA, 'state', f)).size; }); bytes += fs.statSync(DBF).size; } catch (e) { }
   send(res, 200, { users: db.users.length, admins: admins().length, pending: db.users.filter(u => u.status === 'pending').length, invites: db.invites.filter(i => i.expiresAt > now()).length, disabled: db.users.filter(u => u.status === 'disabled').length, locked: db.users.filter(isLocked).length,
     sessions: db.sessions.filter(s => s.expiresAt > now()).length, logins24: a.filter(x => x.type === 'login_ok').length, failed24: a.filter(x => x.type === 'login_fail').length,
     emails24: a.filter(x => x.type === 'reset_email_sent').length, emailFail24: a.filter(x => /email_failed|reset_email_failed/.test(x.type)).length, dataBytes: bytes, dataDir: DATA, node: process.version, version: VERSION, uptime: Math.round(process.uptime()) });
@@ -995,8 +968,6 @@ async function handle(req, res) {
   const secure = isHttps(req);
   if (!secure && requireHttpsOn() && !isLoopback(peerIp(req)) && pathname !== '/api/health') {
     const target = httpsTarget();
-    // Only redirect visits that came in on a different address; if the https hostname itself arrives as plain HTTP the proxy isn't
-    // passing X-Forwarded-Proto (or TRUST_PROXY is off) — redirecting would loop, so serve it and flag it in Admin → Server & proxy.
     if (String(req.headers.host || '').toLowerCase() !== hostOf(target)) {
       if (pathname.startsWith('/api/')) return send(res, 403, { error: `Use the secure address: ${target}`, httpsUrl: target });
       res.writeHead(302, Object.assign({ Location: target + url.pathname + url.search, 'Cache-Control': 'no-store' }, SEC_HEADERS)); return res.end();
@@ -1010,7 +981,7 @@ async function handle(req, res) {
   try {
     if (req.method !== 'GET') {
       if (req.headers['x-f90'] !== '1' || !/application\/json/i.test(req.headers['content-type'] || '')) err(403, 'Blocked request');
-      const origin = req.headers.origin; if (origin) { let oh = ''; try { oh = new URL(origin).host; } catch (e) { /* bad origin */ } if (oh !== req.headers.host) err(403, 'Blocked cross-site request'); }
+      const origin = req.headers.origin; if (origin) { let oh = ''; try { oh = new URL(origin).host; } catch (e) { } if (oh !== req.headers.host) err(403, 'Blocked cross-site request'); }
     }
     if (r.opts.limit === 'auth' && limited('auth:' + ip, 40, 15 * 60000)) err(429, 'Too many attempts from this network. Wait a few minutes and try again.');
     const me = getSession(req);
@@ -1025,7 +996,6 @@ async function handle(req, res) {
   }
 }
 
-/* ---------- command-line recovery:  node server.js --set-password <email> <password>  |  --make-admin <email>  |  --make-owner <email> ---------- */
 async function cli() {
   const a = process.argv.slice(2); if (!a.length || !/^--/.test(a[0])) return false;
   const u = findUser(a[1] || ''); if (!u) { console.error('No account with email', a[1]); process.exit(1); }
@@ -1047,11 +1017,11 @@ async function cli() {
     audit('admin_created', { detail: email }); saveDb(true);
     console.log(`\n  Default administrator created → ${email} / ${existing ? '(existing password)' : pw}\n  You'll be asked to choose a new password the first time you sign in.\n`);
   }
-  ensureOwner();          // brand new server, or an existing one upgrading: the longest-standing admin owns it
+  ensureOwner();
   setInterval(() => { const t = now(); const n1 = db.sessions.length, n2 = db.resets.length, n3 = db.invites.length;
     db.sessions = db.sessions.filter(s => s.expiresAt > t); db.resets = db.resets.filter(r => t - r.createdAt < 86400000); db.invites = db.invites.filter(i => t - i.expiresAt < 30 * 86400000);
     if (n1 !== db.sessions.length || n2 !== db.resets.length || n3 !== db.invites.length) saveDb(); }, 10 * 60000).unref();
-  const server = http.createServer((req, res) => { handle(req, res).catch(e => { console.error(e); try { send(res, 500, { error: 'Server error' }); } catch (x) { /* ignore */ } }); });
+  const server = http.createServer((req, res) => { handle(req, res).catch(e => { console.error(e); try { send(res, 500, { error: 'Server error' }); } catch (x) { } }); });
   server.headersTimeout = 20000; server.requestTimeout = 60000;
   server.listen(PORT, HOST, () => {
     console.log(`  FORGE 90 ${VERSION} is running → ${ENV.APP_URL || `http://localhost:${PORT}`}`);

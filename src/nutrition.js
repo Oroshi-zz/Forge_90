@@ -1,15 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
-/* ============================================================
-   FORGE 90 — Ingredients (USDA-based) and recipes
-   Macros per 100 g, or per unit when `u` is set.
-   Role drives portion scaling:
-     P = protein source (scaled to hit protein target)
-     C = carb source, F = fat source (scaled to hit calorie target)
-     V = vegetables / sauces / seasonings (held constant)
-   ============================================================ */
 const BASE_ING = {
-  // Meat & seafood
   chicken_breast: { n: 'Chicken breast, raw', a: 'Meat & Seafood', r: 'P', k: 120, p: 22.5, c: 0, f: 2.6 },
   chicken_thigh:  { n: 'Chicken thighs, boneless skinless, raw', a: 'Meat & Seafood', r: 'P', k: 121, p: 19.7, c: 0, f: 4.1 },
   turkey_937:     { n: 'Ground turkey 93/7, raw', a: 'Meat & Seafood', r: 'P', k: 150, p: 18.7, c: 0, f: 8.3 },
@@ -22,7 +13,6 @@ const BASE_ING = {
   salmon:         { n: 'Sushi-grade salmon', a: 'Meat & Seafood', r: 'P', k: 208, p: 20.4, c: 0, f: 13.4 },
   tuna_can:       { n: 'Canned light tuna in water, drained', a: 'Pantry', r: 'P', k: 116, p: 25.5, c: 0, f: 0.8 },
   jerky:          { n: 'Beef jerky', a: 'Snacks', r: 'P', k: 286, p: 43, c: 21, f: 3.6 },
-  // Dairy & eggs
   egg:            { n: 'Large eggs', a: 'Dairy & Eggs', r: 'P', u: 'egg', g: 50, k: 72, p: 6.3, c: 0.4, f: 4.8 },
   egg_whites:     { n: 'Liquid egg whites', a: 'Dairy & Eggs', r: 'P', k: 52, p: 10.9, c: 0.7, f: 0.2, ml: true },
   greek_yogurt:   { n: 'Nonfat plain Greek yogurt', a: 'Dairy & Eggs', r: 'P', k: 59, p: 10.3, c: 3.6, f: 0.4 },
@@ -32,11 +22,9 @@ const BASE_ING = {
   feta:           { n: 'Feta cheese', a: 'Dairy & Eggs', r: 'F', k: 264, p: 14.2, c: 4.1, f: 21.3 },
   parmesan:       { n: 'Parmesan, grated', a: 'Dairy & Eggs', r: 'F', k: 420, p: 29.6, c: 13.9, f: 27.8 },
   string_cheese:  { n: 'String cheese (part-skim)', a: 'Dairy & Eggs', r: 'F', u: 'stick', g: 28, k: 80, p: 7, c: 1, f: 5.5 },
-  // Pantry / protein
   whey:           { n: 'Whey protein powder', a: 'Pantry', r: 'P', k: 400, p: 80, c: 10, f: 5 },
   pb2:            { n: 'Powdered peanut butter (PB2)', a: 'Pantry', r: 'P', k: 462, p: 46, c: 38, f: 11.5 },
   protein_bar:    { n: 'Protein bar (~20 g protein)', a: 'Snacks', r: 'P', u: 'bar', g: 60, k: 200, p: 20, c: 21, f: 7 },
-  // Grains & starches
   oats:           { n: 'Rolled oats', a: 'Grains & Bread', r: 'C', k: 379, p: 13.2, c: 67.7, f: 6.5 },
   rice:           { n: 'White/jasmine rice, cooked', a: 'Grains & Bread', r: 'C', k: 130, p: 2.7, c: 28.2, f: 0.3, dry: 0.33, dryName: 'White/jasmine rice, uncooked' },
   sushi_rice:     { n: 'Sushi rice, seasoned, cooked', a: 'Grains & Bread', r: 'C', k: 150, p: 2.6, c: 33, f: 0.3, dry: 0.4, dryName: 'Sushi rice, uncooked' },
@@ -55,12 +43,10 @@ const BASE_ING = {
   kidney_beans:   { n: 'Kidney beans, canned, drained', a: 'Pantry', r: 'C', k: 127, p: 8.7, c: 22.8, f: 0.5 },
   corn:           { n: 'Sweet corn, frozen', a: 'Frozen', r: 'C', k: 86, p: 3.3, c: 18.7, f: 1.4 },
   edamame:        { n: 'Shelled edamame, frozen', a: 'Frozen', r: 'P', k: 121, p: 11.9, c: 8.9, f: 5.2 },
-  // Fruit
   banana:         { n: 'Banana, medium', a: 'Produce', r: 'C', u: 'banana', g: 118, k: 105, p: 1.3, c: 27, f: 0.4 },
   apple:          { n: 'Apple, medium', a: 'Produce', r: 'C', u: 'apple', g: 182, k: 95, p: 0.5, c: 25, f: 0.3 },
   berries:        { n: 'Mixed berries (fresh or frozen)', a: 'Frozen', r: 'C', k: 50, p: 0.7, c: 12, f: 0.3 },
   pineapple:      { n: 'Pineapple chunks', a: 'Produce', r: 'C', k: 50, p: 0.5, c: 13, f: 0.1 },
-  // Sweeteners & sauces
   honey:          { n: 'Honey', a: 'Pantry', r: 'C', k: 304, p: 0.3, c: 82.4, f: 0 },
   syrup_sf:       { n: 'Sugar-free syrup', a: 'Pantry', r: 'V', k: 33, p: 0, c: 8, f: 0, ml: true },
   teriyaki:       { n: 'Teriyaki sauce', a: 'Pantry', r: 'C', k: 89, p: 5.9, c: 15.6, f: 0 },
@@ -72,14 +58,12 @@ const BASE_ING = {
   soy_sauce:      { n: 'Low-sodium soy sauce', a: 'Pantry', r: 'V', k: 53, p: 8.1, c: 4.9, f: 0.6, ml: true },
   sriracha:       { n: 'Sriracha', a: 'Pantry', r: 'V', k: 93, p: 1.9, c: 19, f: 0.9 },
   cocoa:          { n: 'Unsweetened cocoa powder', a: 'Pantry', r: 'V', k: 228, p: 19.6, c: 57.9, f: 13.7 },
-  // Fats
   olive_oil:      { n: 'Olive oil', a: 'Pantry', r: 'F', k: 884, p: 0, c: 0, f: 100 },
   sesame_oil:     { n: 'Toasted sesame oil', a: 'Pantry', r: 'F', k: 884, p: 0, c: 0, f: 100 },
   pb:             { n: 'Peanut butter', a: 'Pantry', r: 'F', k: 588, p: 25, c: 20, f: 50 },
   chia:           { n: 'Chia seeds', a: 'Pantry', r: 'F', k: 486, p: 16.5, c: 42, f: 30.7 },
   avocado:        { n: 'Avocado', a: 'Produce', r: 'F', k: 160, p: 2, c: 8.5, f: 14.7 },
   light_mayo:     { n: 'Light mayonnaise', a: 'Pantry', r: 'F', k: 233, p: 0, c: 6.7, f: 23 },
-  // Vegetables
   spinach:        { n: 'Baby spinach', a: 'Produce', r: 'V', k: 23, p: 2.9, c: 3.6, f: 0.4 },
   bell_pepper:    { n: 'Bell peppers', a: 'Produce', r: 'V', k: 28, p: 1, c: 6, f: 0.3 },
   onion:          { n: 'Onion', a: 'Produce', r: 'V', k: 40, p: 1.1, c: 9.3, f: 0.1 },
@@ -94,16 +78,14 @@ const BASE_ING = {
   carrots:        { n: 'Baby carrots', a: 'Produce', r: 'V', k: 41, p: 0.9, c: 9.6, f: 0.2 },
   pickles:        { n: 'Dill pickles', a: 'Pantry', r: 'V', k: 12, p: 0.5, c: 2.4, f: 0.3 },
   nori:           { n: 'Nori sheets', a: 'Pantry', r: 'V', u: 'sheet', g: 3, k: 8, p: 1.2, c: 1.2, f: 0.1 },
-  // extra options (off/on via Food preferences)
   salmon_fillet:  { n: 'Salmon fillet, raw (to cook)', a: 'Meat & Seafood', r: 'P', k: 208, p: 20.4, c: 0, f: 13.4 },
   shrimp:         { n: 'Shrimp, peeled, raw', a: 'Meat & Seafood', r: 'P', k: 85, p: 20.1, c: 0, f: 0.5 },
   tofu:           { n: 'Extra-firm tofu', a: 'Produce', r: 'P', k: 144, p: 17.3, c: 2.8, f: 8.7 }
 };
 
-/* Recipes: ingredient amounts are for the WHOLE recipe (all servings).
-   yield = servings produced. storage: fridge (eat within 4 days), freezer (freezes well), fresh (eat same day). */
 const BASE_RECIPES = [
-  /* ---------------- BREAKFAST ---------------- */
+
+/* ---------------- BREAKFAST ---------------- */
   { id: 'overnight_oats', name: 'Protein Overnight Oats', cat: 'breakfast', emoji: '🥣', yield: 1, storage: 'fridge', time: 5,
     tags: ['No-cook', 'Make the night before'],
     ing: [['oats', 50], ['whey', 30], ['greek_yogurt', 150], ['fairlife', 150], ['berries', 80], ['chia', 8]],
@@ -137,7 +119,7 @@ const BASE_RECIPES = [
     ing: [['english_muffin', 4], ['egg', 4], ['egg_whites', 400], ['canadian_bacon', 224], ['cheese_shred', 60]],
     steps: ['Heat oven to 350°F. Whisk eggs and whites; pour into a greased 9×13 pan and bake 15 min until set. Cut into 4.', 'Warm Canadian bacon in a skillet.', 'Stack muffin, egg square, Canadian bacon and cheese.', 'Wrap each in foil or parchment. Reheat from frozen: microwave 1.5–2 min.'] },
 
-  /* ---------------- LUNCH ---------------- */
+/* ---------------- LUNCH ---------------- */
   { id: 'burrito_bowls', name: 'Chicken Burrito Bowls', cat: 'lunch', emoji: '🌮', yield: 4, storage: 'fridge', time: 35,
     tags: ['Meal prep', 'Top-rated'],
     ing: [['chicken_breast', 800], ['rice', 600], ['black_beans', 300], ['corn', 200], ['salsa', 240], ['cheese_shred', 60], ['romaine', 200]],
@@ -167,7 +149,7 @@ const BASE_RECIPES = [
     ing: [['sirloin', 800], ['broccoli', 600], ['rice', 600], ['soy_sauce', 60], ['honey', 30], ['cornstarch', 10], ['sesame_oil', 10]],
     steps: ['Slice beef thin against the grain; toss with half the cornstarch.', 'Whisk sauce: soy, honey, remaining cornstarch, garlic, ginger, ½ cup water.', 'Sear beef in sesame oil in batches; set aside. Steam-fry broccoli 3–4 min.', 'Return beef, add sauce and simmer 1 min until glossy. Serve over rice (≈200 g dry).'] },
 
-  /* ---------------- DINNER ---------------- */
+/* ---------------- DINNER ---------------- */
   { id: 'steak_potato', name: 'Steak, Sweet Potato & Green Beans', cat: 'dinner', emoji: '🥩', yield: 1, storage: 'fresh', time: 30,
     tags: ['Classic'],
     ing: [['sirloin', 225], ['sweet_potato', 250], ['green_beans', 150], ['olive_oil', 5]],
@@ -201,7 +183,7 @@ const BASE_RECIPES = [
     ing: [['chicken_thigh', 750], ['rice', 480], ['broccoli', 450], ['honey', 30], ['soy_sauce', 45]],
     steps: ['Whisk honey, soy, minced garlic and a pinch of chili flakes.', 'Sear thighs 5 min per side, pour the sauce over and simmer until sticky and 175°F inside.', 'Steam broccoli; cook rice (≈160 g dry).', 'Portion into 3 containers.'] },
 
-  /* ---------------- SNACKS ---------------- */
+/* ---------------- SNACKS ---------------- */
   { id: 'protein_shake', name: 'Whey Protein Shake', cat: 'snack', emoji: '🥤', yield: 1, storage: 'fresh', time: 1,
     tags: ['Post-workout'],
     ing: [['whey', 30], ['fairlife', 240]],
@@ -243,7 +225,7 @@ const BASE_RECIPES = [
     ing: [['protein_bar', 1]],
     steps: ['Pick a bar with ~20 g protein and ≤ 220 kcal (Quest, Barebells, ONE, etc.).'] },
 
-  /* ---------------- OPTIONAL (enabled by Food preferences) ---------------- */
+/* ---------------- OPTIONAL (enabled by Food preferences) ---------------- */
   { id: 'salmon_rice', name: 'Garlic Salmon, Rice & Asparagus', cat: 'dinner', emoji: '🐟', yield: 1, storage: 'fresh', time: 20,
     tags: ['Omega-3'],
     ing: [['salmon_fillet', 170], ['rice', 180], ['asparagus', 150], ['soy_sauce', 10]],
@@ -267,9 +249,8 @@ const MEAL_SLOTS = ['breakfast', 'lunch', 'dinner', 'snack1', 'snack2'];
 const DAY_SLOTS = MEAL_SLOTS.concat(['dessert']);
 const SLOT_LABEL = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner', snack1: 'Snack', snack2: 'Snack 2', dessert: 'Dessert' };
 const SLOT_CAT = { breakfast: 'breakfast', lunch: 'lunch', dinner: 'dinner', snack1: 'snack', snack2: 'snack', dessert: 'dessert' };
-const RECIPE_CATS = ['breakfast', 'lunch', 'dinner', 'snack', 'dessert'];   // every category a recipe can have
-const PLAN_CATS = ['breakfast', 'lunch', 'dinner', 'snack'];                // the ones the planner draws from
-
+const RECIPE_CATS = ['breakfast', 'lunch', 'dinner', 'snack', 'dessert'];
+const PLAN_CATS = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 /* ---------- recipe links (verified pages for each built-in recipe) ---------- */
 const RECIPE_LINKS = {

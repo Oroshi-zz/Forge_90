@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
 'use strict';
-/* Branded, email-client-safe HTML templates (table layout, inline styles, CID logo) + plain-text versions. */
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const C = { bg: '#eef1f4', card: '#ffffff', ink: '#111827', text: '#374151', muted: '#6b7280', line: '#e5e7eb', dark: '#0f140c', lime: '#a3e635', limeInk: '#1a2e05' };
 

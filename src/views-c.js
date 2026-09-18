@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
-/* ============================================================
-   FORGE 90 — Foods & recipes (editors), food preferences,
-   section backgrounds
-   ============================================================ */
 
 /* ---------------- section backgrounds (Unsplash License photos) ---------------- */
 const SECTION_BG = {
@@ -30,9 +26,6 @@ const BG_FALLBACK = {
   settings: 'radial-gradient(1200px 700px at 50% 0%, #2a3a5a, transparent 60%), linear-gradient(135deg, #0f1420, #101216)'
 };
 const bgPhotoURL = sec => `https://images.unsplash.com/photo-${SECTION_BG[sec].id}?auto=format&fit=crop&w=2200&q=72`;
-/* On a server the backgrounds belong to the instance: the owner sets them and everyone sees
-   the same thing, served as files from /api/background. The local single-user file build has no
-   owner and no server, so there it stays a per-user image kept in the state blob. */
 const bgOwned = () => AUTH.mode === 'server';
 const bgCanEdit = () => !bgOwned() || !!(AUTH.user && AUTH.user.owner);
 const bgServer = sec => { const b = (AUTH.config && AUTH.config.bg) ? AUTH.config.bg[sec] : null;
@@ -46,7 +39,7 @@ function bgUpload(sec, file) {
     .catch(e => toast(e && e.message ? e.message : 'Couldn’t read that image'));
 }
 const bgCustomURL = sec => bgOwned() ? bgServer(sec) : ((S && S.bgCustom && S.bgCustom[sec]) || null);
-const bgURL = sec => (bgCustomURL(sec) || bgPhotoURL(sec));   // a set image wins over the stock photo
+const bgURL = sec => (bgCustomURL(sec) || bgPhotoURL(sec));
 let bgCurrent = null, bgFlip = false;
 function applyBackground(sec) {
   document.documentElement.style.setProperty('--dim', String((S && +S.settings.bgDim >= 0 && +S.settings.bgDim <= 1) ? S.settings.bgDim : 0.7));
@@ -86,14 +79,12 @@ function resizeBackgroundFile(file) {
 function backgroundsHTML() {
   const credit = `<div class="tiny muted" style="margin-top:12px">Default photos from Unsplash (free Unsplash License): ${Object.values(SECTION_BG).map(b => `<a href="https://unsplash.com/photos/${b.slug}" target="_blank" rel="noopener">${esc(b.who)}</a>`).join(' · ')}. Photos load from the internet; offline you’ll see tinted gradients instead.</div>`;
   const dim = `<div class="field"><label>Background visibility</label><input type="range" min="0.1" max="0.75" step="0.05" value="${(1 - S.settings.bgDim).toFixed(2)}" data-input="bg-dim"><span class="tiny muted">Slide right to show more of the photo behind the glass. This setting is yours alone.</span></div>`;
-  if (!bgOwned()) return dim + bgImagesHTML() + credit;      // the local single-user build has no admin console
+  if (!bgOwned()) return dim + bgImagesHTML() + credit;
   const note = bgCanEdit()
     ? `<div class="note" style="margin-top:12px">${icon('info')}<span>The background images are the same for everyone on this server. Change them in <a href="#/admin" data-act="adm-tab" data-v="app">Admin → App settings</a>.</span></div>`
     : `<div class="note" style="margin-top:12px">${icon('info')}<span>The background images are set by whoever runs this server, so they look the same for everyone. The slider above is yours.</span></div>`;
   return dim + note + credit;
 }
-/* The owner's grid. Rendered on the admin console when signed in, and inline in Appearance for
-   the local file build, where there is no server and no one else to affect. */
 function bgImagesHTML() {
   const owned = bgOwned();
   return `<div class="bg-grid" style="margin-top:12px">${Object.entries(SECTION_BG).map(([k, b]) => { const mine = !!bgCustomURL(k);
@@ -166,8 +157,8 @@ function setFoodPref(k, on, wasPartial) {
     const isCat = k.startsWith('cat:'); const cat = isCat && FOOD_CATS.find(c => 'cat:' + c.id === k);
     label = isCat ? cat.name : SUB_LABEL[k];
     const clearKids = () => (isCat ? cat.subs.map(([s]) => s) : [k]).forEach(s => { if (isCat) delete P[s]; foodsOf(s).forEach(g => delete P['f:' + g.id]); });
-    if (wasPartial) { clearKids(); on = true; }           // partly checked → everything in it on
-    else if (on) delete P[k];                            // back on: keeps any finer choices inside it
+    if (wasPartial) { clearKids(); on = true; }
+    else if (on) delete P[k];
     else { P[k] = false; off = true; }
   }
   invalidate();
@@ -221,7 +212,7 @@ function linkChipsHTML(r) { const ls = (r.links || []).filter(l => l && l.url); 
 function viewFoods() {
   const tab = UI.foodsTab || 'recipes';
   const head = `<div class="page-head"><div class="t"><h1>Foods & recipes</h1><p>Edit the macros of any food, add your own foods and recipes, and choose which food groups the plan can use.</p></div>
-    <div class="row wrap">${scanBtnHTML('today')}${AUTH.mode === 'server' ? `<button class="btn" data-act="imp-open">${icon('download')}Import recipe</button>` : ''}<button class="btn primary" data-act="recipe-new">${icon('plus')}New recipe</button><button class="btn" data-act="food-new">${icon('plus')}Add food</button></div></div>
+    <div class="row wrap">${scanBtnHTML('today')}${AUTH.mode === 'server' ? `<button class="btn" data-act="imp-open">${icon('download')}Import recipe</button>` : ''}<button class="btn primary" data-tour="foods" data-act="recipe-new">${icon('plus')}New recipe</button><button class="btn" data-act="food-new">${icon('plus')}Add food</button></div></div>
     <div class="seg" style="margin-bottom:16px">${[['recipes', 'Recipes'], ['foods', 'Foods & macros'], ['prefs', 'Food preferences']].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-act="foods-tab" data-v="${k}">${l}</button>`).join('')}</div>`;
   if (tab === 'prefs') return head + `<div class="card"><div class="card-h"><h2>Food preferences</h2></div>${foodPrefsHTML()}</div>`;
   if (tab === 'foods') return head + foodsTableHTML();
@@ -268,7 +259,6 @@ function foodsTableHTML() {
 
 /* ---------- food editor ---------- */
 function subOptions(sel) { return FOOD_CATS.map(c => `<optgroup label="${esc(c.name)}">${c.subs.map(([id, l]) => `<option value="${id}" ${sel === id ? 'selected' : ''}>${esc(l)}</option>`).join('')}</optgroup>`).join(''); }
-// Built-in values for a food (used by "Reset to defaults" and the "Default:" hints)
 function foodDefaults(id) {
   const b = BASE_ING[id]; if (!b) return null; const sub = BASE_SUB[id] || 'sauces';
   return { n: b.n, sub, a: b.a, basis: b.u ? 'u' : b.ml ? 'ml' : 'g', u: b.u || '', g: b.g || '', k: b.k, p: b.p, c: b.c, f: b.f, r: b.r, pk: defaultPack(id, sub, b) };
@@ -302,7 +292,6 @@ function foodEditor(id) {
         <button type="button" class="btn" data-act="close-modal">Cancel</button><button class="btn primary" type="submit">Save food</button></div></form>`);
   feSuggest(); feDefHints();
 }
-// Show "Default: …" under every field that differs from the built-in value, and enable Reset only when something differs
 function feDefHints() {
   const f = $('#modal form[data-form="food"]'); if (!f) return; const id = f.dataset.id; const d = id && ING[id] && ING[id].base ? foodDefaults(id) : null; if (!d) return;
   const val = n => f.elements[n] ? f.elements[n].value : '';
@@ -354,8 +343,8 @@ function recipeEditor(rid, dup) {
 /* The editor is a page, not a dialog: a stray tap on a backdrop or an Escape used to throw the
    whole thing away. It also keeps a draft, so a closed tab or a misclick is recoverable. */
 const reDraftKey = () => 'forge90.redraft' + (typeof AUTH !== 'undefined' && AUTH && AUTH.user ? ':' + AUTH.user.id : '');
-function reSaveDraft() { if (!RE) return; try { localStorage.setItem(reDraftKey(), JSON.stringify(RE)); } catch (e) { /* full or blocked */ } }
-function reClearDraft() { try { localStorage.removeItem(reDraftKey()); } catch (e) { /* ignore */ } }
+function reSaveDraft() { if (!RE) return; try { localStorage.setItem(reDraftKey(), JSON.stringify(RE)); } catch (e) { } }
+function reClearDraft() { try { localStorage.removeItem(reDraftKey()); } catch (e) { } }
 function reClearDraftKeep() { reSaveDraft(); }          // cancelling keeps the draft on purpose
 function reDraft() { try { const d = JSON.parse(localStorage.getItem(reDraftKey()) || 'null'); return d && typeof d === 'object' && ('ing' in d) ? d : null; } catch (e) { return null; } }
 function reOpen() {
@@ -387,24 +376,19 @@ function reGoToSaved(rid) {
 function reResume() { const d = reDraft(); if (!d) { toast('That draft is gone'); render(); return; } RE = d; reOpen(); }
 function reDiscard() { RE = null; reClearDraft(); const back = UI.reReturn || '#/foods'; UI.reReturn = null; saveUI(); if (location.hash === back) render(); else location.hash = back; }
 window.addEventListener('beforeunload', ev => { if (RE && !RE._saving) { ev.preventDefault(); ev.returnValue = ''; } });
-/* Was a <select> listing all ~650 foods in subgroup optgroups, which is unusable on a phone
-   and slow to scan anywhere. Now a button that opens the same search used elsewhere. */
 function foodSelect(sel, i, sugg) {
   const g = ING[sel]; const sg = (sugg || []).filter(id => ING[id] && id !== sel).slice(0, 3);
   return `<div class="re-food"><button type="button" class="inp re-food-b ${g ? '' : 'empty'}" data-act="re-ing-pick" data-i="${i}">
       <span class="re-food-n">${g ? esc(g.n) + (foodAllowed(sel) ? '' : ' (off)') : 'Choose a food…'}</span>${icon('search')}</button>
     ${sg.length ? `<div class="re-sugg">${sg.map(id => `<button type="button" class="btn sm ghost" data-act="re-ing-set" data-i="${i}" data-id="${id}" title="Suggested match">${esc(ING[id].n)}</button>`).join('')}</div>` : ''}</div>`;
 }
-/* food-only emoji dropdown */
 function emojiPickerHTML(cur) {
   return `<button type="button" class="inp emo-btn" data-act="emo-toggle" aria-haspopup="true" aria-expanded="false" title="Choose an emoji"><span class="emo-cur">${esc(cur || '🍽️')}</span>${icon('right')}</button>
     <div class="emo-pop" role="dialog" aria-label="Food emoji"><input class="inp" type="search" placeholder="Search food emoji…" data-input="emoq" aria-label="Search emoji">
       <div class="emo-groups">${FOOD_EMOJI.map(([g, list]) => `<div class="emo-g"><div class="emo-h">${esc(g)}</div><div class="emo-grid">${list.map(([em, name]) => `<button type="button" class="emo ${em === cur ? 'on' : ''}" data-act="emo-pick" data-e="${em}" data-n="${esc(name)}" title="${esc(name)}">${em}</button>`).join('')}</div></div>`).join('')}
       <div class="emo-none tiny muted">No food emoji match.</div></div></div>`;
 }
-/* The recipe editor is a page now, so none of this lives under #modal any more. */
 function emoClose() { const p = $('.emo-pop.open'); if (p) { p.classList.remove('open'); const b = p.parentElement.querySelector('.emo-btn'); if (b) b.setAttribute('aria-expanded', 'false'); } }
-/* tags already used by any recipe, most common first */
 function usedTags() { const c = {}; RECIPES.forEach(r => (r.tags || []).forEach(t => { t = String(t).trim(); if (!t) return; const k = Object.keys(c).find(x => x.toLowerCase() === t.toLowerCase()) || t; c[k] = (c[k] || 0) + 1; })); return Object.entries(c).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])); }
 const reTagList = () => (RE ? RE.tags : '').split(',').map(t => t.trim()).filter(Boolean);
 function tagChipsHTML() {

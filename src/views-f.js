@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
-/* ================================================================
-   First-run questionnaire (#onb) — shown once, the first time someone opens their plan
-   ================================================================ */
 const ACTIVITY_LEVELS = [[1.3, 'Sedentary', 'Desk job, under 5k steps a day'], [1.4, 'Lightly active', 'Desk job plus 5–8k steps'], [1.5, 'Moderately active', '8–12k steps, or a job with some walking'], [1.6, 'Very active', 'On your feet most of the day, 12k+ steps']];
 const OB_STEPS = ['About you', 'Your body', 'Your goal', 'Meal planning'];
 let OB = null;
@@ -28,7 +25,7 @@ function showOnboarding(done) {
     <main id="onb" class="auth-wrap"></main></div><div id="tip"></div><div id="toast"></div>`;
   applyTheme(); document.title = appTitle() + ' · Welcome'; renderOnboarding();
 }
-function obApplyDraft() {           // live preview uses the real engine, so push the answers into settings (saved only on finish)
+function obApplyDraft() {
   const st = S.settings; const w = obNum(OB.w), bf = obBF(), g = obNum(OB.goal);
   if (w) st.startWeight = w; if (bf) st.startBF = bf; if (g) st.goalWeight = g;
   st.rate = +OB.rate; st.activity = +OB.activity; st.shareIngredients = !!OB.share;
@@ -111,11 +108,12 @@ async function obSubmit(form) {
   obApplyDraft(); const est = obEstimated();
   S.profile = { first: OB.first, last: OB.last, nick: OB.nick, heightIn: (obNum(OB.hFt) || 0) * 12 + (obNum(OB.hIn) || 0) || null, sex: OB.sex || null, age: obNum(OB.age), at: todayISO() };
   S.settings.bfEstimated = est; S.onboarded = true;
-  S.plan = {}; S.planEnd = null; ensureHorizon();                         // meals depend on the money-saver choice
+  S.plan = {}; S.planEnd = null; ensureHorizon();
   if (AUTH.mode === 'server' && AUTH.user) { try { const r = await api('PATCH', '/api/account', { firstName: OB.first, lastName: OB.last, name: OB.nick }); AUTH.user = r.user; } catch (e) { btn.disabled = false; btn.classList.remove('loading'); OB.error = e.message; renderOnboarding(); return; } }
   saveState(); const done = OB.done; OB = null;
   toast(`You’re all set, ${S.profile.nick}! Your plan is ready. 💪`);
   if (done) done();
+  if (!S.tourDone && typeof tourStart === 'function') setTimeout(() => tourStart(), 900);
 }
 document.addEventListener('submit', e => { const f = e.target; if (f.dataset && f.dataset.form === 'onb') { e.preventDefault(); obSubmit(f); } });
 document.addEventListener('input', e => {
@@ -136,7 +134,6 @@ document.addEventListener('change', e => {
 });
 Object.assign(ACT, { 'onb-back': () => { const f = $('form[data-form="onb"]'); if (f) obRead(f); OB.error = null; OB.step = Math.max(0, OB.step - 1); renderOnboarding(); },
   'ob-mode': el => { const f = $('form[data-form="onb"]'); if (f) obRead(f); OB.mode = el.dataset.v; OB.error = null; OB.noFocus = true; renderOnboarding(); } });
-/* Reminder to replace an estimated body-fat % with a measured one */
 function bfEstimateNote() {
   if (!S.settings.bfEstimated || S.weights.some(x => x.bf != null && x.bf !== '')) return '';
   return `<div class="note warn bf-est-note">${icon('info')}<span>Your body fat (${fmt(S.settings.startBF, 1)}%) is an <b>estimate</b> from height, age and sex, so your calorie targets are approximate. When you can, measure it (smart scale, calipers or DEXA) and add it to a weigh-in — targets update automatically.</span><a class="btn sm" href="#/progress">Add a weigh-in</a></div>`;
@@ -157,12 +154,11 @@ function isSharedMeal(date, slot) {
   const p = partnerMeal(date, slot); if (p) return p.rid === mine;
   const k = date + '|' + slot; return SY.data.agreed[k] === mine && !SY.data.changesOut.concat(SY.data.changesIn).some(c => c.date === date && c.slot === slot);
 }
-// computeAll hook: the partner's scaled portions ride along on shared meals (combined batches and shopping list)
 function attachPartner(days) {
   if (!syncActive() || !SY.snap) return;
   Object.keys(days).forEach(d => days[d].meals.forEach(m => { if (isSharedMeal(d, m.slot)) { const p = partnerMeal(d, m.slot); if (p && p.items) m.partner = { items: p.items.filter(([id]) => ING[id]) }; } }));
 }
-function shareBadge(date, slot, compact) {             // compact (calendar chips): only flag meals that need attention
+function shareBadge(date, slot, compact) {
   if (!syncKeyOn(date, slot) || !myMeal(date, slot)) return '';
   const k = date + '|' + slot; const inc = SY.data.changesIn.find(c => c.date === date && c.slot === slot), out = SY.data.changesOut.find(c => c.date === date && c.slot === slot);
   if (inc) return `<span class="bd shr pend" data-tip="${esc(syncName())} changed this to ${esc(inc.name || inc.rid)} — open Sync to accept or decline">${icon('users')}?</span>`;
@@ -181,6 +177,7 @@ function refreshSyncUI() {
   if ($('#modal .sync-modal')) syncPanel();
   const card = $('#acc-sync'); if (card) card.innerHTML = syncCardHTML();
 }
+
 /* ---------- talking to the server ---------- */
 async function syncFetch(force) {
   if (AUTH.mode !== 'server' || !AUTH.user || !S) return;
@@ -212,8 +209,7 @@ function syncRerender() {
   }
   refreshSyncUI();
 }
-async function syncLoadPartner(at) { try { const r = await api('GET', '/api/sync/partner'); SY.snap = r.snap; SY.snapAt = at; invalidate(); syncRerender(); syncMaybeExtend(); } catch (e) { /* retry on next poll */ } }
-// Pull the agreed shared meals into my plan (start of sync, new weeks, newly shared meals). Meals with a pending or declined change stay mine.
+async function syncLoadPartner(at) { try { const r = await api('GET', '/api/sync/partner'); SY.snap = r.snap; SY.snapAt = at; invalidate(); syncRerender(); syncMaybeExtend(); } catch (e) { } }
 function syncApplyAgreed() {
   const sy = SY.data; const t = todayISO(); let n = 0;
   Object.entries(sy.agreed).forEach(([k, rid]) => { const [d, sl] = k.split('|'); if (d < t || !S.plan[d] || !sy.slots[sl]) return;
@@ -224,6 +220,7 @@ function syncApplyAgreed() {
 function syncPoll() { clearTimeout(SY.pollT); SY.pollT = setTimeout(async () => { if (document.visibilityState === 'visible') await syncFetch(); syncPoll(); }, syncActive() ? 20000 : 45000); }
 function syncStart() { if (AUTH.mode !== 'server' || !AUTH.user) return; SY.data = null; SY.rev = 0; SY.snap = null; SY.snapAt = null; syncFetch(true).then(() => { if (syncActive() || (SY.data && SY.data.status === 'pending')) syncPublish(); }); syncPoll(); }
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && AUTH.user && S) syncFetch(); });
+
 /* ---------- after every save: send my edits of shared meals, publish my portions ---------- */
 function syncOnSave() {
   if (!SY.data) return;
@@ -236,7 +233,7 @@ function syncSnapshot() {
     const m = {}; day.meals.forEach(ml => { if (!sy.slots[ml.slot]) return; m[ml.slot] = { rid: ml.r.id, items: ml.items.map(it => [it.id, Math.round(it.amt * 100) / 100]) }; }); days[d] = { t: day.isTrain ? 1 : 0, m }; });
   return { name: AUTH.user.name, planEnd: planEnd(), share: S.settings.shareIngredients !== false, days, train, allowed: RECIPES.filter(r => recipeAllowed(r)).map(r => r.id), favs: Object.keys(S.favRecipes || {}).filter(k => S.favRecipes[k]) };
 }
-async function syncPublish() { if (!SY.data || !S || !AUTH.user) return; try { await api('PUT', '/api/sync/snapshot', { snap: syncSnapshot() }); } catch (e) { /* next save retries */ } }
+async function syncPublish() { if (!SY.data || !S || !AUTH.user) return; try { await api('PUT', '/api/sync/snapshot', { snap: syncSnapshot() }); } catch (e) { } }
 function syncDiff() {
   const sy = SY.data; const out = []; const t = todayISO();
   Object.keys(sy.agreed).forEach(k => { const [d, sl] = k.split('|'); if (d < t || d < sy.since || !sy.slots[sl] || !S.plan[d]) return;
@@ -249,12 +246,13 @@ function syncDiff() {
   return out;
 }
 async function syncSendChanges() {
-  if (!syncActive() || SY.busy) return; SY.busy = true; await syncFetch(); if (!syncActive()) { SY.busy = false; return; }   // diff against the latest shared plan
+  if (!syncActive() || SY.busy) return; SY.busy = true; await syncFetch(); if (!syncActive()) { SY.busy = false; return; }
   const list = syncDiff(); if (!list.length) { SY.busy = false; return; }
   try { const r = await api('POST', '/api/sync/changes', { changes: list }); const had = SY.data.changesOut.length; SY.data = r.sync; SY.rev = r.sync.rev;
     const nNew = r.sync.changesOut.length - had; if (nNew > 0) toast(`Sent ${nNew} meal change${nNew === 1 ? '' : 's'} to ${syncName()} to accept.`); syncRerender(); }
-  catch (e) { /* keep for next save */ } SY.busy = false;
+  catch (e) { } SY.busy = false;
 }
+
 /* ---------- planning shared meals together ---------- */
 function jointMeals(from, through, slots) {
   const snap = SY.snap || {}; const ptrain = new Set(snap.train || []); const meals = {};
@@ -270,12 +268,13 @@ async function syncPostBaseline(meals, through) {
   const r = await api('POST', '/api/sync/baseline', { meals, through, baseRev: SY.data.baseRev });
   SY.data = r.sync; SY.rev = r.sync.rev; const n = syncApplyAgreed(); S.syncSeen = { id: r.sync.id, baseRev: r.sync.baseRev }; saveState(); return n;
 }
-async function syncMaybeExtend() {                  // plan new weeks together once both plans reach further than the shared plan
+async function syncMaybeExtend() {
   if (!syncActive() || !SY.snap || SY.extending) return; const sy = SY.data;
   const end = [planEnd(), SY.snap.planEnd].filter(Boolean).sort()[0]; const from = sy.through ? addDays(sy.through, 1) : maxISO(sy.since, addDays(todayISO(), 1));
   if (!end || from > end) return;
   SY.extending = true; try { await syncPostBaseline(jointMeals(from, end, sy.slots), end); render(); } catch (e) { if (e.status === 409) syncFetch(true); } SY.extending = false;
 }
+
 /* ---------- the Sync panel ---------- */
 const chgLabel = c => `${fmtDate(c.date, { weekday: 'short', month: 'short', day: 'numeric' })} · ${SLOT_LABEL[c.slot]}`;
 const chgMeal = (rid, name, emoji) => { const r = rid && RECIPE[rid]; return rid ? `${esc(r ? r.emoji : emoji || '🍽️')} ${esc(r ? r.name : name || rid)}` : '<span class="muted">nothing</span>'; };
@@ -330,6 +329,7 @@ async function syncResolve(ids, action) {
     refreshSyncUI(); }
   catch (e) { toast(e.message); }
 }
+
 /* ---------- Account → Meal-plan sync card ---------- */
 function syncCardHTML() {
   const sy = SY.data; const slotBoxes = (sel, dis) => `<div class="sync-slots">${MEAL_SLOTS.map(k => `<label class="chk-pill ${sel[k] ? 'on' : ''}"><input type="checkbox" name="slot" value="${k}" ${sel[k] ? 'checked' : ''} ${dis ? 'disabled' : ''}><span>${SLOT_LABEL[k]}</span></label>`).join('')}</div>`;
@@ -385,7 +385,6 @@ document.addEventListener('submit', async e => {
   } catch (x) { toast(x.message); b.disabled = false; }
 });
 document.addEventListener('change', e => { const t = e.target; if (t.name === 'slot' && t.closest('.sync-slots')) t.closest('.chk-pill').classList.toggle('on', t.checked); });
-/* A pending request for me shows on the dashboard */
 function syncInviteNote() {
   if (!SY.data || SY.data.status !== 'pending' || SY.data.role !== 'recipient') return '';
   return `<div class="note warn sync-invite">${icon('users')}<span style="flex:1"><b>${esc(syncName())}</b> wants to sync meal plans with you — shared meals and one shopping list.</span><a class="btn sm primary" href="#/account">Review</a></div>`;

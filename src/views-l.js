@@ -1,10 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
-/* ================================================================
-   FORGE 90 — the phone layout (below 860 px): bottom tabs, the Today
-   page, the + sheet, Plan / Kitchen tabs, the You page, and the quick
-   sheets for weigh-ins and meal swaps. Wide screens keep the sidebar.
-   ================================================================ */
 Object.assign(IC, { today: '<path d="M3 10h18M8 2v4M16 2v4"/><rect x="3" y="4" width="18" height="18" rx="2"/><path d="m9 16 2 2 4-4"/>' });
 if (PHONE_MQ && PHONE_MQ.addEventListener) PHONE_MQ.addEventListener('change', () => { if (!$('#view')) return; closeModal(); render(); });
 
@@ -21,14 +16,13 @@ function tabbarRender(page) {
   const href = k => k === 'today' ? '#/' : k === 'plan' ? '#/' + (UI.lastPlan || 'calendar') : k === 'kitchen' ? '#/' + (UI.lastKit || 'grocery') : '#/you';
   el.innerHTML = [['today', 'Today', 'today'], ['plan', 'Plan', 'cal'], ['add'], ['kitchen', 'Kitchen', 'cart'], ['you', 'You', 'user']].map(([k, l, ic]) => k === 'add'
     ? `<button type="button" class="tb-add" data-act="plus-sheet" aria-label="Quick add"><span>${icon('plus')}</span></button>`
-    : `<a class="tb ${cur === k ? 'on' : ''}" href="${href(k)}" ${cur === k ? 'aria-current="page"' : ''}>${icon(ic)}<span>${l}</span>${k === 'kitchen' && soon ? `<i class="tb-badge" title="${soon} pantry item${soon === 1 ? '' : 's'} expiring soon">${soon}</i>` : ''}</a>`).join('');
+    : `<a class="tb ${cur === k ? 'on' : ''}" data-tour="tab-${k}" href="${href(k)}" ${cur === k ? 'aria-current="page"' : ''}>${icon(ic)}<span>${l}</span>${k === 'kitchen' && soon ? `<i class="tb-badge" title="${soon} pantry item${soon === 1 ? '' : 's'} expiring soon">${soon}</i>` : ''}</a>`).join('');
 }
 
-/* ---------------- popups slide up from the bottom on phones: drag the handle down (or tap it) to close ---------------- */
 let SHD = null;
 document.addEventListener('pointerdown', e => {
   const h = e.target.closest && e.target.closest('.sh-hdl'); if (!h) return; const m = h.closest('.modal'); if (!m) return;
-  e.preventDefault(); SHD = { y: e.clientY, dy: 0, m }; m.style.transition = 'none'; try { h.setPointerCapture(e.pointerId); } catch (x) { /* ignore */ }
+  e.preventDefault(); SHD = { y: e.clientY, dy: 0, m }; m.style.transition = 'none'; try { h.setPointerCapture(e.pointerId); } catch (x) { }
 });
 document.addEventListener('pointermove', e => { if (!SHD) return; SHD.dy = Math.max(0, e.clientY - SHD.y); SHD.m.style.transform = `translateY(${SHD.dy}px)`; });
 document.addEventListener('pointerup', () => { if (!SHD) return; const { m, dy } = SHD; SHD = null; m.style.transition = ''; if (dy > 90 || dy < 6) closeModal(); else m.style.transform = ''; });
@@ -130,8 +124,6 @@ function viewToday(date) {
   return head + bar + `<div class="ph-stack">${syncInviteNote()}${bfEstimateNote()}${prompt}${vis.map(id => `<section class="ph-p" data-panel="${id}">${panels[id]}</section>`).join('')}
     <div class="ph-cust"><button type="button" class="btn sm ghost" data-act="dash-edit" data-l="today">${icon('grid')}Customize Today</button>${nHid ? `<span class="tiny muted">${nHid} panel${nHid === 1 ? '' : 's'} hidden</span>` : ''}</div></div>`;
 }
-/* The phone gets the same cardio session as the desktop, sized for a thumb: what it is, how
-   long, the estimated burn, and one button into the stopwatch. */
 function phCardioHTML(date, e) {
   const c = dayCardio(e); if (!c) return '';
   const k = CARDIO[c.k]; const kc = cardioKcal(c.k, c.min, statsOn(date).w);
@@ -156,7 +148,6 @@ function todayWorkoutHTML(date) {
     ${dayCardio(e) ? `<button type="button" class="btn block" data-act="cw-open" data-d="${date}">${icon('heart')}Also today: ${esc(CARDIO[e.c.k].name)} · ${e.c.min} min</button>` : ''}
     <div class="row wrap ph-wo-links"><button type="button" class="btn sm ghost" data-act="qe" data-d="${date}" data-f="wo">${icon('edit')}Change session</button><button type="button" class="btn sm ghost" data-act="print-wo" data-d="${date}">${icon('print')}Print</button>${date < t0 ? `<button type="button" class="btn sm ghost" data-act="wo-open" data-d="${date}">${icon('edit')}Log or fix sets</button>` : ''}${date <= t0 && !S.done[date] && c.done ? `<button type="button" class="btn sm ghost" data-act="toggle-done" data-date="${date}">${icon('check')}Mark complete</button>` : ''}</div></div>`;
 }
-// the summary on Today and You — one tap to the Progress page
 function progressCardHTML() {
   const st = S.settings; const ws = sortedWeights(); const cur = latestStats(); const trend = weightTrend(); const hasW = ws.length > 0;
   const dW = cur.w - st.startWeight; const sign = (v, d = 1) => (v > 0 ? '+' : v < 0 ? '−' : '±') + fmt(Math.abs(v), d);

@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
-/* ================================================================
-   FORGE 90 — workout mode (one exercise at a time), the rest timer
-   and its end sounds (made with Web Audio, so nothing to download)
-   ================================================================ */
 Object.assign(IC, {
   play: '<path d="M7 4v16l13-8z"/>',
   pause: '<rect x="6" y="4.5" width="4" height="15" rx="1"/><rect x="14" y="4.5" width="4" height="15" rx="1"/>',
@@ -31,10 +27,9 @@ const restVol = () => { const v = S && S.settings && S.settings.restVol; return 
 function noiseBuf(c) {
   let b = NOISE_BUF.get(c); if (b) return b;
   b = c.createBuffer(1, c.sampleRate, c.sampleRate); const d = b.getChannelData(0); let x = 1;
-  for (let i = 0; i < d.length; i++) { x = (x * 16807) % 2147483647; d[i] = x / 1073741823.5 - 1; }   // seeded, so every play sounds the same
+  for (let i = 0; i < d.length; i++) { x = (x * 16807) % 2147483647; d[i] = x / 1073741823.5 - 1; }
   NOISE_BUF.set(c, b); return b;
 }
-// one enveloped oscillator: attack a, optional hold, exponential decay d; f2 glides the pitch
 function tone(c, out, { type = 'sine', f, f2, glide, t, a = 0.005, hold = 0, d = 0.3, v = 0.5, det = 0 }) {
   const o = c.createOscillator(), g = c.createGain(); o.type = type; o.frequency.setValueAtTime(f, t);
   if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + (glide || a + hold + d)); if (det) o.detune.value = det;
@@ -43,7 +38,6 @@ function tone(c, out, { type = 'sine', f, f2, glide, t, a = 0.005, hold = 0, d =
   o.connect(g); g.connect(out); o.start(t); o.stop(t + a + hold + d + 0.03); return o;
 }
 function lowpass(c, out, f, q = 0.7) { const fl = c.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = f; fl.Q.value = q; fl.connect(out); return fl; }
-// id, name, description, length (s), lead = seconds it starts before the timer reaches 0
 const REST_SOUNDS = [
   { id: 'beeps', n: 'Classic beeps', d: 'Three short stopwatch beeps', dur: .75,
     play: (c, o, t) => { const l = lowpass(c, o, 3500); [0, .22, .44].forEach(s => tone(c, l, { type: 'square', f: 1046, t: t + s, a: .004, hold: .1, d: .03, v: .5 })); } },
@@ -60,25 +54,21 @@ const REST_SOUNDS = [
 ];
 const restSoundOf = id => REST_SOUNDS.find(x => x.id === id) || REST_SOUNDS[0];
 const restSoundId = () => restSoundOf(S.settings.restSound).id;
-function soundStop() { if (sndBus) { try { sndBus.disconnect(); } catch (e) { /* already gone */ } sndBus = null; } }
-// play a sound `when` seconds from now; returns how long it lasts
+function soundStop() { if (sndBus) { try { sndBus.disconnect(); } catch (e) { } sndBus = null; } }
 function soundPlay(id, when = 0) {
   const x = restSoundOf(id), c = audioCtx(); if (!x.play || !c) return 0;
   soundStop(); const bus = c.createGain(); bus.connect(AC_OUT); sndBus = bus; AC_OUT.gain.value = restVol();
   x.play(c, bus, c.currentTime + .03 + Math.max(0, when));
-  setTimeout(() => { if (sndBus === bus) soundStop(); else try { bus.disconnect(); } catch (e) { /* ignore */ } }, (Math.max(0, when) + x.dur + .7) * 1000);
+  setTimeout(() => { if (sndBus === bus) soundStop(); else try { bus.disconnect(); } catch (e) { } }, (Math.max(0, when) + x.dur + .7) * 1000);
   return x.dur;
 }
-const buzz = pat => { if (S.settings.restVib !== false && navigator.vibrate) try { navigator.vibrate(pat); } catch (e) { /* not supported */ } };
+const buzz = pat => { if (S.settings.restVib !== false && navigator.vibrate) try { navigator.vibrate(pat); } catch (e) { } };
 // browsers only allow sound after a tap: wake the audio engine on the first one
 document.addEventListener('pointerdown', () => { if (!AC || AC.state === 'suspended') audioCtx(); }, true);
 
 /* ---------------- rest timer ---------------- */
 const RT = { d: null, dur: 90, left: 90000, run: false, paused: false, endAt: 0, cued: false, flash: false };
 let rtT = null;
-/* When the rest ends the alarm repeats until it's stopped — one chime is easy to miss
-   mid-set. How long it keeps going is a setting: 0 means sound once and stop, anything
-   else is how long it may repeat before giving up on its own (a phone left in a bag). */
 let rtAlarmT = null, rtAlarmAt = 0;
 const RT_ALARM_OPTS = [[0, 'Once'], [15, '15s'], [30, '30s'], [60, '1 min'], [120, '2 min']];
 const RT_ALARM_LABEL = { 15: '15 seconds', 30: '30 seconds', 60: '1 minute', 120: '2 minutes' };
@@ -86,7 +76,7 @@ function restAlarmSec() { const v = S.settings.restAlarmSec; return RT_ALARM_OPT
 function rtAlarmStop() {
   if (!rtAlarmT) return;
   clearInterval(rtAlarmT); rtAlarmT = null; soundStop();
-  if (navigator.vibrate) try { navigator.vibrate(0); } catch (e) { /* not supported */ }
+  if (navigator.vibrate) try { navigator.vibrate(0); } catch (e) { }
 }
 function rtAlarmGo() {
   rtAlarmStop(); rtAlarmAt = performance.now();
@@ -96,7 +86,7 @@ function rtAlarmGo() {
   const beat = () => {
     if (!RT.flash) { rtAlarmStop(); return; }
     if (cap && performance.now() - rtAlarmAt > cap) { rtIdle(); rtPaint(true); return; }
-    if (x.play && !(first && RT.cued)) soundPlay(x.id, 0);      // a lead-in sound is already ringing on the first beat
+    if (x.play && !(first && RT.cued)) soundPlay(x.id, 0);
     buzz([220, 120, 220]); first = false;
   };
   beat();
@@ -104,7 +94,7 @@ function rtAlarmGo() {
   if (cap) rtAlarmT = setInterval(beat, Math.max(1500, ((x.dur || 0) + 0.9) * 1000));
 }
 function mmss(ms) { const s = Math.max(0, Math.ceil(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
-const RT_MIN = 15;                                   // shortest rest the timer will hold, in seconds
+const RT_MIN = 15;
 const restFor = row => Math.max(RT_MIN, (S.settings.restPlan !== false && row && +row.rest) || (+S.settings.restDef || 90));
 const rtLeft = () => RT.run ? Math.max(0, RT.endAt - performance.now()) : RT.left;
 const rtBusy = () => RT.run || RT.paused;
@@ -113,8 +103,7 @@ function rtIdle(row, keepSound) {
   clearInterval(rtT); Object.assign(RT, { dur: restFor(row || woRow()), run: false, paused: false, cued: false, flash: false }); RT.left = RT.dur * 1000;
   if (!keepSound) soundStop();
 }
-// an idle timer follows the exercise on screen; a running or paused one keeps going
-function rtFollow() { if (!RT.run && !RT.paused && !RT.flash) rtIdle(null, true); }   // keepSound: a settings preview may be playing
+function rtFollow() { if (!RT.run && !RT.paused && !RT.flash) rtIdle(null, true); }
 function rtStart() {
   if (RT.left <= 0 || RT.flash) rtIdle();
   Object.assign(RT, { run: true, paused: false, flash: false, d: WO ? WO.d : RT.d }); RT.endAt = performance.now() + RT.left; audioCtx();
@@ -122,13 +111,13 @@ function rtStart() {
 }
 function rtPause() { RT.left = rtLeft(); RT.run = false; RT.paused = true; clearInterval(rtT); if (RT.cued) { soundStop(); RT.cued = false; } rtPaint(true); }
 function rtAdd(s) {
-  if (RT.flash) {                                    // it's already going off
-    if (s <= 0) { rtIdle(); rtPaint(true); return; } // taking time off a finished rest just clears it
-    rtIdle(null, true); RT.dur = Math.max(RT_MIN, s); RT.left = RT.dur * 1000; rtStart(); return;   // "give me a bit more"
+  if (RT.flash) {
+    if (s <= 0) { rtIdle(); rtPaint(true); return; }
+    rtIdle(null, true); RT.dur = Math.max(RT_MIN, s); RT.left = RT.dur * 1000; rtStart(); return;
   }
   const cur = rtLeft(), next = Math.max(RT_MIN * 1000, cur + s * 1000), delta = next - cur;
   if (!delta) { if (s < 0) toast(`${RT_MIN} seconds is the shortest rest`); return; }
-  RT.dur = Math.max(RT_MIN, RT.dur + delta / 1000);  // the progress bar tracks the new length
+  RT.dur = Math.max(RT_MIN, RT.dur + delta / 1000);
   if (RT.run) RT.endAt += delta; else RT.left = next;
   if (RT.cued && rtLeft() > (restSoundOf(restSoundId()).lead || 0) * 1000 + 150) { soundStop(); RT.cued = false; }
   rtPaint(true);
@@ -139,8 +128,8 @@ function rtTick() {
   if (!RT.cued && left <= lead * 1000 + 150) { RT.cued = true; if (x.play) soundPlay(x.id, Math.max(0, left / 1000 - lead)); }
   if (left > 0) { rtPaint(false); return; }
   clearInterval(rtT); Object.assign(RT, { run: false, paused: false, left: 0, flash: true });
-  rtAlarmGo();                                                                        // keeps sounding until Stop
-  rtPaint(true); if (!(WO && WO.open)) toast('Rest over — back to your workout');     // in workout mode the timer bar itself turns green
+  rtAlarmGo();
+  rtPaint(true); if (!(WO && WO.open)) toast('Rest over — back to your workout');
 }
 function rtHTML() {
   const st = RT.flash ? 'done' : RT.run ? 'run' : RT.paused ? 'paused' : 'idle', left = rtLeft();
@@ -157,19 +146,18 @@ function rtPaint(full) {
   if (el) { if (full) el.outerHTML = rtHTML(); else { const left = rtLeft(), v = $('#rt-v'), b = $('#rt-bar'); if (v) v.textContent = mmss(left); if (b) b.style.width = (1 - left / (RT.dur * 1000)) * 100 + '%'; } }
   rtPill();
 }
-// small pill above the tab bar while a rest runs and the workout screen is closed
 function rtPill() {
   let p = $('#rt-pill'); const show = (rtBusy() || RT.flash) && !(WO && WO.open) && !!$('#view');
   if (!p) { if (!show) return; p = document.createElement('button'); p.type = 'button'; p.id = 'rt-pill'; p.className = 'rt-pill'; document.body.appendChild(p); }
   p.hidden = !show; if (!show) return;
-  p.dataset.act = RT.flash ? 'rt-go' : 'wo-resume';          // while it's going off, the pill is the stop button
+  p.dataset.act = RT.flash ? 'rt-go' : 'wo-resume';
   p.classList.toggle('done', !!RT.flash);
   p.innerHTML = RT.flash ? `${icon('stop')}<b>Rest over</b><span>tap to stop</span>`
     : `${icon('clock')}<b class="num">${mmss(rtLeft())}</b><span>${RT.paused ? 'paused' : 'rest'} · back to workout</span>`;
 }
 
 /* ---------------- workout mode ---------------- */
-let WO = null;            // { d, i, w: {exId: lb}, r: {exId: reps}, edit: set index | null, open, done }
+let WO = null;
 let WO_LOCK = null;
 const woEntry = () => WO && S.plan[WO.d];
 const woRows = () => { const e = woEntry(); return e && e.w ? sessionRows(e.w) : []; };
@@ -183,14 +171,13 @@ function woOpen(date, i) {
   const rows = woRows(); if (i != null) WO.i = i; else if (!WO.open) { const k = rows.findIndex(r => !exLogged(d, r)); WO.i = k < 0 ? rows.length - 1 : k; }
   const wasOpen = WO.open; WO.open = true; WO.done = false; rtFollow(); woRender(); document.body.classList.add('wo-on');
   if (!wasOpen) backPush('workout', woClose);
-  try { if (navigator.wakeLock && !WO_LOCK) navigator.wakeLock.request('screen').then(l => { WO_LOCK = l; }).catch(() => {}); } catch (x) { /* not supported */ }
+  try { if (navigator.wakeLock && !WO_LOCK) navigator.wakeLock.request('screen').then(l => { WO_LOCK = l; }).catch(() => {}); } catch (x) { }
 }
 function woClose() {
   if (!WO || !WO.open) return; WO.open = false; backDrop('workout'); const r = $('#wo-root'); if (r) r.innerHTML = ''; document.body.classList.remove('wo-on');
   if (WO_LOCK) { WO_LOCK.release().catch(() => {}); WO_LOCK = null; }
   render(); rtPill();
 }
-// keep the overlay in step with the rest of the app (swaps, undo, sync)
 function woRefresh() { if (WO && WO.open) { if (!woEntry() || !woEntry().w) { woClose(); return; } woRender(); } else rtPill(); }
 function woPrefill(r) {
   const id = r.ex.id; if (WO.w[id] != null && WO.r[id] != null) return;
@@ -266,7 +253,7 @@ function woLog() {
   WO.edit = null; saveState();
   const h = exerciseHistory(id).find(x => x.d === d); const pr = h && h.pr && h.best > before + 0.01 && h.bestSet === arr[k];
   const rows = woRows(); const lastEx = WO.i === rows.length - 1; const exDone = exLogged(d, r);
-  if (lastEx && exDone) { if (rtBusy()) rtIdle(r); }                     // no rest after the very last set
+  if (lastEx && exDone) { if (rtBusy()) rtIdle(r); }
   else if (S.settings.restAuto !== false) { rtIdle(r); rtStart(); }
   woRender();
   if (pr) toast(`New PR on ${r.ex.name}: ${isBW(id) ? h.best + ' reps' : 'e1RM ' + fmt(h.best)}`); else if (exDone && k === r.sets - 1) toast(`${r.ex.name} done`);
@@ -339,9 +326,8 @@ document.addEventListener('input', e => { const t = e.target; if (!t || !t.datas
   if (WO && WO.open && (t.dataset.input === 'wo-w' || t.dataset.input === 'wo-r')) { const r = woRow(); if (r) { if (t.dataset.input === 'wo-w') WO.w[r.ex.id] = t.value === '' ? '' : +t.value; else WO.r[r.ex.id] = t.value === '' ? '' : +t.value; } }
 });
 document.addEventListener('change', e => { const t = e.target; if (t && t.dataset && t.dataset.input === 'rest-vol') { saveState(); if (restSoundId() !== 'none') soundPlay(restSoundId()); } });
-// the screen lock is dropped when the page is hidden; take it back when workout mode is showing again
 document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') { WO_LOCK = null; return; } if (WO && WO.open && !WO_LOCK && navigator.wakeLock) navigator.wakeLock.request('screen').then(l => { WO_LOCK = l; }).catch(() => {}); if (RT.run) rtTick(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && WO && WO.open && !$('#modal') && !$('#gym-full')) woClose(); }, true);   // capture: runs before Escape closes a popup
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && WO && WO.open && !$('#modal') && !$('#gym-full')) woClose(); }, true);
 
 /* ============================================================
    CARDIO MODE — a stopwatch with laps and a running calorie estimate.
@@ -350,7 +336,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape' && WO && WO.o
    a start timestamp plus accumulated milliseconds, so it stays right if the screen sleeps or the
    tab is backgrounded — a tick-counting timer drifts badly there.
    ============================================================ */
-let CW = null;            // { d, k, min, run, at, acc, laps: [ms], open }
+let CW = null;
 let CW_LOCK = null, CW_T = null;
 const cwElapsed = () => CW ? CW.acc + (CW.run ? Date.now() - CW.at : 0) : 0;
 const cwKcal = () => CW ? cardioKcal(CW.k, cwElapsed() / 60000, statsOn(CW.d).w) : 0;
@@ -365,7 +351,7 @@ function cwOpen(date) {
   if (!CW || CW.d !== d || CW.k !== c.k) CW = { d, k: c.k, min: c.min, run: false, at: 0, acc: 0, laps: [] };
   const wasOpen = CW.open; CW.open = true; cwRender(); document.body.classList.add('wo-on');
   if (!wasOpen) backPush('cardio', cwClose);
-  try { if (navigator.wakeLock && !CW_LOCK) navigator.wakeLock.request('screen').then(l => { CW_LOCK = l; }).catch(() => {}); } catch (x) { /* not supported */ }
+  try { if (navigator.wakeLock && !CW_LOCK) navigator.wakeLock.request('screen').then(l => { CW_LOCK = l; }).catch(() => {}); } catch (x) { }
   cwTick();
 }
 function cwClose() {
@@ -387,7 +373,7 @@ function cwPause() { if (!CW || !CW.run) return; CW.acc = cwElapsed(); CW.run = 
 function cwLap() {
   if (!CW) return; if (!CW.run) { cwStart(); return; }
   const prev = CW.laps.reduce((a, l) => a + l, 0); const t = cwElapsed();
-  if (t - prev < 1000) return;                       // ignore a double tap
+  if (t - prev < 1000) return;
   CW.laps.push(t - prev); cwRender();
 }
 function cwReset() { if (!CW) return; CW.run = false; CW.at = 0; CW.acc = 0; CW.laps = []; cwRender(); }

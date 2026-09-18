@@ -1,11 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
-/* ================================================================
-   FORGE 90 — barcode scanning, the shared product list, quick-add to today,
-   and the pantry (use-up, expiry, shopping-list integration)
-   ================================================================ */
 
-/* ---------- EAN-13 / UPC-A / EAN-8 / UPC-E decoder (for phones without a built-in barcode reader) ---------- */
 const BC_L = [[3, 2, 1, 1], [2, 2, 2, 1], [2, 1, 2, 2], [1, 4, 1, 1], [1, 1, 3, 2], [1, 2, 3, 1], [1, 1, 1, 4], [1, 3, 1, 2], [1, 2, 1, 3], [3, 1, 1, 2]];
 const BC_G = BC_L.map(p => p.slice().reverse());
 const BC_FIRST = ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL'];
@@ -17,7 +12,6 @@ function bcDigit(w, sets) {                    // w: 4 run widths → { d, set, 
   return best && best.v < 1.5 ? best : null;
 }
 function bcGuard(runs, i, n, m) { for (let j = 0; j < n; j++) { const r = runs[i + j] / m; if (r < 0.45 || r > 1.9) return false; } return true; }
-// blur and exposure make bars look wider (or thinner) than the spaces by the same amount everywhere;
 // the guard bars are all one module wide, so they show how much to take back
 function bcFix(runs, i, len, guards) {
   let b = 0, nb = 0, sp = 0, ns = 0; guards.forEach(g => { if (g % 2 === 0) { b += runs[i + g]; nb++; } else { sp += runs[i + g]; ns++; } });
@@ -28,7 +22,6 @@ function bcFix(runs, i, len, guards) {
 const BC_G13 = [0, 1, 2, 27, 28, 29, 30, 31, 56, 57, 58], BC_G8 = [0, 1, 2, 19, 20, 21, 22, 23, 40, 41, 42], BC_GE = [0, 1, 2, 27, 28, 29, 30, 31, 32];
 function bcTry(runs, i) {                        // runs[i] must be a bar (the first bar of the start guard)
   const out = [];
-  // EAN-13 / UPC-A: 3 + 24 + 5 + 24 + 3 runs, 95 modules
   if (i + 59 <= runs.length) {
     let tot = 0; for (let j = 0; j < 59; j++) tot += runs[i + j]; const m = tot / 95;
     if ((i === 0 || runs[i - 1] > m * 2.5) && bcGuard(runs, i, 3, m) && bcGuard(runs, i + 27, 5, m) && bcGuard(runs, i + 56, 3, m)) {
@@ -38,7 +31,6 @@ function bcTry(runs, i) {                        // runs[i] must be a bar (the f
       if (ok) { const f = BC_FIRST.indexOf(par); if (f >= 0 && bcCheck(f + digits)) out.push(String(f) + digits); }
     }
   }
-  // EAN-8: 3 + 16 + 5 + 16 + 3 runs, 67 modules
   if (!out.length && i + 43 <= runs.length) {
     let tot = 0; for (let j = 0; j < 43; j++) tot += runs[i + j]; const m = tot / 67;
     if ((i === 0 || runs[i - 1] > m * 2.5) && bcGuard(runs, i, 3, m) && bcGuard(runs, i + 19, 5, m) && bcGuard(runs, i + 40, 3, m) && (i + 43 >= runs.length || runs[i + 43] > m * 2.5)) {
@@ -48,7 +40,6 @@ function bcTry(runs, i) {                        // runs[i] must be a bar (the f
       if (ok && bcCheck(digits)) out.push(digits);
     }
   }
-  // UPC-E: 3 + 24 + 6 runs, 51 modules → expanded to UPC-A
   if (!out.length && i + 33 <= runs.length) {
     let tot = 0; for (let j = 0; j < 33; j++) tot += runs[i + j]; const m = tot / 51;
     if ((i === 0 || runs[i - 1] > m * 2.5) && bcGuard(runs, i, 3, m) && bcGuard(runs, i + 27, 6, m) && (i + 33 >= runs.length || runs[i + 33] > m * 2.5)) {
@@ -63,7 +54,6 @@ function bcTry(runs, i) {                        // runs[i] must be a bar (the f
   }
   return out[0] || null;
 }
-// sliding-window min / max (monotonic queues)
 function bcMinMax(a, half) {
   const n = a.length, mn = new Float32Array(n), mx = new Float32Array(n); const qa = new Int32Array(n), qb = new Int32Array(n); let ha = 0, ta = 0, hb = 0, tb = 0;
   for (let j = 0; j < n + half; j++) {
@@ -74,11 +64,10 @@ function bcMinMax(a, half) {
   }
   return { mn, mx };
 }
-function bcRuns(lum) {                         // luminance line → run widths (sub-pixel edges, local threshold) + colour of the first run
+function bcRuns(lum) {
   const n = lum.length; if (n < 60) return null;
   let gmn = 255, gmx = 0; for (let i = 0; i < n; i++) { if (lum[i] < gmn) gmn = lum[i]; if (lum[i] > gmx) gmx = lum[i]; }
   if (gmx - gmn < 30) return null;
-  // threshold halfway between the local black and white levels, so blur moves both edges of a bar equally
   const half = Math.max(8, Math.round(n / 24)); const { mn, mx } = bcMinMax(lum, half); const th = new Float32Array(n); const gmid = (gmn + gmx) / 2;
   for (let i = 0; i < n; i++) th[i] = mx[i] - mn[i] > (gmx - gmn) * 0.3 ? (mn[i] + mx[i]) / 2 : gmid;
   const runs = []; let cur = lum[0] < th[0]; const first = cur; let last = 0;
@@ -146,7 +135,7 @@ function sharedAdd(food) { SHARED_FOODS[food.id] = food; rebuildCatalog(); }
 /* ---------- the shared recipe book ---------- */
 let SREC_REV = 0, SREC_LOADED = false, SREC_TRY = 0, SREC_T = null, SREC_WARNED = false;
 const recipeMine = r => !!r && !!r.shared && !!AUTH.user && r.by === AUTH.user.id;
-const recipeMayEdit = r => !r ? false : r.shared ? (recipeMine(r) || isAdmin()) : true;   // a recipe still held privately is always yours
+const recipeMayEdit = r => !r ? false : r.shared ? (recipeMine(r) || isAdmin()) : true;
 async function loadSharedRecipes() {
   if (AUTH.mode !== 'server') { SREC_LOADED = true; return; }
   try {
@@ -158,34 +147,30 @@ async function loadSharedRecipes() {
     else if (!SREC_WARNED) { SREC_WARNED = true; toast('Couldn’t load the shared recipes. Reload to try again.'); }
   }
 }
-/* Recipes written before the book existed live in this user's own plan data. Lift them up once,
-   then rewrite anything that pointed at an id the server had to change. */
 async function migrateRecipesUp() {
   if (AUTH.mode !== 'server' || S.recipesShared) return;
   const mine = Object.values(S.customRecipes || {}).filter(r => r && r.id && !SHARED_RECIPES[r.id]);
   if (!mine.length) { S.recipesShared = 1; saveState(); return; }
-  let r; try { r = await api('POST', '/api/recipes/migrate', { recipes: mine }); } catch (e) { return; }   // try again next load
+  let r; try { r = await api('POST', '/api/recipes/migrate', { recipes: mine }); } catch (e) { return; }
   const map = r.map || {};
   Object.entries(map).forEach(([oldId, newId]) => { if (newId !== oldId) remapRecipeId(oldId, newId); });
-  try { const f = await api('GET', '/api/recipes/shared'); SHARED_RECIPES = f.recipes || {}; SREC_REV = f.rev || 0; } catch (e) { /* the POST landed; the list refreshes next load */ }
+  try { const f = await api('GET', '/api/recipes/shared'); SHARED_RECIPES = f.recipes || {}; SREC_REV = f.rev || 0; } catch (e) { }
   S.customRecipes = {}; S.recipesShared = 1; rebuildCatalog(); saveState();
   if (r.added) toast(`${r.added} recipe${r.added === 1 ? '' : 's'} shared with everyone on this server`);
 }
-/* Every place a recipe id is held in this user's own data. */
 function remapRecipeId(oldId, newId) {
   Object.values(S.plan || {}).forEach(e => { if (e && e.m) Object.keys(e.m).forEach(sl => { if (e.m[sl] === oldId) e.m[sl] = newId; }); });
   [S.favRecipes, S.recipeOff].forEach(o => { if (o && o[oldId] != null) { o[newId] = o[oldId]; delete o[oldId]; } });
   Object.keys(S.importMap || {}).forEach(k => { if (S.importMap[k] === oldId) S.importMap[k] = newId; });
 }
 const foodLabel = id => { const g = ING[id]; return g ? g.n + (g.brand ? ' · ' + g.brand : '') : id; };
-const pantryName = id => { const g = ING[id]; return !g ? 'Removed food' : g.dry ? g.dryName : g.n; };   // rice & co. are kept and shown uncooked
+const pantryName = id => { const g = ING[id]; return !g ? 'Removed food' : g.dry ? g.dryName : g.n; };
 const canScan = () => AUTH.mode === 'server';
 const scanBtnHTML = (mode = 'today', cls = '', date = '') => canScan() ? `<button class="btn ${cls}" data-act="scan" data-v="${mode}" ${date ? `data-d="${date}"` : ''} title="${mode === 'pantry' ? 'Scan groceries into the pantry' : `Scan a barcode to add it to ${date && date !== todayISO() ? fmtDate(date) : 'today'}`}">${icon('scan')}Scan</button>` : '';
-// "Add food" — pick any food or scanned product to add to a day (works without a camera)
 const addFoodBtnHTML = (date = '', cls = '') => `<button class="btn ${cls}" data-act="qa-pick" ${date ? `data-d="${date}"` : ''} title="Add a snack or any food to ${date && date !== todayISO() ? fmtDate(date) : 'today'}">${icon('plus')}Add food</button>`;
 
 /* ---------- scanner ---------- */
-let SCN = null;           // { mode, stream, timer, busy, last, lastAt, added: [] }
+let SCN = null;
 function openScanner(mode, date, draft) {
   if (mode !== 'gym' && !canScan()) { toast('Scanning needs the FORGE 90 server.'); return; }
   scanStop(); SCN = { mode, date: date || todayISO(), added: [], last: '', lastAt: 0, draft: draft || null };
@@ -229,14 +214,13 @@ function scanMsg(t, cls) { const m = $('#scan-msg'); if (m) { m.textContent = t;
 async function scanStart() {
   const v = $('#scan-video'); const me = SCN; if (!v || !me) return;
   const gone = () => SCN !== me || !document.body.contains(v);
-  // no live camera (plain http, blocked, none): a photo still works — on a phone it opens the camera app
   const noLive = t => { if (gone()) return; scanMsg(t, 'warn'); const ph = $('#modal .scan-photo'); if (ph) { ph.classList.remove('ghost'); ph.classList.add('primary'); ph.querySelector('.scan-photo-t').textContent = 'Take a photo of the barcode'; } };
   if (!window.isSecureContext) { noLive('The live camera needs HTTPS. Take a photo of the barcode instead, or type the number.'); return; }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { noLive('This browser can’t open the camera here. Take a photo instead, or type the number.'); return; }
   try { me.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }); }
   catch (e) { noLive(e && e.name === 'NotAllowedError' ? 'Camera access was blocked. Allow it in the browser’s site settings, or take a photo instead.' : 'No camera found. Take a photo of the barcode or type the number.'); return; }
   if (gone()) { scanStop(me); return; }
-  v.srcObject = me.stream; try { await v.play(); } catch (e) { /* autoplay */ }
+  v.srcObject = me.stream; try { await v.play(); } catch (e) { }
   const track = me.stream.getVideoTracks()[0]; const caps = track && track.getCapabilities ? track.getCapabilities() : {};
   if (caps.torch) { const t = $('#scan-torch'); if (t) t.classList.remove('hidden'); }
   scanMsg('Line the barcode up inside the box');
@@ -252,7 +236,7 @@ async function scanStart() {
         if (detector) { const r = await detector.detect(v); if (r && r[0]) { code = r[0].rawValue; fmt = BD_FMT[r[0].format] || r[0].format; } }
         if (!code && (!detector || gym)) { const W = Math.min(1280, v.videoWidth), H = Math.round(v.videoHeight * W / v.videoWidth); cv.width = W; cv.height = H; ctx.drawImage(v, 0, 0, W, H); const img = ctx.getImageData(0, 0, W, H);
           if (gym) { const x = bcDecodeAny(img); if (x) { code = x.code; fmt = x.fmt; } } else code = bcDecodeImage(img); }
-      } catch (e) { /* keep trying */ }
+      } catch (e) { }
       if (code && !gone()) scanFound(code, fmt);
     }
     me.timer = setTimeout(tick, detector ? 120 : 160);
@@ -261,15 +245,14 @@ async function scanStart() {
 }
 function scanStop(sess) { const x = sess || SCN; if (!x) return; clearTimeout(x.timer); if (x.stream) x.stream.getTracks().forEach(t => t.stop()); x.stream = null; }
 async function scanFound(raw, fmt) {
-  if (SCN && SCN.mode === 'gym') { if (navigator.vibrate) try { navigator.vibrate(60); } catch (e) { /* no vibration */ } gymScanned(String(raw), fmt); return; }
+  if (SCN && SCN.mode === 'gym') { if (navigator.vibrate) try { navigator.vibrate(60); } catch (e) { } gymScanned(String(raw), fmt); return; }
   const code = gtinNorm(raw); if (!/^\d{8}$|^\d{13,14}$/.test(code)) return;
   if (SCN.last === code && Date.now() - SCN.lastAt < 3000) return; SCN.last = code; SCN.lastAt = Date.now();
-  if (navigator.vibrate) try { navigator.vibrate(60); } catch (e) { /* no vibration */ }
+  if (navigator.vibrate) try { navigator.vibrate(60); } catch (e) { }
   SCN.busy = true; scanMsg('Found ' + code + ' — looking it up…', 'ok');
   try { const id = await barcodeFood(code); if (id) scanUse(id); else if (SCN) SCN.busy = false; }
   catch (e) { scanMsg(e.message, 'warn'); if (SCN) SCN.busy = false; }
 }
-// barcode → a food id in the catalog, asking to add it to the food list when it's new
 async function barcodeFood(code) {
   const local = Object.values(ING).find(g => g.gtin === code); if (local) return local.id;
   const r = await api('GET', '/api/barcode/' + encodeURIComponent(code));
@@ -287,7 +270,7 @@ function scanUse(id) {
       const base = before ? Math.max(0, Math.round((+before.qty) * 100) / 100) : 0;
       const it = pantryAdd(id, null, null, 'scan'); if (!it) { SCN.busy = false; return; }
       SCN.added.unshift({ food: id, itemId: it.id, n: 1, base });
-      if (/^#\/(pantry|grocery)/.test(location.hash)) render();   // the page behind the scanner stays current
+      if (/^#\/(pantry|grocery)/.test(location.hash)) render();
       scanMsg(`Added ${foodLabel(id)} — scan the next item`, 'ok');
     }
     scanPaint(); SCN.busy = false; return;
@@ -305,7 +288,7 @@ function productGuessSub(s) {
     [/frozen|ready-?meal|meals\b/i, 'frozen_meals'], [/soup|chili/i, 'soups'], [/sauce/i, 'sauces'], [/condiment|ketchup|mustard|dressing/i, 'condiments'], [/peanut/i, 'peanuts'], [/\bnuts?\b|almond|cashew|pistachio|walnut/i, 'tree_nuts'], [/juice|sports-?drink/i, 'juice'], [/diet|zero|sugar-?free-?(soda|drink)|water/i, 'zero_drinks'], [/soda|soft-?drink|energy-?drink/i, 'soda'], [/chocolate|candy|confection|cookie|biscuit|dessert|ice-?cream/i, 'sweets']];
   const hit = rules.find(([re]) => re.test(c)); return hit ? hit[1] : 'bars';
 }
-let PF = null;             // { gtin, resolve, sug, edit: foodId }
+let PF = null;
 const pfVal = v => v == null || v === '' ? '' : Math.round(v * 10) / 10;
 const pfInt = v => v == null || v === '' ? '' : Math.max(0, Math.round(+v || 0));   // package size, serving size and item weight are whole units
 function productFieldsHTML(v, lock) {
@@ -340,7 +323,6 @@ function productForm(gtin, sug, error) {
       ${sug ? '<div class="tiny muted" style="margin-top:8px">Product data © Open Food Facts contributors, available under the Open Database License.</div>' : ''}</div>`, 'prod-modal');
   });
 }
-// scanned products are shared: the person who added one (or an admin) can fix it; everyone else sees the details
 function sharedFoodEditor(id) {
   const g = ING[id]; if (!g || !g.shared) return;
   const mine = AUTH.user && (g.by === AUTH.user.id || isAdmin());
@@ -367,7 +349,6 @@ async function productSave(form) {
   catch (e) { btn.disabled = false; toast(e.message); }
 }
 function openScannerKeep() { const added = (SCN && SCN.added) || []; openScanner('pantry'); if (SCN) { SCN.added = added; scanPaint(); } }
-/* review what was scanned without leaving for the Pantry page: counts, amounts and use-by dates */
 function scanReview() {
   if (!SCN || !SCN.added.length) return;
   const added = SCN.added; scanStop();
@@ -417,7 +398,7 @@ function qpRelevance(g, q, words) {
   if (/^\d{6,}$/.test(q) && g.gtin && (g.gtin === q || String(g.gtin).endsWith(q))) return 1000;
   let s = 0; words.forEach(w => { s += qpWordScore(w, n, br, lbl); });
   s = s / words.length;
-  if (words.length > 1 && n.includes(q)) s += 30;         // the whole phrase, in order, in the name
+  if (words.length > 1 && n.includes(q)) s += 30;
   return s;
 }
 function qpListHTML(q, act, d) {
@@ -436,12 +417,9 @@ function qpListHTML(q, act, d) {
     + (list.length > top.length ? `<div class="tiny muted" style="padding:8px 4px">${list.length - top.length} more — keep typing to narrow it down.</div>` : '') || `<div class="muted small" style="padding:12px 4px">No foods match.${canScan() ? ' Scan the barcode to add a new product.' : ''}</div>`;
 }
 
-/* ---------- find a food by name ----------
-   The camera isn't always the way in: a lot of what people add is already on the food list,
-   and loose produce has no barcode at all. Same picker, three destinations. */
-let FP = null;              // { mode: 'pantry' | 'today' | 'foods', d }
+let FP = null;
 function foodByName(mode, date, ingIndex, tab) {
-  scanStop();               // release the camera if we came from the scanner
+  scanStop();
   FP = { mode, d: date || (SCN && SCN.date) || todayISO(), i: ingIndex, tab: tab === 'online' && onlineFoodOK() ? 'online' : 'list' };
   FO = { q: '', rows: null, busy: false, err: '' };
   const title = mode === 'pantry' ? 'Add to the pantry by name' : mode === 'foods' ? 'Find a food' : mode === 'ing' ? 'Pick an ingredient' : `Add food to ${FP.d === todayISO() ? 'today' : fmtDate(FP.d, { weekday: 'short', month: 'short', day: 'numeric' })}`;
@@ -449,11 +427,8 @@ function foodByName(mode, date, ingIndex, tab) {
     <div id="fp-body">${fpBodyHTML()}</div></div>`, 'qp-modal');
   fpFocus();
 }
-/* Two places to look: the food list this server already has, and Open Food Facts by name.
-   The online tab is the same catalog the scanner reads, reachable by typing for loose produce,
-   anything already out of its packaging, and labels a camera will not read. */
 const onlineFoodOK = () => AUTH.mode === 'server' && !!AUTH.user;
-let FO = null;              // { q, rows, busy, err }
+let FO = null;
 function fpFocus() { const q = $(FP && FP.tab === 'online' ? '#fo-q' : '#fp-q'); if (q && window.matchMedia && matchMedia('(pointer: fine)').matches) q.focus(); }
 function fpBodyHTML() {
   const mode = FP.mode;
@@ -493,8 +468,6 @@ async function foSearch(q) {
   catch (e) { if (FO) FO.err = e.message; }
   if (FO) { FO.busy = false; fpRepaint(); }
 }
-/* A result the server already has goes through the normal barcode path; a new one opens the same
-   confirm-the-numbers form a scan does, so nothing reaches the shared list unchecked. */
 async function foPick(i) {
   const row = FO && (FO.rows || [])[i]; if (!row || !FP) return;
   const m = FP.mode, d = FP.d, ii = FP.i;
@@ -513,7 +486,7 @@ function fpUse(id, m, d, ii) {
   if (m === 'ing') { closeModal(); reSetIng(ii, id); return; }
   if (m === 'foods') { const g = ING[id]; closeModal(); if (g && g.shared) sharedFoodEditor(id); else foodEditor(id); return; }
   if (m === 'pantry') {
-    if (SCN && SCN.mode === 'pantry') { scanUse(id); openScannerKeep(); return; }   // straight back to the scanner with the session list
+    if (SCN && SCN.mode === 'pantry') { scanUse(id); openScannerKeep(); return; }
     const it = pantryAdd(id, null, null, 'manual'); closeModal(); render();
     toast(it ? `${foodLabel(id)} added to the pantry` : 'That food has no package size set');
     return;
@@ -550,7 +523,6 @@ function qaSave() {
   saveState(); closeModal(); render(); toast(`${ING[QA.id].n} added to ${SLOT_LABEL[QA.slot].toLowerCase()} ${QA.d === todayISO() ? 'today' : 'on ' + fmtDate(QA.d)}`, true); QA = null;
 }
 function extraRemove(d, i) { const e = S.plan[d]; if (!e || !e.x || !e.x[i]) return; pushUndo('remove added food'); const x = e.x.splice(i, 1)[0]; if (!e.x.length) delete e.x; saveState(); render(); toast(`${ING[x.id] ? ING[x.id].n : 'Item'} removed`, true); }
-// foods added to a day (quick add / scan); slot null = every slot, labelled
 function extrasHTML(day, slot) {
   const xs = (day.extras || []).filter(x => !slot || x.slot === slot);
   /* A product an admin deleted drops out of day.extras, but its record stays on the day with
@@ -568,7 +540,6 @@ function favFoodBtnHTML(id) { const on = isFavFood(id); return `<button type="bu
 function toggleFavFood(id) { S.favFoods = S.favFoods || {}; if (S.favFoods[id]) delete S.favFoods[id]; else S.favFoods[id] = 1; saveState(); $$(`.fav-btn[data-act="fav-food"][data-id="${id}"]`).forEach(b => { const on = isFavFood(id); b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); }); }
 
 /* ---------- pantry ---------- */
-// S.pantry = [{ id, food, qty, exp, added }] — quantities in the food's own unit (g, ml or items)
 const PANTRY_SOON = 14;
 function pantryShared() { return typeof SY !== 'undefined' && SY && SY.data && SY.data.status === 'active' && SY.data.pantry && SY.data.pantry.on; }
 function pantryItems() { return pantryShared() ? (SY.data.pantry.items || []) : (S.pantry || []); }
@@ -580,7 +551,7 @@ function defaultExp(id) {
 }
 const pid = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 function pantryQtyText(id, q) { const g = ING[id]; if (!g) return ''; return g.u ? amountText(id, q).main : groceryText(id, q).qty; }
-async function pantryOps(ops, consume) {                    // shared pantry: send changes to the server
+async function pantryOps(ops, consume) {
   try { const r = await api('POST', '/api/sync/pantry', { ops, consume }); SY.data.pantry = Object.assign(SY.data.pantry || {}, r.pantry);
     S.pantrySharedCopy = r.pantry.items; S.pantrySharedRev = r.pantry.rev; if (r.used && (!S.pantryThrough || r.used > S.pantryThrough)) S.pantryThrough = r.used; saveState();
     if (/^#\/(pantry|grocery)/.test(location.hash)) render(); return true; }
@@ -591,7 +562,6 @@ function pantryAdd(food, qty, exp, src) {
   const it = { id: pid(), food, qty: Math.round((qty != null ? +qty : packInfo(food).P) * 100) / 100, exp: exp === undefined || exp === null ? defaultExp(food) : exp, added: todayISO() };
   if (!(it.qty > 0)) return;
   if (!S.pantryThrough) S.pantryThrough = addDays(todayISO(), -1);
-  // same food, same use-by date: one row, not a pile of identical ones
   const same = pantryItems().find(x => x.food === food && (x.exp || '') === (it.exp || ''));
   if (same) { const qty2 = Math.round((+same.qty + it.qty) * 100) / 100; pantrySet(same.id, { qty: qty2, added: todayISO() }); return pantryItems().find(x => x.id === same.id) || same; }
   if (pantryShared()) { SY.data.pantry.items = (SY.data.pantry.items || []).concat([it]); pantryOps([{ op: 'add', item: it }]); }
@@ -620,22 +590,20 @@ function pantryDel(itemId) {
   S.pantry = (S.pantry || []).filter(x => x.id !== itemId); saveState();
 }
 function pantryHave(food, items) { return (items || pantryItems()).filter(x => x.food === food).reduce((a, x) => a + (+x.qty || 0), 0); }
-function useFifo(items, use) {                                  // take amounts out, soonest-expiring first (mutates)
+function useFifo(items, use) {
   Object.entries(use).forEach(([food, amt]) => { let left = amt;
     items.filter(x => x.food === food && x.qty > 0).sort((a, b) => (a.exp || '9999') < (b.exp || '9999') ? -1 : 1).forEach(x => { const t = Math.min(left, x.qty); x.qty = Math.round((x.qty - t) * 100) / 100; left -= t; }); });
   return items.filter(x => x.qty > 0.001);
 }
-// planned days that have passed use up the pantry (only this user's own portions; each synced user sends their own)
 let _pantryBusy = false;
 function pantryCatchUp() {
   if (_pantryBusy || !S || (AUTH.mode === 'server' && !SHARED_LOADED)) return;          // scanned foods must be known first, or their use would be missed
   const y = addDays(todayISO(), -1);
-  if (!pantryInUse()) { if (S.pantryThrough) { delete S.pantryThrough; saveState(); } return; }   // starts again from the day something is added
+  if (!pantryInUse()) { if (S.pantryThrough) { delete S.pantryThrough; saveState(); } return; }
   if (!S.pantryThrough) { S.pantryThrough = y; saveState(); return; }
   if (S.pantryThrough >= y) return;
   const A = computeAll(); const use = {}; let d = addDays(S.pantryThrough, 1); let n = 0;
   while (d <= y && n < 120) { if (A.days[d]) Object.entries(dayUse(A, d, true)).forEach(([id, a]) => use[id] = (use[id] || 0) + a); d = addDays(d, 1); n++; }
-  // only mark off the days actually accounted for; a longer gap catches up on the next pass
   const through = addDays(d, -1);
   const prev = S.pantryThrough; S.pantryThrough = through < y ? through : y;
   const y2 = S.pantryThrough;
@@ -646,7 +614,7 @@ function pantryCatchUp() {
 async function pantrySyncReconcile() {
   if (AUTH.mode !== 'server' || !S) return;
   const shared = pantryShared();
-  if (shared && S.pantryShareSid !== SY.data.id) {            // just joined a shared pantry: bring my items in
+  if (shared && S.pantryShareSid !== SY.data.id) {
     S.pantryShareSid = SY.data.id; const mine = (S.pantry || []).filter(x => x.qty > 0);
     S.pantry = []; S.pantrySharedRev = null; saveState();
     if (mine.length) { SY.data.pantry.items = (SY.data.pantry.items || []).concat(mine); await pantryOps(mine.map(item => ({ op: 'add', item }))); toast(`Moved ${mine.length} pantry item${mine.length > 1 ? 's' : ''} into the shared pantry`); }
@@ -674,7 +642,6 @@ async function grocerySyncReconcile() {
     try { const r = await api('PUT', '/api/sync/grocery', { week: w, set: mine[w] }); SY.rev = r.rev; } catch (e) { delete g[w]; break; }
   }
 }
-// what's in the pantry at the start of `date`, after the planned days from today until then
 function pantryProjected(date) {
   const items = pantryItems().map(x => Object.assign({}, x)); const A = computeAll(); let d = todayISO(); const use = {};
   while (d < date) { if (A.days[d]) Object.entries(dayUse(A, d, !pantryShared(), true)).forEach(([id, a]) => use[id] = (use[id] || 0) + a); d = addDays(d, 1); }
@@ -692,9 +659,7 @@ function viewPantry() {
   const byFood = {}; items.forEach(x => (byFood[x.food] = byFood[x.food] || []).push(x));
   const lotHTML = x => `<div class="pan-lot ${x.exp && daysLeft(x.exp) < 0 ? 'bad' : x.exp && daysLeft(x.exp) <= PANTRY_SOON ? 'soon' : ''}"><span class="num">${esc(pantryQtyText(x.food, x.qty))}</span><span class="tiny">${x.exp ? `${esc(expDate(x.exp))} · ${esc(expText(x.exp))}` : 'no use-by date'}</span>
       <button type="button" class="btn icon ghost sm" data-act="pan-edit" data-id="${x.id}" title="Edit" aria-label="Edit">${icon('edit')}</button><button type="button" class="btn icon ghost sm" data-act="pan-del" data-id="${x.id}" title="Used up — remove" aria-label="Remove">${icon('x')}</button></div>`;
-  // search and sort
   const words = String(UI.panQ || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
-  // searching is nearly always "what do I have and what goes off first", so results come back soonest-first
   const sort = words.length ? 'expiry' : (PAN_SORTS.some(x => x[0] === UI.panSort) ? UI.panSort : 'aisle');
   const hay = f => (pantryName(f) + ' ' + (ING[f] ? ING[f].n + ' ' + (ING[f].brand || '') + ' ' + (ING[f].a || '') + ' ' + (SUB_LABEL[ING[f].sub] || '') : '')).toLowerCase();
   const all = Object.keys(byFood); const foods = all.filter(f => words.every(w => hay(f).includes(w)));
@@ -719,7 +684,6 @@ function viewPantry() {
       ${all.length ? list : `<div class="empty-state">${icon('box')}<div>The pantry is empty. ${canScan() ? 'Scan groceries, ' : ''}add items by hand, or tick items on the <a href="#/grocery">shopping list</a> and add them here.</div></div>`}
       <div class="tiny muted" style="margin-top:10px">${S.pantryThrough ? `Planned meals through ${fmtDate(S.pantryThrough, { month: 'short', day: 'numeric' })} have been taken out, soonest-expiring first.` : ''} Use-by dates start from typical shelf life — edit them to match the package.</div></div>`;
 }
-// pantry amounts are kept in the food's own unit; rice & co. are entered uncooked like on the shopping list
 const panUnit = id => { const g = ING[id]; return !g ? '' : g.u ? g.u + 's' : g.dry ? 'g uncooked' : g.ml ? 'ml' : 'g'; };
 const panToShown = (id, q) => { const g = ING[id]; return g && g.dry ? Math.round(q * g.dry) : Math.round(q * 100) / 100; };
 const panFromShown = (id, q) => { const g = ING[id]; return g && g.dry ? q / g.dry : q; };
@@ -745,8 +709,7 @@ function pantrySubmit(form) {
 function pantryNavBadge() { const a = $('.nav a[data-nav="pantry"]'); if (!a) return; const n = S ? pantrySoon().length : 0; let b = a.querySelector('.nav-badge'); if (!n) { if (b) b.remove(); return; } if (!b) { b = document.createElement('span'); b.className = 'nav-badge'; a.appendChild(b); } b.textContent = n; b.title = `${n} pantry item${n === 1 ? '' : 's'} expiring soon`; }
 
 /* ---------- shopping list: pantry-aware rows, check all, add checked to the pantry ---------- */
-let GRO_ROWS = null;       // { rows, week, wk } for the list on screen
-// rows = [{ id, total, have, need }]; with a pantry, the current week only covers today onward (earlier days are eaten)
+let GRO_ROWS = null;
 function groceryRows(A, wd, totals) {
   pantryCatchUp(); const t = todayISO();
   if (!pantryInUse() || wd[wd.length - 1] < t) return { rows: Object.entries(totals).map(([id, a]) => ({ id, total: a, have: 0, need: a })), note: '' };
@@ -758,15 +721,13 @@ function groceryRows(A, wd, totals) {
   const note = `<div class="note gro-pan-note">${icon('box')}<span>${part ? `This week’s list covers <b>${fmtDate(days[0], { weekday: 'long' })}</b> on — earlier days are already eaten. ` : ''}Items your <a href="#/pantry">pantry</a> already covers${days[0] > t ? ' (after the meals planned before then)' : ''} are ticked with a pantry icon — untick any you still need to buy. Partly covered items show the full amount and what’s at home.</span></div>`;
   return { rows, note };
 }
-// checked state: pantry-covered rows are ticked unless the user unticked them (stored as 0); other rows need a tick (1)
 function groRowState(r, got) { const covered = !(r.need > 0) && r.have > 0; return { covered, checked: covered ? got[r.id] !== 0 : !!got[r.id] }; }
 function groTools(rows, got) { let checked = 0, add = 0; rows.forEach(r => { const st = groRowState(r, got); if (st.checked) { checked++; if (!st.covered) add++; } }); return { checked, add }; }
 function groGot() { const G = GRO_ROWS; if (!G) return {}; return ((syncActive() ? (SY.data.grocery = SY.data.grocery || {}) : (S.grocery = S.grocery || {}))[G.week]) || {}; }
-// changes: [[id, 1 | 0 | null]] — null clears the entry
 async function groSetMany(changes, noRender) {
   const G = GRO_ROWS; if (!G || !changes.length) return;
   const apply = w => changes.forEach(([id, v]) => { if (v == null) delete w[id]; else w[id] = v; });
-  S.grocery = S.grocery || {}; apply(S.grocery[G.week] = S.grocery[G.week] || {});   // always shadowed locally, so ending a sync mid-shop keeps your ticks
+  S.grocery = S.grocery || {}; apply(S.grocery[G.week] = S.grocery[G.week] || {});
   if (syncActive()) {
     const g = SY.data.grocery = SY.data.grocery || {}; apply(g[G.week] = g[G.week] || {}); saveState(); if (!noRender) render();
     try { const r = await api('PUT', '/api/sync/grocery', { week: G.week, set: Object.fromEntries(changes) }); SY.rev = r.rev; } catch (e) { toast(e.message); }
@@ -779,7 +740,6 @@ function groTick(el) {
   groSetMany([[id, covered ? (el.checked ? null : 0) : (el.checked ? 1 : null)]], true);
   const row = el.closest('.gro-item'); if (row) row.classList.toggle('got', el.checked); groToolsRefresh();
 }
-// keep Check all / Uncheck all / Add checked in step with ticks made one at a time
 function groToolsRefresh() {
   const G = GRO_ROWS; if (!G) return; const T = groTools(G.rows, groGot()); const n = G.rows.length;
   const all = $('[data-act="gro-all"][data-v="1"]'), none = $('[data-act="gro-all"][data-v="0"]'), add = $('[data-act="gro-pantry"]');
@@ -789,11 +749,9 @@ function groToolsRefresh() {
 function groAll(on) {
   const G = GRO_ROWS; if (!G) return; const got = groGot(); const ch = [];
   G.rows.forEach(r => { const st = groRowState(r, got); if (st.checked === on) return; ch.push([r.id, st.covered ? (on ? null : 0) : (on ? 1 : null)]); });
-  if (!on) Object.keys(got).forEach(id => { if (got[id] && !G.rows.some(r => r.id === id)) ch.push([id, null]); });   // ticks left from items no longer on the list
+  if (!on) Object.keys(got).forEach(id => { if (got[id] && !G.rows.some(r => r.id === id)) ch.push([id, null]); });
   groSetMany(ch);
 }
-// ticked items go into the pantry — the amount the list shows, rounded up to whole packages where the size is known — and lose their tick.
-// Items the pantry already covered aren't added again.
 function groceryAddChecked() {
   const G = GRO_ROWS; if (!G) return; const got = groGot(); const done = [];
   G.rows.forEach(r => { const st = groRowState(r, got); if (!st.checked || st.covered) return; const pi = packInfo(r.id); const q = pi.P > 1 ? Math.ceil(r.total / pi.P - 1e-9) * pi.P : r.total; if (pantryAdd(r.id, q, null, 'list')) done.push(r.id); });
@@ -845,7 +803,7 @@ document.addEventListener('submit', e => {
 });
 document.addEventListener('input', e => {
   const t = e.target; if (!t || !t.dataset) return;
-  if (t.dataset.input === 'panq') { UI.panQ = t.value; const pos = t.selectionStart; render(); const n = $('[data-input="panq"]'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) { /* ignore */ } } return; }
+  if (t.dataset.input === 'panq') { UI.panQ = t.value; const pos = t.selectionStart; render(); const n = $('[data-input="panq"]'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) { } } return; }
   if (t.dataset.input === 'qp-q' && QP) { const l = $('#qp-list'); if (l) l.innerHTML = qpListHTML(t.value); }
   if (t.dataset.input === 'fp-q' && FP) { if (FO) FO.q = t.value; const l = $('#fp-list'); if (l) l.innerHTML = qpListHTML(t.value, 'fp-pick', FP.d); }
   if (t.dataset.input === 'pan-foodq') { const g = panFindFood(t.value); const u = $('#pan-unit'); if (u) u.textContent = g ? panUnit(g.id) : ''; }
@@ -863,7 +821,7 @@ document.addEventListener('change', async e => {
     const f = t.files && t.files[0]; t.value = ''; if (!f) return; scanMsg('Reading the photo…');
     try { const bmp = await createImageBitmap(f); const W = Math.min(1600, bmp.width), H = Math.round(bmp.height * W / bmp.width); const c = document.createElement('canvas'); c.width = W; c.height = H; const x = c.getContext('2d'); x.drawImage(bmp, 0, 0, W, H);
       const gym = SCN && SCN.mode === 'gym'; let code = null, fmt = null;
-      if ('BarcodeDetector' in window) { try { const f = await window.BarcodeDetector.getSupportedFormats(); const want = (gym ? Object.keys(BD_FMT) : ['ean_13', 'ean_8', 'upc_a', 'upc_e']).filter(k => f.includes(k)); const r = await new window.BarcodeDetector({ formats: want }).detect(c); if (r[0]) { code = r[0].rawValue; fmt = BD_FMT[r[0].format] || r[0].format; } } catch (er) { /* fall back */ } }
+      if ('BarcodeDetector' in window) { try { const f = await window.BarcodeDetector.getSupportedFormats(); const want = (gym ? Object.keys(BD_FMT) : ['ean_13', 'ean_8', 'upc_a', 'upc_e']).filter(k => f.includes(k)); const r = await new window.BarcodeDetector({ formats: want }).detect(c); if (r[0]) { code = r[0].rawValue; fmt = BD_FMT[r[0].format] || r[0].format; } } catch (er) { } }
       if (!code) { const img = x.getImageData(0, 0, W, H); if (gym) { const d = bcDecodeAny(img); if (d) { code = d.code; fmt = d.fmt; } } else code = bcDecodeImage(img); }
       if (code && SCN) { SCN.last = ''; scanFound(code, fmt); } else scanMsg('No barcode found in that photo — try closer and straight on, or type the number.', 'warn'); }
     catch (er) { scanMsg('That photo couldn’t be read.', 'warn'); }

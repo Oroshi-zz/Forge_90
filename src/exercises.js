@@ -1,10 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
+
 /* ============================================================
    FORGE 90 — Exercise library, rotation slots, session templates
    ============================================================ */
-
-// Muscle regions used by the muscle-map SVG
 const REGION_LABEL = {
   chest: 'Chest', frontDelt: 'Front delts', sideDelt: 'Side delts', rearDelt: 'Rear delts',
   traps: 'Traps', lats: 'Lats', upperBack: 'Upper back', lowerBack: 'Lower back',
@@ -12,7 +11,6 @@ const REGION_LABEL = {
   quads: 'Quads', hamstrings: 'Hamstrings', glutes: 'Glutes', adductors: 'Adductors', calves: 'Calves'
 };
 
-// E(id, name, group, equipment, primary[], secondary[], compound?, steps[], cues[], mistake)
 const EX = {};
 function E(id, name, group, equip, primary, secondary, compound, steps, cues, mistake) {
   EX[id] = { id, name, group, equip, primary, secondary, compound, steps, cues, mistake };
@@ -484,17 +482,11 @@ const SLOTS = {
   core:          { label: 'Core',              group: 'Core',       vars: ['cable_crunch', 'hanging_knee_raise', 'ab_wheel'] }
 };
 
-/* ============================================================
-   EXTRA EXERCISES — research-backed alternatives, switched off by default.
-   Switch any of them on in the Exercise library and it joins the rotation for its slot.
-   RX(slot, why, …same arguments as E)
-   ============================================================ */
 const EXTRA_EX = [];
 function RX(slot, why, id, name, group, equip, primary, secondary, compound, steps, cues, mistake, opts) {
   E(id, name, group, equip, primary, secondary, compound, steps, cues, mistake);
   Object.assign(EX[id], { extra: true, slot, why }, opts || {}); EXTRA_EX.push(id);
 }
-/* ---- chest ---- */
 RX('chest_press', 'A 30–45° incline shifts more of the work to the upper chest, and the fixed bar path lets you push close to failure without a spotter.',
   'smith_incline_press', 'Smith Machine Incline Press', 'Chest', 'Smith machine + adjustable bench', ['chest'], ['frontDelt', 'triceps'], true,
   ['Set the bench to 30–45° so the bar lines up with your upper chest.', 'Grip slightly wider than shoulders, pin your shoulder blades back and down.',
@@ -525,7 +517,6 @@ RX('chest_fly', 'Cables keep tension on the chest through the whole arc; one arm
   ['Set a cable at shoulder height and stand side-on with the handle in your far hand.', 'Step forward so the arm is stretched back with a soft elbow.',
    'Sweep the handle across your body until your hand passes the middle of your chest.', 'Return slowly to the stretch.'],
   ['Brace with the free hand on your hip', 'Keep the chest facing forward'], 'Rotating the torso to move the weight.');
-/* ---- back ---- */
 RX('back_row', 'Chest support takes the lower back out of the lift so the lats and upper back can be trained close to failure.',
   'cs_tbar_row', 'Chest-Supported T-Bar Row', 'Back', 'Chest-supported T-bar row machine', ['lats', 'upperBack'], ['rearDelt', 'biceps'], true,
   ['Set the pad so your chest is supported and your arms hang straight to the handles.', 'Grip the handles and brace your chest into the pad.',
@@ -556,7 +547,6 @@ RX('back_iso', 'A pullover machine trains the lats through a big overhead stretc
   ['Set the seat so your shoulders line up with the machine’s pivot.', 'Place your elbows or hands on the pads with your arms overhead.',
    'Drive the pads down in an arc until they reach your torso.', 'Let them rise back overhead until the lats are fully stretched.'],
   ['Move from the shoulder', 'Squeeze the lats at the bottom'], 'Starting from a short range and never reaching the stretch.');
-/* ---- shoulders ---- */
 RX('side_delt', 'Leaning away puts the side delt under load at the bottom of the raise, where a standard raise has almost none.',
   'lean_away_lateral', 'Lean-Away Dumbbell Lateral Raise', 'Shoulders', 'Dumbbell + upright post', ['sideDelt'], ['traps'], false,
   ['Hold a post with one hand and lean away until your body is at about 15–20°.', 'Hold a dumbbell in the free hand in front of your thigh.',
@@ -582,7 +572,6 @@ RX('delt_press', 'The arcing path of a landmine press is kind to shoulders that 
   ['Kneel on one knee facing the end of a landmine bar; hold the end at your shoulder on the same side as the down knee.', 'Brace your abs and glutes.',
    'Press the bar up and forward until your arm is straight.', 'Lower under control back to the shoulder.'],
   ['Ribs down', 'Reach through at the top'], 'Leaning back to turn it into an incline press.');
-/* ---- rear delts ---- */
 RX('rear_delt', 'Crossed cables keep the rear delts loaded at the stretched, arms-crossed position.',
   'cable_rear_delt_fly', 'Cable Rear Delt Fly (Crossover)', 'Shoulders', 'Dual cable station', ['rearDelt'], ['upperBack'], false,
   ['Set both cables at shoulder height and hold the left cable in your right hand and the right in your left.', 'Step back so your arms are crossed in front of you.',
@@ -608,7 +597,6 @@ RX('rear_delt', 'Light, high-rep work for the rear delts and upper back that is 
   ['Hold a band at shoulder height with straight arms, hands shoulder-width apart.', 'Stand tall with your ribs down.',
    'Pull the band apart until it touches your chest.', 'Return slowly to the start.'],
   ['Straight arms', 'Slow return'], 'Arching the lower back to finish the rep.', { bw: true });
-/* ---- biceps ---- */
 RX('biceps_a', 'The cable keeps tension on the biceps at the bottom of the curl, where dumbbells go slack.',
   'cable_bar_curl', 'Cable Bar Curl', 'Biceps', 'Cable + straight or EZ bar (low)', ['biceps'], ['forearms'], false,
   ['Set the cable low and grip the bar shoulder-width, palms up.', 'Stand a step back so the cable pulls slightly forward.',
@@ -634,7 +622,6 @@ RX('biceps_b', 'An overhand grip shifts work to the brachialis and brachioradial
   ['Hold an EZ bar with an overhand grip, hands shoulder-width.', 'Stand tall with elbows at your sides.',
    'Curl the bar up until your forearms are vertical.', 'Lower under control.'],
   ['Knuckles up', 'Wrists straight'], 'Letting the wrists bend back as the bar rises.');
-/* ---- triceps ---- */
 RX('triceps_a', 'Overhead extensions built noticeably more triceps than pushdowns in a 12-week study (Maeo et al., 2023) because the long head is stretched.',
   'katana_ext', 'Cross-Body Cable Extension (Katana)', 'Triceps', 'Single cable + D-handle (low)', ['triceps'], [], false,
   ['Set a cable low and hold the handle in one hand so it runs up behind your opposite shoulder.', 'Start with the elbow bent and the hand near the opposite shoulder blade.',
@@ -660,7 +647,6 @@ RX('triceps_b', 'One arm at a time evens out a weaker side and lets you finish t
   ['Set a cable high and hold the handle with one hand, palm down or neutral.', 'Pin the elbow at your side.',
    'Push the handle down until your arm is straight and slightly behind your hip.', 'Return until the elbow is bent about 90°.'],
   ['Elbow stays pinned', 'Stand tall'], 'Leaning over the handle to use body weight.');
-/* ---- quads ---- */
 RX('quad_main', 'Keeps the torso upright and lets the knees travel well forward, loading the quads through a deep range.',
   'pendulum_squat', 'Pendulum Squat', 'Quads', 'Pendulum squat machine', ['quads'], ['glutes', 'adductors'], true,
   ['Set your shoulders under the pads and feet mid-platform, shoulder-width.', 'Release the safety and brace.',
@@ -691,7 +677,6 @@ RX('quad_uni', 'A long stride works the quads and glutes one leg at a time, fixi
   ['Hold dumbbells at your sides and stand tall.', 'Take a long step forward.',
    'Lower until your back knee nearly touches the floor.', 'Push through the front foot and step straight into the next rep.'],
   ['Long steps', 'Upright torso'], 'Short, choppy steps that turn it into a knee-only movement.');
-/* ---- hamstrings ---- */
 RX('ham_curl', 'One of the best-supported exercises for hamstring strength and for cutting the risk of hamstring strains.',
   'nordic_curl', 'Nordic Hamstring Curl', 'Hamstrings', 'Anchor for the heels (partner, pad or machine)', ['hamstrings'], ['glutes', 'calves'], false,
   ['Kneel with your heels anchored and your body upright.', 'Keep a straight line from knees to shoulders.',
@@ -717,7 +702,6 @@ RX('ham_hinge', 'A one-leg hinge trains the hamstrings and glutes with lighter l
   ['Stand on one leg holding a dumbbell in the opposite hand.', 'Soften the standing knee.',
    'Hinge forward as the free leg reaches back, until you feel a hamstring stretch.', 'Return to standing.'],
   ['Hips level', 'Reach back with the heel'], 'Opening the hips toward the ceiling.');
-/* ---- glutes ---- */
 RX('glute', 'Shifts most of the load onto one leg while staying stable; hip thrusts built as much glute muscle as squats (Plotkin et al., 2023).',
   'b_stance_hip_thrust', 'B-Stance Hip Thrust', 'Glutes', 'Barbell or dumbbell + bench', ['glutes'], ['hamstrings'], true,
   ['Set up as for a hip thrust, then move one foot forward so only its heel touches the floor.', 'Most of the weight goes through the back (working) leg.',
@@ -743,7 +727,6 @@ RX('glute', 'Rounding the upper back and turning the feet out shifts a back exte
   ['Set the pad just below your hip crease; turn your feet out slightly.', 'Round your upper back and tuck your chin.',
    'Lower your torso down.', 'Raise up by squeezing the glutes until your body is straight — no further.'],
   ['Push the hips into the pad', 'Stop at straight'], 'Over-extending the lower back at the top.');
-/* ---- calves ---- */
 RX('calves', 'Calves grew more when trained in the stretched part of the range (Kassiano et al., 2023), so pause at the bottom.',
   'smith_calf_raise', 'Smith Machine Calf Raise', 'Calves', 'Smith machine + step or plate', ['calves'], [], false,
   ['Stand with the balls of your feet on a step under the bar, bar on your upper back.', 'Keep your knees straight but not locked.',
@@ -769,7 +752,6 @@ RX('calves', 'Bent knees shift the work to the soleus, the larger of the two cal
   ['Sit with the balls of your feet on a step and dumbbells resting on your knees.', 'Let your heels drop as low as they go.',
    'Pause, then rise onto your toes as high as you can.', 'Lower slowly.'],
   ['Slow and full range', 'Pause at the bottom'], 'Using a range of a couple of inches.');
-/* ---- core ---- */
 RX('core', 'Anti-rotation work trains the obliques and deep core to resist twisting without any spinal flexion.',
   'pallof_press', 'Pallof Press', 'Core', 'Cable + D-handle (chest height)', ['obliques', 'abs'], [], false,
   ['Stand side-on to a cable at chest height, holding the handle at your chest with both hands.', 'Step away until the cable pulls.',
@@ -800,10 +782,6 @@ RX('core', 'An ab machine is easy to load progressively, so the abs can be train
   ['Set the seat so the pads sit on your chest or shoulders.', 'Hold the handles and brace.',
    'Crunch forward, curling your ribs toward your hips.', 'Return slowly until the abs are stretched.'],
   ['Round the spine', 'Exhale as you crunch'], 'Pulling with the arms to move the stack.');
-// switched-on extras join the rotation for their slot
-
-/* ---- filling the gaps: traps, erectors, adductors, forearms and obliques had no direct work,
-        the three barbell staples were missing, and two slots had nothing a home gym could do ---- */
 
 RX('back_row', 'The traps had no direct loading anywhere in the library — face pulls and Y-raises only reach them as helpers. A heavy shrug is the simplest fix, and the upper traps respond well to it.',
   'db_shrug', 'Dumbbell Shrug', 'Back', 'Dumbbells', ['traps'], ['upperBack', 'forearms'], false,
@@ -1021,15 +999,6 @@ RX('back_row', 'There was no barbell row in the library, which left PR test week
   'Standing up with the weight instead of rowing it.');
 EXTRA_EX.forEach(id => { const s = SLOTS[EX[id].slot]; if (s && !s.vars.includes(id)) s.vars.push(id); });
 
-
-/* ============================================================
-   CARDIO
-   CD(id, name, group, met, opts) — met is the metabolic equivalent used for the calorie
-   estimate: kcal/min = MET x 3.5 x kg / 200. Values follow the Compendium of Physical
-   Activities. They are an estimate from your body weight and the clock, not a measurement:
-   no heart rate, no pace, no grade, so treat the number as a ballpark.
-   laps: the stopwatch offers laps (intervals, rounds, repeats). round: the lap is a timed round.
-   ============================================================ */
 const CARDIO = {};
 const CARDIO_GROUPS = ['Walking & running', 'Machines', 'Outdoors & water', 'Boxing & martial arts', 'Intervals & conditioning'];
 function CD(id, name, group, met, how, opts) { CARDIO[id] = Object.assign({ id, name, group, met, how }, opts || {}); }
@@ -1228,7 +1197,6 @@ Object.assign(TEMPLATES, {
       ['triceps_b', 'H', 3, '10–12', 45, 2, 'Superset B — alternate with biceps']] }
 });
 
-/* ---------- legacy (mixed upper/full-body) templates stay defined so old logged days still render ---------- */
 Object.keys(TEMPLATES).forEach(k => { TEMPLATES[k].legacy = true; });
 
 /* ============================================================
@@ -1237,7 +1205,6 @@ Object.keys(TEMPLATES).forEach(k => { TEMPLATES[k].legacy = true; });
    ============================================================ */
 const NOTE_DS = 'Last set: drop set (−25%, go to 1 RIR)', NOTE_MYO = 'Last set: myo-reps (rest 5 breaths, 3–5 more reps ×3)', NOTE_60 = '~60% of normal load', NOTE_RAMP = 'Ramp: 50% ×8, 70% ×5, 85% ×2, then top set';
 function TPL(key, name, short, kind, phase, focus, rows) { TEMPLATES[key] = { name, short, kind, phase, icon: { push: 'upper', pull: 'pull', legs: 'lower', deload: 'deload', test: 'test' }[kind], focus, rows }; }
-// Foundation — legs lower priority (1 legs session per 5)
 TPL('FPA', 'Push A — Strength', 'Push A · Strength', 'push', 1, 'Chest and shoulder pressing for strength, then fly, lateral raises and triceps.', [
   ['chest_press', 'S', 4, '5–7', 150, 0], ['delt_press', 'S', 3, '6–8', 150, 0], ['chest_fly', 'H', 3, '10–15', 90, 0], ['side_delt', 'H', 3, '12–15', 60, 0], ['triceps_b', 'H', 3, '10–12', 60, 0], ['triceps_a', 'H', 2, '10–12', 60, 1]]);
 TPL('FLA', 'Pull A — Strength', 'Pull A · Strength', 'pull', 1, 'Heavy rows, then vertical pulls, lat isolation, rear delts and biceps.', [
@@ -1248,7 +1215,6 @@ TPL('FPB', 'Push B — Hypertrophy', 'Push B · Hypertrophy', 'push', 1, 'Higher
   ['chest_press', 'H', 3, '8–12', 120, 1], ['chest_fly', 'H', 3, '12–15', 75, 1], ['delt_press', 'H', 3, '10–12', 90, 1], ['side_delt', 'H', 4, '15–20', 60, 1], ['triceps_a', 'H', 3, '12–15', 60, 0], ['triceps_b', 'H', 2, '12–15', 60, 1]]);
 TPL('FLB', 'Pull B — Hypertrophy', 'Pull B · Hypertrophy', 'pull', 1, 'Higher-rep back, rear delt and biceps work using different variations from Pull A.', [
   ['back_vertical', 'H', 3, '8–12', 120, 1], ['back_row', 'H', 3, '10–12', 90, 1], ['back_iso', 'H', 3, '12–15', 60, 1], ['rear_delt', 'H', 3, '15–20', 60, 1], ['biceps_b', 'H', 3, '10–12', 60, 0], ['biceps_a', 'H', 2, '12–15', 60, 1]]);
-// Build
 TPL('BPA', 'Push A — Strength', 'Push A · Strength', 'push', 2, 'Heavy chest and overhead pressing, then fly, lateral raises and triceps.', [
   ['chest_press', 'S', 4, '5–7', 150, 0], ['delt_press', 'S', 3, '6–8', 150, 0], ['chest_fly', 'H', 3, '10–15', 90, 0], ['side_delt', 'H', 3, '12–15', 60, 0], ['triceps_a', 'H', 3, '8–12', 75, 0], ['triceps_b', 'H', 2, '10–12', 60, 0]]);
 TPL('BLA', 'Pull A — Strength', 'Pull A · Strength', 'pull', 2, 'Heavy vertical pull and row, then lat isolation, rear delts and biceps.', [
@@ -1261,7 +1227,6 @@ TPL('BLB', 'Pull B — Hypertrophy', 'Pull B · Hypertrophy', 'pull', 2, 'Modera
   ['back_row', 'H', 3, '8–12', 90, 1], ['back_vertical', 'H', 3, '10–12', 90, 1], ['back_iso', 'H', 3, '12–15', 60, 1], ['rear_delt', 'H', 3, '15–20', 60, 1], ['biceps_b', 'H', 3, '10–15', 60, 1], ['biceps_a', 'H', 2, '12–15', 60, 1]]);
 TPL('BGB', 'Legs B — Hypertrophy', 'Legs B · Hypertrophy', 'legs', 2, 'Leg extensions first, then moderate-load pressing, a hinge, curls, glutes, calves and core.', [
   ['quad_iso', 'H', 3, '12–15', 75, 0], ['quad_main', 'H', 3, '10–12', 120, 1], ['ham_hinge', 'H', 3, '8–12', 120, 1], ['ham_curl', 'H', 3, '12–15', 75, 1], ['glute', 'H', 3, '12–15', 60, 1], ['calves', 'H', 3, '12–15', 60, 1], ['core', 'H', 3, '10–15', 60, 0]]);
-// Intensify
 TPL('IPA', 'Push — Heavy', 'Push · Heavy', 'push', 3, 'Lowest reps of the program on the presses; intensity techniques on the isolation finishers.', [
   ['chest_press', 'S', 5, '4–6', 180, 0], ['delt_press', 'S', 4, '5–7', 150, 0], ['chest_fly', 'H', 3, '12–15', 75, 0, NOTE_DS], ['side_delt', 'H', 4, '12–15', 60, 0, NOTE_MYO], ['triceps_b', 'H', 3, '10–12', 60, 0]]);
 TPL('ILA', 'Pull — Heavy', 'Pull · Heavy', 'pull', 3, 'Heavy rows and pulldowns; intensity techniques on lats and rear delts.', [
@@ -1274,14 +1239,12 @@ TPL('ILB', 'Pull — Pump', 'Pull · Pump', 'pull', 3, 'Moderate loads, short re
   ['back_vertical', 'H', 3, '10–12', 90, 2], ['back_row', 'H', 3, '10–12', 90, 2], ['back_iso', 'H', 3, '12–15', 60, 2], ['rear_delt', 'H', 3, '15–20', 45, 1], ['biceps_b', 'H', 3, '10–12', 45, 1], ['biceps_a', 'H', 2, '12–15', 45, 2]]);
 TPL('IGB', 'Legs — Pump', 'Legs · Pump', 'legs', 3, 'Higher-rep leg day with short rests, hinging as well as curling for the hamstrings.', [
   ['quad_iso', 'H', 3, '12–15', 75, 1], ['quad_main', 'H', 3, '10–12', 120, 2], ['ham_hinge', 'H', 3, '10–12', 90, 2], ['ham_curl', 'H', 3, '12–15', 75, 2], ['glute', 'H', 3, '12–15', 60, 2], ['calves', 'H', 3, '12–20', 45, 2], ['core', 'H', 3, '10–15', 60, 1]]);
-// Volume (cycle 2+)
 TPL('VP', 'Push — Volume', 'Push · Volume', 'push', 5, 'Higher reps and shorter rests for chest, delts and triceps.', [
   ['chest_press', 'H', 3, '10–12', 90, 1], ['chest_fly', 'H', 3, '12–15', 60, 2], ['delt_press', 'H', 3, '10–12', 90, 2], ['side_delt', 'H', 4, '15–20', 45, 2, 'Last set: drop set'], ['triceps_a', 'H', 3, '12–15', 45, 0], ['triceps_b', 'H', 3, '12–15', 45, 2]]);
 TPL('VL', 'Pull — Volume', 'Pull · Volume', 'pull', 5, 'Higher reps and shorter rests for back, rear delts and biceps.', [
   ['back_vertical', 'H', 4, '10–12', 90, 1], ['back_row', 'H', 3, '12–15', 75, 2], ['back_iso', 'H', 3, '12–15', 60, 1], ['rear_delt', 'H', 3, '15–20', 45, 2], ['biceps_a', 'H', 3, '12–15', 45, 0], ['biceps_b', 'H', 3, '10–12', 45, 2]]);
 TPL('VG', 'Legs — Volume', 'Legs · Volume', 'legs', 5, 'Quads pre-exhausted with extensions, then moderate-load pressing, curls, glutes and calves for reps.', [
   ['quad_iso', 'H', 3, '15–20', 60, 1, 'Pre-exhaust — controlled 3 s lowering'], ['quad_main', 'H', 3, '10–15', 120, 1], ['ham_hinge', 'H', 3, '10–12', 90, 1], ['ham_curl', 'H', 3, '10–15', 75, 2], ['quad_uni', 'H', 3, '10–12 / leg', 75, 1], ['glute', 'H', 3, '12–15', 60, 1], ['calves', 'H', 4, '12–20', 45, 1], ['core', 'H', 3, '12–15', 45, 2]]);
-// Deload & test week
 TPL('DLPUSH', 'Deload — Push', 'Deload · Push', 'deload', 4, 'Half the sets at ~60% of your recent working weights.', [
   ['chest_press', 'H', 2, '8–10', 90, 0, NOTE_60], ['delt_press', 'H', 2, '8–10', 90, 0, NOTE_60], ['side_delt', 'H', 2, '12–15', 60, 0], ['triceps_b', 'H', 2, '12', 45, 0]]);
 TPL('DLPULL', 'Deload — Pull', 'Deload · Pull', 'deload', 4, 'Half the sets at ~60% of your recent working weights.', [
@@ -1295,7 +1258,6 @@ TPL('TPULL', 'PR Test — Pull', 'PR Test · Pull', 'test', 4, 'Warm up in 3–4
 TPL('TLEGS', 'PR Test — Legs', 'PR Test · Legs', 'test', 4, 'Top sets on the main leg movements. Stop the set when form breaks — that’s your RM.', [
   ['quad_main', 'T', 1, '3–5 RM', 240, 0, NOTE_RAMP, 'barbell_back_squat'], ['ham_hinge', 'T', 1, '5–8 RM', 180, 0, '', 'trap_bar_deadlift'], ['ham_curl', 'T', 1, '8 RM', 120, 0], ['glute', 'T', 1, '8 RM', 120, 0], ['calves', 'T', 1, '10 RM', 90, 0], ['core', 'H', 2, '10–15', 60, 0]]);
 
-// seq = the rolling order sessions are assigned in (continues across weeks, restarts each phase)
 const PHASE_DEFS = {
   foundation: { key: 'foundation', n: 1, name: 'Foundation', seq: ['FPA', 'FLA', 'FGA', 'FPB', 'FLB'], cls: 'p1', dot: 'push',
     summary: 'Upper-body priority. Push and pull sessions alternate; legs get 1 session in every 5 while your recovery adapts to the calorie deficit.',
@@ -1314,15 +1276,12 @@ const PHASE_DEFS = {
     legs: 'Test week' }
 };
 Object.values(PHASE_DEFS).forEach(p => { p.templates = p.key === 'test' ? ['DLPUSH', 'DLPULL', 'DLLEGS', 'TPUSH', 'TPULL', 'TLEGS'] : p.seq.slice(); });
-// Test week: (N−3) deloads first, then up to 3 PR tests
 function testWeekSeq(n) { const dl = ['DLPUSH', 'DLPULL', 'DLLEGS'], t = ['TPUSH', 'TPULL', 'TLEGS']; const seq = dl.slice(0, Math.max(0, Math.min(3, n - 3))).concat(t.slice(0, Math.min(3, Math.max(1, n)))); return seq; }
-// Cycle 1 = the 90-day launch. Every later cycle is 13 weeks: Build → Intensify → Volume → Deload & Test.
 const CYCLE1 = [Object.assign({}, PHASE_DEFS.foundation, { weeks: [1, 4] }), Object.assign({}, PHASE_DEFS.build, { weeks: [5, 8] }), Object.assign({}, PHASE_DEFS.intensify, { weeks: [9, 12] }), Object.assign({}, PHASE_DEFS.test, { weeks: [13, 13] })];
 const CYCLEN = [Object.assign({}, PHASE_DEFS.build, { weeks: [1, 4] }), Object.assign({}, PHASE_DEFS.intensify, { weeks: [5, 8] }), Object.assign({}, PHASE_DEFS.volume, { weeks: [9, 12] }), Object.assign({}, PHASE_DEFS.test, { weeks: [13, 13] })];
 const PHASES = CYCLE1;
 const ALL_PHASES = ['foundation', 'build', 'intensify', 'volume', 'test'].map(k => PHASE_DEFS[k]);
 const PUSH_GROUPS = ['Chest', 'Shoulders', 'Triceps'], PULL_GROUPS = ['Back', 'Biceps'];
 
-// Target reps-in-reserve by week within a phase
 const RIR = { H: ['3', '2', '1–2', '0–1'], S: ['3', '2', '2', '1'] };
 EX.assisted_pullup.assist = true;

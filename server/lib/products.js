@@ -1,23 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
 'use strict';
-/* ============================================================
-   FORGE 90 — packaged products by barcode: barcode checks and Open Food Facts lookups.
-   Product data from Open Food Facts (openfoodfacts.org) is available under the Open Database License.
-   ============================================================ */
 const { fetchUrl, ImportErr } = require('./recipe-import');
 
 const OFF_BASE = () => String(process.env.OFF_URL || 'https://world.openfoodfacts.org').replace(/\/+$/, '');
 const UA = 'FORGE90/1.0 (self-hosted meal planner; +https://github.com/Oroshi-zz/Forge_90)';
 
-// GTIN check digit (EAN-8, UPC-A, EAN-13, GTIN-14)
 function gtinValid(code) {
   if (!/^\d{8}$|^\d{12,14}$/.test(code)) return false;
   const d = code.split('').map(Number); const check = d.pop();
   const sum = d.reverse().reduce((a, n, i) => a + n * (i % 2 === 0 ? 3 : 1), 0);
   return (10 - (sum % 10)) % 10 === check;
 }
-// one spelling per product: UPC-A (12) is stored as its EAN-13 form with a leading 0
 function normGtin(code) {
   code = String(code || '').replace(/\D/g, '');
   if (code.length === 12) code = '0' + code;

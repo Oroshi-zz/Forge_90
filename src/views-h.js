@@ -6,8 +6,8 @@
    ================================================================ */
 
 /* ---------- swapping exercises ---------- */
-let SWP = null;          // { mode: 'day'|'prog', date, i, slot, exId, back }
-function swapStartWeek(exId) {                 // same rule as switching an exercise off: next week if it's already logged this week
+let SWP = null;
+function swapStartWeek(exId) {
   let from = curPlanWeekStart();
   const logged = Object.keys(S.logs || {}).some(d => d >= from && d <= todayISO() && ((S.logs[d] || {})[exId] || []).some(x => x && (x.w != null || x.r != null)));
   return logged ? addDays(from, 7) : from;
@@ -69,7 +69,7 @@ function swapPick(id) {
   const wkFrom = swapStartWeek(x.exId);
   pushUndo('swap exercise in the program');
   S.slotSwap = S.slotSwap || {}; const L = S.slotSwap[x.slot] = S.slotSwap[x.slot] || [];
-  const act = L.find(s => s[1] === x.exId && !s[3]);       // the exercise shown is itself a swap → change that swap
+  const act = L.find(s => s[1] === x.exId && !s[3]);
   const orig = act ? act[0] : x.exId;
   if (act) { if (act[2] >= wkFrom) L.splice(L.indexOf(act), 1); else act[3] = wkFrom; }
   if (id !== orig) L.push([orig, id, wkFrom, null]);
@@ -94,7 +94,7 @@ function avatarSquare(file, size = 256) {
       const w = img.naturalWidth, h = img.naturalHeight; const s = Math.min(w, h); if (!s) throw new Error('empty');
       const c = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d');
       g.imageSmoothingQuality = 'high'; g.fillStyle = '#fff'; g.fillRect(0, 0, size, size);
-      g.drawImage(img, (w - s) / 2, (h - s) / 2, s, s, 0, 0, size, size);            // centre crop to a square
+      g.drawImage(img, (w - s) / 2, (h - s) / 2, s, s, 0, 0, size, size);
       URL.revokeObjectURL(url); resolve(c.toDataURL('image/jpeg', 0.86));
     } catch (e) { URL.revokeObjectURL(url); reject(e); } };
     img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode')); };

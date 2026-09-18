@@ -1,13 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
-// AGPL-3.0 §13: if you run a modified FORGE 90 for other people, point this at your own source code.
 const SOURCE_URL = 'https://github.com/Oroshi-zz/Forge_90';
-/* ============================================================
-   FORGE 90 — UI core: helpers, icons, art, muscle map, tooltip,
-   charts, toast/modal, undo, router
-   ============================================================ */
 const $ = (s, el = document) => el.querySelector(s);
-// phones get the bottom-tab layout (views-l); the sidebar layout starts at 861 px
 const PHONE_MQ = window.matchMedia ? window.matchMedia('(max-width: 860px)') : null;
 const isPhone = () => !!(PHONE_MQ && PHONE_MQ.matches);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -17,15 +11,13 @@ const UI = { calView: 'month', calMonth: null, calWeek: null, libTab: 'workouts'
 /* Per-account, because two people on one machine were inheriting each other's grocery week,
    calendar position, searches and theme. The bare key stays for signed-out (local) use. */
 const UI_DEFAULTS = JSON.parse(JSON.stringify(UI));
-// AUTH is declared later in the bundle, so at this point it is in the temporal dead zone and
-// even `typeof AUTH` throws. Catch it rather than silently falling back to an unmerged UI.
 function uiUser() { try { return (AUTH && AUTH.user) || null; } catch (e) { return null; } }
 const uiKey = () => { const u = uiUser(); return u ? 'forge90.ui:' + u.id : 'forge90.ui'; };
 function loadUI() {
   Object.keys(UI).forEach(k => { delete UI[k]; });
   Object.assign(UI, JSON.parse(JSON.stringify(UI_DEFAULTS)));
   try { Object.assign(UI, JSON.parse(localStorage.getItem(uiKey()) || '{}')); } catch (e) { }
-  delete UI.returnToRecipe;                     // was persisted by mistake and could stay set after a cancelled dialog
+  delete UI.returnToRecipe;
 }
 loadUI();
 function saveUI() { try { localStorage.setItem(uiKey(), JSON.stringify(UI)); } catch (e) { } }
@@ -85,7 +77,6 @@ const IC = {
 const icon = (n, cls = '') => `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${IC[n] || ''}</svg>`;
 
 /* ---------- generated art ---------- */
-// Logo: “Anvil Bar + Spark” (option 3B-3) — lime anvil, hammer spark, barbell across the base
 const LOGO = `<svg class="logo" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FORGE 90"><defs><linearGradient id="fgt" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#27321c"/><stop offset="1" stop-color="#0b0f09"/></linearGradient><linearGradient id="fgf" x1=".5" y1="0" x2=".5" y2="1"><stop offset="0" stop-color="#f2ff9e"/><stop offset=".45" stop-color="#b5f23d"/><stop offset="1" stop-color="#4d8a0a"/></linearGradient></defs><rect width="48" height="48" rx="13" fill="url(#fgt)"/><rect x=".6" y=".6" width="46.8" height="46.8" rx="12.4" fill="none" stroke="#b5f23d" stroke-opacity=".28" stroke-width="1.2"/><path d="M24 12.4V6.800000000000001M18.8 13 15.9 8.8M29.2 13 32.1 8.8" stroke="#d9f99d" stroke-width="2.2" stroke-linecap="round"/><path transform="translate(24 23.8) scale(0.84) translate(-24 -24)" d="M6.5 19.5H38.8Q42.4 19.5 42.4 23.2V24.4H35.6L31.8 29.2V32.6H36.2V37.6H13.8V32.6H18.2V29.2L15.2 25.6Q9.2 25.1 6.5 19.5Z" fill="url(#fgf)"/><g fill="#f7fbe9" stroke="#0f1a02" stroke-width="1.3" paint-order="stroke"><rect x="5.8" y="28.4" width="4.2" height="12" rx="1.8900000000000001"/><rect x="10.4" y="30.68" width="3.2760000000000002" height="7.4399999999999995" rx="1.4742000000000002"/><rect x="38" y="28.4" width="4.2" height="12" rx="1.8900000000000001"/><rect x="34.324" y="30.68" width="3.2760000000000002" height="7.4399999999999995" rx="1.4742000000000002"/><rect x="13.676" y="33.1" width="20.648000000000003" height="2.6" rx="1.3"/></g></svg>`;
 function heroArt() {
   /* Colours come from --hero-accent / --accent-2 so the art follows the accent setting. CSS variables
@@ -189,7 +180,6 @@ function showTip(el, html) {
   t.style.left = x + 'px'; t.style.top = y + 'px';
 }
 function hideTip() { tipEl().classList.remove('on'); tipTarget = null; }
-// touch screens have no hover: a tap only opens the exercise form tips (on what was actually tapped), and the next tap closes it
 let tipPtr = 'mouse', tipTap = null;
 document.addEventListener('pointerdown', e => { tipPtr = e.pointerType || 'mouse'; tipTap = e.target; if (tipPtr !== 'mouse' && tipTarget && !(e.target.closest && e.target.closest('#tip'))) hideTip(); }, true);
 const TIP_SEL = '[data-tip-ex],[data-tip-wo],[data-tip-meal],[data-tip-tpl],[data-tip]';
@@ -204,12 +194,10 @@ function openTip(el) { if (!el) return; if (el === tipTarget) return; tipTarget 
 document.addEventListener('mouseover', e => {
   if (document.body.classList.contains('dragging')) return;
   const el = e.target.closest(TIP_SEL);
-  if (tipPtr !== 'mouse' && el) return;                // touch is handled on tap below
+  if (tipPtr !== 'mouse' && el) return;
   if (!el) { if (tipTarget) hideTip(); return; }
   openTip(el);
 });
-/* Keyboard users had no way to reach any of this, and on touch everything except the exercise
-   tips was unreachable too. Tabbing to a tip target opens it; a tap toggles it. */
 document.addEventListener('focusin', e => { const el = e.target.closest && e.target.closest(TIP_SEL); if (el) openTip(el); else if (tipTarget) hideTip(); });
 document.addEventListener('focusout', e => { if (tipTarget && e.target === tipTarget) hideTip(); });
 document.addEventListener('click', e => {
@@ -237,7 +225,6 @@ function niceTicks(min, max, n = 5) {
   for (let v = lo; v <= hi + step * 1e-6; v += step) out.push(+v.toFixed(6));
   return out;
 }
-/* cfg: {series:[{label,color,pts:[{d,v}],line,dots,muted,width}], refs:[{v,label}], yFmt, h, xMin, xMax} */
 function lineChart(el, cfg) {
   if (!el) return;
   const all = cfg.series.flatMap(s => s.pts);
@@ -283,7 +270,6 @@ function lineChart(el, cfg) {
     tt.style.left = Math.min(r.width - 70, Math.max(70, X(best) * sx)) + 'px'; tt.style.top = (topY * sx - 10) + 'px';
   };
   const hide = () => { tt.classList.add('hidden'); xh.setAttribute('visibility', 'hidden'); hl.innerHTML = ''; };
-  // mouse: hover; finger: touch and drag sideways (vertical swipes still scroll the page); keyboard: arrow keys
   hit.addEventListener('pointermove', ev => { if (ev.pointerType === 'mouse' || ev.buttons) move(ev); });
   hit.addEventListener('pointerdown', ev => { touchTT = ev.pointerType !== 'mouse'; move(ev); });
   hit.addEventListener('pointerleave', ev => { if (ev.pointerType === 'mouse') hide(); });
@@ -305,7 +291,7 @@ function estMinutes(rows) { return Math.round(rows.reduce((a, r) => a + r.sets *
 
 /* ---------- toast, modal ---------- */
 let toastTimer = null;
-const TOAST_MS = 10000;   // notifications stay up for 10 seconds (paused while the pointer is over them)
+const TOAST_MS = 10000;
 function toast(msg, undoable) {
   const t = $('#toast'); if (!t) return;
   t.innerHTML = `<span>${esc(msg)}</span>${undoable ? `<button data-act="undo">Undo</button>` : ''}<button class="toast-x" data-act="toast-close" aria-label="Dismiss">${icon('x')}</button>`;
@@ -314,7 +300,7 @@ function toast(msg, undoable) {
   if (!t._hover) { t._hover = true; t.addEventListener('mouseenter', () => clearTimeout(toastTimer)); t.addEventListener('mouseleave', () => { clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 4000); }); }
 }
 function modal(html, cls = '', backable) {
-  const old = $('#modal'); if (old) old.remove();     // replaced in place: re-rendering a sheet mustn't churn history
+  const old = $('#modal'); if (old) old.remove();
   const bg = document.createElement('div'); bg.className = 'modal-bg'; bg.id = 'modal';
   bg.innerHTML = `<div class="modal ${cls}">${isPhone() ? '<div class="sh-hdl" role="button" tabindex="-1" aria-label="Close"><i></i></div>' : ''}${html}</div>`;
   bg.addEventListener('mousedown', e => { if (e.target === bg) closeModal(); });
@@ -328,14 +314,11 @@ function modal(html, cls = '', backable) {
 let RE_ADDFOOD = false;
 function closeModal() { RE_ADDFOOD = false; const m = $('#modal'); if (m) m.remove(); backDrop('modal'); }
 
-/* ---------- back-to-close ----------
-   On a phone the back gesture should dismiss whatever is on top, not leave the app.
-   One history entry covers the whole overlay session; closing the last overlay gives it back. */
 const BACK_STACK = []; let BACK_SELF = false;
 function backPush(name, close) {
   const top = BACK_STACK[BACK_STACK.length - 1];
-  if (top && top.name === name) { top.close = close; return; }        // same overlay re-rendering, not a new one
-  if (!BACK_STACK.length) { try { history.pushState({ f90: 1 }, ''); } catch (e) { /* no history */ } }
+  if (top && top.name === name) { top.close = close; return; }
+  if (!BACK_STACK.length) { try { history.pushState({ f90: 1 }, ''); } catch (e) { } }
   BACK_STACK.push({ name, close });
 }
 function backDrop(name) {                       // closed by a tap, Escape or a button: take our entry back
@@ -346,8 +329,8 @@ function backDrop(name) {                       // closed by a tap, Escape or a 
 window.addEventListener('popstate', () => {
   if (BACK_SELF) { BACK_SELF = false; return; }
   const top = BACK_STACK.pop(); if (!top) return;
-  if (BACK_STACK.length) { try { history.pushState({ f90: 1 }, ''); } catch (e) { /* no history */ } }
-  try { top.close(); } catch (e) { /* already gone */ }
+  if (BACK_STACK.length) { try { history.pushState({ f90: 1 }, ''); } catch (e) { } }
+  try { top.close(); } catch (e) { }
 });
 function confirmBox(title, text, okLabel, onOk, danger) {
   modal(`<h2>${esc(title)}</h2><p class="sub">${text}</p><div class="row" style="justify-content:flex-end;margin-top:18px"><button class="btn" data-act="close-modal">Cancel</button><button class="btn ${danger ? 'danger' : 'primary'}" id="cf-ok">${esc(okLabel)}</button></div>`, 'sm');
@@ -356,9 +339,6 @@ function confirmBox(title, text, okLabel, onOk, danger) {
 
 /* ---------- undo ---------- */
 const undoStack = [];
-/* `extra` carries anything outside S.plan that the action is about to change. A rebuild moves
-   the start date, and restoring the old plan without it left the app enumerating dates the
-   plan no longer had. */
 function pushUndo(label, extra) { undoStack.push({ plan: JSON.stringify(S.plan), fav: JSON.stringify(S.favRecipes || {}), share: S.settings.shareIngredients !== false, swap: JSON.stringify(S.slotSwap || {}), gym: JSON.stringify({ c: S.gymCards || [], a: S.gymActive || null }), extra: extra ? JSON.parse(JSON.stringify(extra)) : null, label }); if (undoStack.length > 40) undoStack.shift(); }
 function undo() {
   const u = undoStack.pop(); if (!u) { toast('Nothing to undo'); return; }

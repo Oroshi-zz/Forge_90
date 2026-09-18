@@ -1,17 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
-/* ================================================================
-   FORGE 90 — recipe import (web links and Mealie)
-   The server fetches the recipe; here each ingredient line is parsed (amount, unit,
-   food), matched to the food database and converted to the food's own unit. Every
-   import opens in the recipe editor for review: anything that couldn't be worked out
-   is highlighted and has to be filled in before the recipe can be saved.
-   ================================================================ */
 
 /* ---------- parsing an ingredient line ---------- */
 const IMP_FRAC = { '½': .5, '⅓': 1 / 3, '⅔': 2 / 3, '¼': .25, '¾': .75, '⅕': .2, '⅖': .4, '⅗': .6, '⅘': .8, '⅙': 1 / 6, '⅚': 5 / 6, '⅛': .125, '⅜': .375, '⅝': .625, '⅞': .875 };
 const IMP_WORDNUM = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, half: .5, dozen: 12, couple: 2 };
-// [pattern for the unit word, kind, factor to grams (mass) or ml (volume), label]
 const IMP_UNITS = [
   ['fl\\.?\\s?oz\\.?|fluid\\s+ounces?', 'vol', 29.57, 'fl oz'],
   ['kilograms?|kilos?|kgs?', 'mass', 1000, 'kg'], ['grams?|gr|g', 'mass', 1, 'g'], ['milligrams?|mg', 'mass', .001, 'mg'],
@@ -52,21 +44,17 @@ function impParseLine(text) {
     .replace(/^[\s•*·▢☐□\-–]+/, '').replace(/\s+/g, ' ').trim();
   const out = { src, qty: null, u: null, size: 1, paren: null, food: '', note: '', header: false, optional: /\boptional\b/i.test(s), toTaste: /\bto taste\b|\bas needed\b|\bfor (serving|garnish|the pan|greasing|dusting)\b|\bgarnish\b/i.test(s) };
   if (/:$/.test(s) && !/\d/.test(s)) { out.header = true; return out; }
-  // "juice of 1 lemon", "zest of 2 limes"
   let jm = s.match(/^(juice|zest)\s+(?:from|of)\s+(\S+)\s+(?:(small|medium|large)\s+)?(lemons?|limes?|oranges?)/i);
   if (jm) { const q = impNum(jm[2]) || IMP_WORDNUM[jm[2].toLowerCase()] || 1; const fruit = jm[4].toLowerCase().replace(/s$/, ''); out.qty = q; out.u = null; out.size = IMP_SIZE[(jm[3] || '').toLowerCase()] || 1; out.food = jm[1].toLowerCase() === 'zest' ? fruit + ' zest' : fruit + ' juice'; out.juiceOf = fruit; out.zest = jm[1].toLowerCase() === 'zest'; return out; }
   // parentheses: keep any measurement in them, then drop them from the text
   const parens = []; s = s.replace(/\(([^)]*)\)/g, (m, x) => { parens.push(x); return ' '; }).replace(/\s+/g, ' ').trim();
-  // leading amount
   let m = s.match(new RegExp('^(' + IMP_NUM_RE + ')(?:\\s*(?:-|–|to|or)\\s*(' + IMP_NUM_RE + '))?\\s*'));
   if (m) { const a = impNum(m[1]), b = m[2] ? impNum(m[2]) : null; out.qty = b && a ? (a + b) / 2 : a; s = s.slice(m[0].length); }
   else if ((m = s.match(/^(an?|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|half|dozen|couple)\b(?:\s+of)?\s*/i))) { out.qty = IMP_WORDNUM[m[1].toLowerCase()]; s = s.slice(m[0].length); }
-  // "2 x 400 g", "1 15-oz can"
   let mx = s.match(new RegExp('^(?:x|×)\\s*(' + IMP_NUM_RE + ')\\s*(fl\\.?\\s?oz|[a-z]+\\.?)\\s*', 'i'));
   if (mx) { const u = impUnit(mx[2].toLowerCase(), mx[2]); if (u && u.k !== 'count') { out.paren = { qty: impNum(mx[1]), u }; s = s.slice(mx[0].length); } }
   mx = s.match(new RegExp('^(' + IMP_NUM_RE + ')\\s*-?\\s*(fl\\.?\\s?oz|ounces?|oz\\.?|g|grams?|ml|lbs?\\.?|pounds?)\\b\\.?\\s*', 'i'));
   if (mx && out.qty) { const u = impUnit(mx[2].toLowerCase(), mx[2]); if (u) { out.paren = { qty: impNum(mx[1]), u }; s = s.slice(mx[0].length); } }
-  // size word, then unit (allowing "2 large cloves", "1 heaping cup")
   const takeSize = () => { const sm = s.match(/^(small|medium|med\.?|large|big|extra-large|xl|jumbo)\b\.?\s*/i); if (sm) { out.size = IMP_SIZE[sm[1].toLowerCase().replace(/\.$/, '')] || 1; s = s.slice(sm[0].length); } };
   s = s.replace(/^(heaping|heaped|level|scant|generous|rounded|packed|about|approximately|approx\.?)\s+/i, ''); takeSize();
   const two = s.match(/^(fl\.?\s?oz\.?|fluid\s+ounces?)\b\s*/i);
@@ -77,7 +65,6 @@ function impParseLine(text) {
   if (!out.paren) for (const p of parens) { const pm = impMeasure(p); if (pm) { out.paren = pm; break; } }
   if (out.u && out.u.k !== 'count') out.paren = null;
   const qual = parens.filter(p => !impMeasure(p) && /\d\s*%|\d+\/\d+|\blean\b|\bfat\b|\blow\b|\breduced\b|\bnonfat\b|\bskim\b/i.test(p)).join(' ');
-  // food name: before the first comma; notes after it
   const ci = s.indexOf(','); out.food = (ci >= 0 ? s.slice(0, ci) : s).trim(); out.note = ci >= 0 ? s.slice(ci + 1).trim() : '';
   if (qual) out.food += ' ' + qual;
   out.food = out.food.replace(/\s+(?:or|and\/or)\s+.*$/i, '').replace(/\b(for serving|for garnish|to taste|as needed|optional|divided)\b/gi, '').replace(/\s+/g, ' ').trim();
@@ -117,15 +104,15 @@ function impSing(w) {
   return w;
 }
 const IMP_FILLER = new Set('of the a an and or with in to for style'.split(' '));
-function impTokens(s, syn) {             // syn = true for recipe text (synonyms, descriptors dropped); false for food names (descriptors kept, as weak words)
+function impTokens(s, syn) {
   let t = impAscii(s).replace(/%/g, ' ').replace(/&/g, ' and ');
   if (syn) IMP_SYN.forEach(([re, rep]) => { t = t.replace(re, rep); });
   return t.replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean).map(impSing).filter(w => !(syn ? IMP_STOP : IMP_FILLER).has(w));
 }
 const impW = w => IMP_WEAK.has(w) || IMP_STOP.has(w) ? .25 : IMP_COLOR.has(w) ? .5 : /^\d+$/.test(w) ? .5 : 1;
 let _impIdx = null, _impIdxKey = '';
-const IMP_MORE = new Set(MORE_FOODS.map(f => f[0]));        // the original ~75 foods (used by the built-in recipes) win ties
-function impIndex() {                         // candidate names for every food, rebuilt when the catalog changes
+const IMP_MORE = new Set(MORE_FOODS.map(f => f[0]));
+function impIndex() {
   const key = Object.keys(ING).length + ':' + Object.keys(S.customFoods || {}).join(',') + ':' + Object.values(S.foodOverrides || {}).map(o => o.n || '').join(',');
   if (_impIdx && _impIdxKey === key) return _impIdx;
   _impIdx = Object.values(ING).map(g => {
@@ -165,15 +152,14 @@ function impMatch(food) {
   if (learned && ING[learned]) return { id: learned, score: 1, sugg: [learned].concat(sugg.filter(i => i !== learned)).slice(0, 4), st: 'ok', key, learned: true };
   const top = scored[0];
   if (!top || top.s < .55) return { id: '', score: top ? top.s : 0, sugg, st: 'none', key };
-  // a one-word food ("1 cup yogurt") that several foods fit about equally well
   const oneWord = Q.filter(t => impW(t) === 1).length <= 1;
   const close = scored[1] && top.s - scored[1].s < .05 && oneWord && !(top.orig && !scored[1].orig);
-  const vague = oneWord && top.c.some(t => !Q.includes(t) && t !== top.c.imp && !IMP_TRIVIAL.has(t) && !/^\d+$/.test(t));   // "1 lb beef" → which beef?
+  const vague = oneWord && top.c.some(t => !Q.includes(t) && t !== top.c.imp && !IMP_TRIVIAL.has(t) && !/^\d+$/.test(t));
   return { id: top.id, score: top.s, sugg, st: top.s >= .8 && !close && !vague ? 'ok' : 'check', key };
 }
 
 /* ---------- converting the amount to the food's unit ---------- */
-const IMP_DENS = [                // g per ml for measuring by volume (checked against the food's name, then its subgroup)
+const IMP_DENS = [
   [/peanut butter|almond butter|nut butter/, 1.08], [/\bbutter\b|ghee/, .95], [/honey/, 1.42], [/maple|agave|syrup/, 1.32], [/brown sugar/, .9], [/powdered sugar/, .5], [/sugar|sweetener/, .85],
   [/salt/, 1.2], [/flour|pancake mix|baking mix/, .53], [/cornstarch/, .53], [/cocoa/, .36], [/oats|oat\b/, .36], [/granola|cereal|flakes/, .3], [/rice, cooked|rice cup/, .66], [/\brice\b/, .78],
   [/quinoa|couscous|farro|barley|bulgur/, .75], [/lentil|chickpea|split pea/, .8], [/bean/, .72], [/pasta|noodle/, .45], [/panko|breadcrumb/, .25], [/shredded|mozzarella|cheddar|swiss|provolone|pepper jack|cotija|feta/, .45],
@@ -184,7 +170,7 @@ const IMP_DENS = [                // g per ml for measuring by volume (checked a
   [/oil|mayo|dressing|vinaigrette/, .92], [/sauce|salsa|ketchup|mustard|pesto|relish|paste|jam/, 1.05], [/powder|seasoning|spice|cinnamon|paprika|cumin|pepper/, .5]
 ];
 const IMP_SUB_DENS = { oils: .92, dressings: .95, sweeteners: 1.3, spices: .55, sauces: 1.05, condiments: 1.05, yogurt: 1.03, cottage: 1, cheese: .45, soft_cheese: 1, butter_cream: .95, rice: .78, ancient: .75, oats: .36, cereal: .3, baking: .53, pasta: .45, beans: .72, lentils: .8, leafy: .13, cruciferous: .38, alliums: .65, root_veg: .55, squash: .5, tomatoes: .7, other_veg: .6, berries: .6, tree_fruit: .6, tropical: .6, melon: .65, dried_fruit: .65, avocado: .63, peanuts: .6, tree_nuts: .55, seeds: .65, whey: .4, other_protein: .4, chips: .12, sweets: .6 };
-const IMP_EACH = [               // grams (ml for per-ml foods) of one item, by name
+const IMP_EACH = [
   [/egg white/, 33], [/egg yolk/, 17], [/\beggs?\b/, 50], [/chicken breast/, 225], [/chicken thigh/, 115], [/drumstick/, 105], [/chicken wing/, 90], [/chicken tender/, 45], [/pork tenderloin/, 450], [/pork chop|lamb chop/, 170],
   [/steak|filet/, 225], [/salmon|trout|cod|tilapia|halibut|mahi|swordfish|fillet/, 170], [/bratwurst|kielbasa|sausage/, 75], [/patty|burger/, 113], [/garlic/, 5], [/shallot/, 40], [/green onion|scallion/, 15],
   [/onion/, 150], [/bell pepper/, 150], [/jalape/, 15], [/serrano|chile|chili pepper|thai chili/, 8], [/sweet potato/, 180], [/potato/, 215], [/carrot/, 60], [/celery/, 40], [/zucchini|yellow squash/, 200], [/cucumber/, 300],
@@ -192,7 +178,7 @@ const IMP_EACH = [               // grams (ml for per-ml foods) of one item, by 
   [/lemon juice/, 45], [/lime juice/, 30], [/orange juice/, 80], [/lemon/, 60], [/lime/, 45], [/orange/, 130], [/apple/, 180], [/banana/, 118], [/pear/, 178], [/peach/, 150], [/mango/, 200], [/kiwi/, 75], [/date/, 24],
   [/lasagna/, 20], [/tortilla/, 45], [/bagel/, 100], [/\bbun\b/, 50], [/pita/, 64], [/naan/, 90], [/english muffin/, 66], [/bread/, 30], [/bacon/, 8], [/ginger/, 15], [/tofu/, 400], [/tempeh/, 225], [/shrimp/, 12], [/scallop/, 30]
 ];
-const IMP_UNIT_EACH = {          // grams per count unit, by name (falls back to IMP_EACH)
+const IMP_UNIT_EACH = {
   can: [[/tuna|chicken breast, drained|salmon, drained/, 142], [/bean|chickpea|lentil|corn|pea|artichoke/, 425], [/tomato|pumpkin|enchilada|marinara|sauce/, 411], [/broth|milk|coconut/, 400], [/./, 400]],
   jar: [[/salsa|pesto/, 450], [/marinara|sauce/, 680], [/pepper|artichoke/, 340], [/./, 450]], package: [[/tofu/, 400], [/tempeh/, 225], [/spinach|greens|arugula|lettuce/, 142], [/cream cheese/, 227], [/./, 450]], block: [[/tofu/, 400], [/./, 227]],
   stick: [[/butter/, 113], [/celery/, 40], [/cinnamon/, 3], [/./, 28]], bunch: [[/cilantro|parsley|herb|basil|dill|mint/, 60], [/green onion|scallion/, 100], [/spinach/, 280], [/kale|chard/, 200], [/asparagus/, 450], [/./, 150]],
@@ -219,7 +205,6 @@ function impAmount(id, p) {
     meas = { k: p.paren.u.k, v: qty * p.paren.qty * p.paren.u.f }; est = `${impQtyText(qty, p.u)} × ${impQtyText(p.paren.qty, p.paren.u)}`;
     if ((/drained/.test(gn) || /bean|chickpea|lentil|artichoke|corn|pea\b/.test(gn)) && (!p.u || /can|jar/.test(p.u.l))) { meas.v *= .6; est += ', drained'; }
   }
-  // per-item foods (eggs, tortillas, slices…)
   if (g.u) {
     if (!meas) { if (p.u && /can|jar|package|block|bunch|head|handful|scoop|serving/.test(p.u.l)) return null; return { amt: impRound(qty, true), est: null }; }
     const per = +g.g || 0; if (!per) return null; const grams = meas.k === 'mass' ? meas.v : meas.v * dens();
@@ -239,7 +224,6 @@ function impAmount(id, p) {
     if (ul === 'can' && (/drained/.test(gn) || /bean|chickpea|lentil|artichoke|corn|pea\b/.test(gn))) v *= .6;
     est = `${impQtyText(qty, p.u)}${p.size !== 1 ? (p.size < 1 ? ' small' : ' large') : ''} × ~${fmt(each * (p.size || 1))} ${g.ml ? 'ml' : 'g'} each`;
   }
-  // measured dry, but the database has it cooked (rice, quinoa, lentils…)
   const x = !g.ml && /\bcooked\b|\bcanned\b/.test(gn) ? impFind(IMP_DRY_COOKED, gn) : null;
   if (x && !/\bcooked\b|\bcanned\b|\bleftover\b/.test(fd + ' ' + impAscii(p.note || ''))) {
     const said = /\b(uncooked|dry|dried|raw)\b/.test(impAscii(p.src || '') + ' ' + fd);
@@ -250,12 +234,13 @@ function impAmount(id, p) {
   }
   return { amt: impRound(v, false), est, check };
 }
+
 /* ---------- turning an ingredient into an editor row ---------- */
 const IMP_NEGLIGIBLE = /^(water|cold water|warm water|hot water|boiling water|ice|ice cube|ice water|baking soda|baking powder|cream tartar|salt|black pepper|pepper|salt pepper|salt black pepper|cooking spray|nonstick spray|parchment|foil)$/;
 function impRow(it) {
   const p = impParseLine(it.text);
   if (it.header || p.header) return { header: true };
-  if (it.food) {                // Mealie already split it up
+  if (it.food) {
     p.food = it.food; if (it.qty != null) p.qty = +it.qty; if (it.unit) { const us = impAscii(it.unit).replace(/[^a-z. ]/g, '').trim(); p.u = impUnit(us, it.unit) || impUnit(us.split(' ')[0], it.unit) || p.u; if (p.u && p.u.k !== 'count') p.paren = null; }
     if (it.note && !p.note) p.note = it.note;
   }
@@ -356,8 +341,8 @@ function impRemember() {
 }
 
 /* ---------- the import dialog ---------- */
-let INTEG = null;                        // { mealie: {...} } from the server
-let IMPQ = null;                         // queue of Mealie recipes being reviewed one after another
+let INTEG = null;
+let IMPQ = null;
 const IMPUI = { tab: 'url', url: '', q: '', items: [], page: 1, pages: 1, total: 0, sel: {}, busy: false, err: '', loaded: false, sync: false, note: '' };
 async function loadInteg(force) { if (INTEG && !force) return INTEG; try { INTEG = await api('GET', '/api/integrations'); } catch (e) { INTEG = { mealie: { configured: false, canEdit: isAdmin() }, error: e.message }; } return INTEG; }
 function importModal(tab) {
@@ -428,8 +413,6 @@ async function impNext() {
   IMPQ.i++;
   if (IMPQ.i >= IMPQ.list.length) { const d = IMPQ.done, n = IMPQ.list.length; IMPQ = null; closeModal(); render(); toast(`Imported ${d} of ${n} recipe${n > 1 ? 's' : ''} from Mealie`); return; }
   const slug = IMPQ.list[IMPQ.i];
-  /* No loading popup here: the review screen already carries "Recipe n of N", and the popup used to
-     sit over the editor for every single recipe until it was clicked away. */
   try { const r = await api('GET', '/api/import/mealie/recipes/' + encodeURIComponent(slug)); if (!IMPQ) return; IMPUI.busy = false; closeModal(); importToEditor(r.recipe); }
   catch (e) { toast(`Couldn’t import “${impName(slug)}”: ${e.message}`); impNext(); }
 }
@@ -439,8 +422,6 @@ function impStartQueue() {
   const list = impSelected();
   if (!list.length) return; IMPQ = { list, i: -1, done: 0 }; IMPUI.sel = {}; IMPUI.busy = true; renderImportModal(); impNext();
 }
-/* Save everything that came through complete, and hand the rest to the normal review queue.
-   "Complete" is the same bar the review screen enforces (impNeeds), so nothing half-filled is saved. */
 async function impBulk() {
   const list = impSelected(); if (!list.length) return;
   const wasRE = RE; IMPUI.busy = true; renderImportModal();
