@@ -10,12 +10,15 @@ function woChip(date, e, extraCls = '') {
   const t = TEMPLATES[e.w.t];
   return `<div class="chip wo ${extraCls}" style="--k:${KIND_VAR(t.kind)}" draggable="true" data-drag="workout" data-date="${date}" data-tip-wo="${date}">${icon(t.icon)}<span class="nm">${esc(t.short)}</span></div>`;
 }
-function cdChip(date, e, extraCls = '') {
+/* A month cell leaves about 60px for the label, so which cardio it is wins over how long it is
+   there; the minutes stay in the tooltip and on every wider surface. */
+function cdChip(date, e, extraCls = '', compact = false) {
   const c = dayCardio(e); if (!c) return '';
   const k = CARDIO[c.k];
-  return `<div class="chip cd ${extraCls}" data-tip="${esc(k.name)} · ${c.min} min · about ${fmt(cardioKcal(c.k, c.min, statsOn(date).w))} kcal">${icon('heart')}<span class="nm">${esc(k.name)}</span><small>${c.min}m</small></div>`;
+  const label = compact ? (k.short || k.name) : k.name;
+  return `<div class="chip cd ${extraCls}" data-tip="${esc(k.name)} · ${c.min} min · about ${fmt(cardioKcal(c.k, c.min, statsOn(date).w))} kcal">${icon('heart')}<span class="nm">${esc(label)}</span>${compact ? '' : `<small>${c.min}m</small>`}</div>`;
 }
-const dayChips = (date, e) => (e.w ? woChip(date, e) : '') + cdChip(date, e);
+const dayChips = (date, e, compact) => (e.w ? woChip(date, e) : '') + cdChip(date, e, '', compact);
 function batchBadge(b, compact) {
   if (!b) return '';
   if (b.role === 'cook') return `<span class="bd cook">${compact ? '' : 'COOK '}×${b.batch.size}</span>`;
@@ -82,7 +85,7 @@ function viewDashboard() {
   const days7 = Array.from({ length: 7 }, (_, i) => addDays(focus, i)).filter(inPlan);
   const strip = `<div class="card"><div class="card-h"><h2>Next 7 days</h2><a class="btn sm ghost" href="#/calendar">Calendar ${icon('right')}</a></div><div class="strip7">
     ${days7.map(d => { const x = A.days[d]; return `<a href="#/day/${d}" class="cell ${x.isTrain ? 'train' : ''} ${d === today ? 'today' : ''}" style="min-height:0;text-decoration:none"><div class="cell-head"><span class="dn">${parseISO(d).getDate()}</span><span class="dt">${DOW[parseISO(d).getDay()]}</span></div>
-      ${dayHasWork(x.entry) ? dayChips(d, x.entry).replace('draggable="true"', '') : '<div class="rest-lbl">Rest</div>'}<div class="cell-foot"><div class="k">${fmt(x.totals.k)}<span>kcal</span></div></div></a>`; }).join('')}</div></div>`;
+      ${dayHasWork(x.entry) ? dayChips(d, x.entry, true).replace('draggable="true"', '') : '<div class="rest-lbl">Rest</div>'}<div class="cell-foot"><div class="k">${fmt(x.totals.k)}<span>kcal</span></div></div></a>`; }).join('')}</div></div>`;
 
   const prs = recentPRs(6);
   const prCard = `<div class="card"><div class="card-h"><h2>Recent PRs</h2><a class="btn sm ghost" href="#/progress">All progress ${icon('right')}</a></div>
@@ -121,7 +124,7 @@ function cellHTML(date, A, big, monthNum) {
   const outMonth = monthNum != null && dd.getMonth() + 1 !== monthNum;
   if (!inPlan(date)) return `<div class="cell out" style="${outMonth ? 'opacity:.3' : ''}"><div class="cell-head"><span class="dn">${dd.getDate()}</span>${big ? `<span class="dt">${DOW[dd.getDay()]}</span>` : ''}</div><div class="tiny muted" style="margin:auto;text-align:center">Outside plan</div></div>`;
   const day = A.days[date] || { meals: [] }; const e = planCell(date); const today = date === todayISO();
-  const wo = dayHasWork(e) ? dayChips(date, e) : `<div class="rest-lbl">Rest</div>`;
+  const wo = dayHasWork(e) ? dayChips(date, e, true) : `<div class="rest-lbl">Rest</div>`;   // both month and week cells are one column of seven
   const meals = DAY_SLOTS.map(slot => {
     const rid = e.m[slot]; const lbl = big ? `<div class="slot-l">${SLOT_LABEL[slot]}</div>` : '';
     if (!rid || !RECIPE[rid]) return lbl + `<div class="slot-empty" data-drop="slot" data-date="${date}" data-slot="${slot}">+ ${SLOT_LABEL[slot]}</div>`;

@@ -9,10 +9,14 @@ const TOUR_DESK = [
     body: 'Open a day to log your sets, swap a meal you don’t fancy, or add something you ate that wasn’t in the plan. The day’s calories and protein update as you go.' },
   { k: 'wo', hash: () => '#/day/' + tourDay(), sel: ['[data-act="wo-open"]', '.day-head'], title: 'Workout mode',
     body: 'This walks you through the session one exercise at a time, with the rest timer running between sets and your last weights already filled in.' },
+  { k: 'library', hash: '#/workouts', sel: ['[data-coll="lib"] .card-h', '[data-coll="lib"]'], title: 'Choose your exercises',
+    body: 'Each session is built from movement slots that rotate through a few variations. Switch exercises off here and they leave your rotation, so the plan matches the equipment you actually have. A swap in the table above sticks for the whole program.' },
   { k: 'grocery', hash: '#/grocery', sel: ['[data-tour="grocery"]', '.gro-aisle', '.gro-list'], title: 'The shopping sorts itself',
     body: 'This list is built from the week’s meals, grouped by aisle. Tell the Pantry what you already have at home and it comes off the list instead of being bought twice.' },
   { k: 'foods', hash: '#/foods', sel: ['[data-act="imp-open"]', '[data-tour="foods"]'], title: 'Recipes are shared',
     body: 'Everyone on your FORGE 90 server sees the same recipe book, and you can edit or delete the ones you create. Import brings recipes in from a web link or from Mealie.' },
+  { k: 'settings', hash: '#/settings', sel: ['[data-tour="training"]', '[data-tour="goal"]'], title: 'Training days and goals',
+    body: 'Select how many days you train and whether you are cutting, maintaining or building. Change either one and the calendar rebuilds from today forward, leaving everything you have already done alone.' },
 ];
 
 const TOUR_PHONE = [
@@ -20,10 +24,14 @@ const TOUR_PHONE = [
     body: 'The Today page provides you with quick ways to access gym cards, log workouts, weight checkins, edit workouts and meals.' },
   { k: 'plan', hash: '#/calendar', sel: ['[data-tour="tab-plan"]'], title: 'Plan',
     body: "FORGE 90 automatically generates all of your workouts and meals in advance based on your preferences. Don't like the generated plan? No problem. Use drag & drop to fully customize your workouts and meals, or select a day for easier editing. You can change your training days or your goals in Settings and the calendar rebuilds itself from today forward while past days are left alone." },
+  { k: 'library', hash: '#/workouts', sel: ['[data-coll="lib"] .card-h', '[data-coll="lib"]', '[data-tour="tab-plan"]'], title: 'Choose your exercises',
+    body: 'Under Plan → Training you get the whole program, plus the exercise library. Switch exercises off here and they leave your rotation, so the plan matches the equipment you actually have.' },
   { k: 'kitchen', hash: '#/grocery', sel: ['[data-tour="tab-kitchen"]'], title: 'Kitchen',
     body: 'Your shopping list, built from the week’s meals, plus the recipe book everyone here shares. Tell the Pantry what you already have and it comes off the list.' },
   { k: 'you', hash: '#/you', sel: ['[data-tour="tab-you"]'], title: 'You',
     body: 'Weigh-ins, progress and settings. Log your weight a few times a week and the plan adjusts your calories.' },
+  { k: 'settings', hash: '#/settings/training', sel: ['[data-tour="training"]'], title: 'Training days and goals',
+    body: 'Select how many days you train and whether you are cutting, maintaining or building. Change either one and the calendar rebuilds from today forward, leaving everything you have already done alone.' },
 ];
 
 /* A new user runs the tour before their plan starts, so today is not in the plan yet and the day

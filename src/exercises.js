@@ -506,7 +506,7 @@ RX('chest_press', 'Leaning forward on dips loads the lower chest through one of 
   'chest_dip', 'Chest-Leaning Dip', 'Chest', 'Dip bars (or assisted dip machine)', ['chest'], ['triceps', 'frontDelt'], true,
   ['Grip the bars and support yourself on straight arms.', 'Lean your torso forward about 30° and let your elbows flare slightly.',
    'Lower until your shoulders are just below your elbows, or until you feel a strong chest stretch.', 'Press back up without fully locking out.'],
-  ['Stay leaned forward the whole set', 'Shoulders down, away from your ears'], 'Dropping too deep with the shoulders rolling forward — stop where the stretch is strong but comfortable.', { bw: true });
+  ['Stay leaned forward the whole set', 'Shoulders down, away from your ears'], 'Dropping too deep with the shoulders rolling forward — stop where the stretch is strong but comfortable.', { bw: true, on: true });
 RX('chest_fly', 'Flies load the chest hardest when it is stretched, and training at long muscle lengths tends to build more muscle.',
   'incline_db_fly', 'Incline Dumbbell Fly', 'Chest', 'Dumbbells + adjustable bench', ['chest'], ['frontDelt'], false,
   ['Set the bench to about 30° and lie back with the dumbbells over your chest, palms facing.', 'Keep a soft bend in your elbows.',
@@ -997,36 +997,189 @@ RX('back_row', 'There was no barbell row in the library, which left PR test week
    'Lower under control without letting the torso rise.'],
   ['Torso angle stays fixed', 'Pull to the belly button, not the chest'],
   'Standing up with the weight instead of rowing it.');
+
+/* ---------------- Bodyweight and kettlebell options ----------------
+   Every slot above is a movement, not a machine, so these slot in beside the existing
+   variations rather than needing their own templates. Ten of them close the slots that had
+   no bodyweight option at all, which is what stopped a bodyweight-only plan being complete.
+   Side delts are the one slot with no honest bodyweight answer — they need load, so that one
+   is filled with a bell. Ballistic work (swings, snatches) is deliberately left out: the plan
+   progresses by adding load or reps at a target RIR, which is not how those are trained. */
+RX('chest_fly', 'Rings let the chest work through a deeper stretch than a fixed machine allows, and the effort scales with how far you walk your feet forward rather than with a pin.',
+  'ring_fly', 'Ring Fly', 'Chest', 'Rings or a suspension trainer', ['chest'], ['frontDelt', 'abs'], false,
+  ['Set the straps at about waist height and take a handle in each hand.',
+   'Walk your feet forward and lean in, arms out in front, elbows softly bent.',
+   'Open your arms wide and let the chest stretch, keeping the elbow angle fixed.',
+   'Squeeze the handles back together in front of your chest. Walk the feet further forward to make it harder.'],
+  ['Body in one straight line, ribs down', 'The elbow angle never changes'],
+  'Bending and straightening the elbows, which turns it into a press.', { bw: true });
+RX('back_row', 'A horizontal pull you load with body angle alone — the lower the bar, the harder it gets, which gives bodyweight training its own way of adding a plate.',
+  'inverted_row', 'Inverted Row', 'Back', 'Bar in a rack, or rings', ['upperBack', 'lats'], ['biceps', 'rearDelt'], true,
+  ['Set a bar at about hip height and lie underneath it.',
+   'Grip a little wider than your shoulders and hang with your body straight, heels on the floor.',
+   'Pull your chest to the bar, driving the elbows down and back.',
+   'Lower under control to straight arms. Drop the bar or raise your feet to make it harder.'],
+  ['Squeeze the glutes so the hips do not sag', 'Chest to the bar, not the chin'],
+  'Letting the hips drop first so the body bends instead of staying rigid.', { bw: true });
+RX('back_iso', 'Takes the arms out of a vertical pull so the lats and lower traps work on their own — the same job as a straight-arm pulldown, without a cable stack.',
+  'scap_pullup', 'Scapular Pull-Up', 'Back', 'Pull-up bar', ['lats'], ['upperBack', 'traps'], false,
+  ['Hang from the bar with straight arms and a shoulder-width grip.',
+   'Without bending the elbows, pull your shoulder blades down and back so your chest rises an inch or two.',
+   'Hold the top for a second.',
+   'Let the shoulders rise slowly back into a full hang.'],
+  ['Arms stay straight the whole set', 'Think chest up rather than body up'],
+  'Turning it into a small pull-up by bending the elbows.', { bw: true });
+RX('delt_press', 'The closest bodyweight match to an overhead press: hips high puts the shoulders under most of your weight, and raising the feet puts more of it there.',
+  'pike_pushup', 'Pike Push-Up', 'Shoulders', 'Floor, feet on a box optional', ['frontDelt'], ['triceps', 'sideDelt'], true,
+  ['Start in a push-up position and walk your feet in until the hips are high and the body makes an upside-down V.',
+   'Set your hands a little wider than your shoulders, head between the arms.',
+   'Bend the elbows and lower the crown of your head toward the floor.',
+   'Press back to straight arms. Put your feet on a box to make it harder.'],
+  ['Hips stay high throughout', 'Elbows track forward, not flared wide'],
+  'Letting the hips drift back so it becomes a push-up instead of a press.', { bw: true });
+RX('rear_delt', 'Rear delts respond to strict, light, high-rep work, which is exactly what an unloaded prone raise gives — no band or machine needed.',
+  'prone_ytw', 'Prone Y-T-W Raise', 'Shoulders', 'Floor, or an incline bench', ['rearDelt'], ['upperBack', 'traps'], false,
+  ['Lie face down on the floor or an incline bench with your arms hanging.',
+   'Raise your arms overhead into a Y with the thumbs up, then lower.',
+   'Raise them straight out to the sides into a T, then lower.',
+   'Raise them bent at the elbow into a W, squeezing the shoulder blades. That is one rep.'],
+  ['Lift with the shoulder blades, not the hands', 'Neck long, chin tucked'],
+  'Hauling the arms up with momentum — slow and strict is the whole point.', { bw: true });
+RX('biceps_a', 'A chin-up trains the biceps under a heavier load than most people can curl, and the underhand grip puts them in their strongest position.',
+  'chin_up', 'Chin-Up', 'Biceps', 'Pull-up bar', ['biceps'], ['lats', 'upperBack'], true,
+  ['Hang from the bar with your palms facing you, hands about shoulder-width apart.',
+   'Pull your chest toward the bar, leading with the elbows.',
+   'Get your chin over the bar without shrugging.',
+   'Lower slowly to a full hang. Add a belt and plate once sets pass 12 reps.'],
+  ['Full hang at the bottom of every rep', 'Elbows drive down, not back'],
+  'Kipping the hips to get past the sticking point.', { bw: true });
+RX('biceps_b', 'A curl you load with body angle: the bar stays put and you change how much of your weight the biceps carry by walking your feet in or out.',
+  'inverted_curl', 'Bodyweight Bar Curl', 'Biceps', 'Bar in a rack, or rings', ['biceps'], ['forearms', 'upperBack'], false,
+  ['Set a bar at about chest height and grip it underhand, shoulder-width.',
+   'Walk your feet forward and lean back with straight arms and a straight body.',
+   'Curl yourself up toward the bar by bending only at the elbows.',
+   'Lower under control. Walk the feet further forward to make it harder.'],
+  ['Elbows stay pinned in one spot', 'Body rigid from heels to head'],
+  'Pulling with the back, which turns it into a row.', { bw: true });
+RX('triceps_a', 'Narrowing the hands shifts a push-up onto the triceps, and you can keep loading it with a box under the feet long after a bench press would need more plates.',
+  'diamond_pushup', 'Diamond Push-Up', 'Triceps', 'Floor', ['triceps'], ['chest', 'frontDelt'], true,
+  ['Set up in a plank with your hands together under your chest, index fingers and thumbs touching.',
+   'Brace the abs and glutes so the body is one straight line.',
+   'Lower your chest to your hands, keeping the elbows close to your ribs.',
+   'Press back to straight arms. Raise the feet onto a box to make it harder.'],
+  ['Elbows brush past the ribs, not out wide', 'Hips level with the shoulders'],
+  'Letting the elbows flare, which hands the work back to the chest.', { bw: true });
+RX('quad_main', 'A full-depth single-leg squat loads the quads hard enough to carry a main slot with no equipment, and holding a post lets you scale it from the first session.',
+  'pistol_squat', 'Pistol Squat', 'Quads', 'Floor, with a post or strap to hold', ['quads'], ['glutes', 'abs'], true,
+  ['Stand on one leg with the other held out in front of you.',
+   'Hold a post or strap lightly for balance if you need it.',
+   'Sit down slowly on the standing leg, heel flat, free leg off the floor.',
+   'Stand back up. Use more hand support, or squat to a box, until you can do it clean.'],
+  ['Heel stays down the whole way', 'Knee tracks over the middle of the foot'],
+  'Dropping fast to bounce out of the bottom instead of controlling the descent.', { bw: true });
+RX('ham_hinge', 'A hinge that needs nothing at all: standing on one leg puts most of your bodyweight through one hamstring, and a single bell adds load once you outgrow it.',
+  'sl_rdl', 'Single-Leg Romanian Deadlift', 'Hamstrings', 'Bodyweight, or one dumbbell/kettlebell', ['hamstrings'], ['glutes', 'lowerBack'], true,
+  ['Stand on one leg with a soft bend in the knee.',
+   'Hinge at the hip and let the free leg travel straight back as a counterweight.',
+   'Lower until you feel a strong stretch down the back of the standing leg.',
+   'Drive the hip forward to stand tall. Hold a weight in the opposite hand to load it.'],
+  ['Hips stay square to the floor', 'Back flat, chest pointing down'],
+  'Rotating the hip open, which takes the stretch off the hamstring.', { bw: true });
+RX('chest_press', 'The floor stops the upper arm before the shoulder reaches end range, so it is a press you can push hard on with one bell and cranky shoulders.',
+  'kb_floor_press', 'Kettlebell Floor Press', 'Chest', 'One or two kettlebells', ['chest'], ['triceps', 'frontDelt'], true,
+  ['Lie on your back on the floor with the bell racked at your shoulder, knees bent.',
+   'Keep the wrist straight so the bell rests against the back of your forearm.',
+   'Press straight up until the arm is almost locked out.',
+   'Lower until the back of your upper arm touches the floor, pause, then press again.'],
+  ['Wrist stacked straight over the elbow', 'Pause on the floor, do not bounce'],
+  'Letting the wrist bend back under the weight of the bell.');
+RX('delt_press', 'Pressing one bell at a time makes the trunk resist being pulled sideways, and the offset load keeps the shoulder in a groove most people find friendlier than a bar.',
+  'kb_press', 'Kettlebell Overhead Press', 'Shoulders', 'One kettlebell', ['frontDelt'], ['triceps', 'abs', 'sideDelt'], true,
+  ['Clean one bell to the rack position at your shoulder, elbow tucked in.',
+   'Brace your abs and squeeze the glute on that side.',
+   'Press straight overhead, turning the palm forward as you go.',
+   'Lower back to the rack under control. Finish all reps, then swap sides.'],
+  ['Ribs down, no leaning away from the bell', 'Finish with the arm by your ear'],
+  'Arching the lower back to get the bell up instead of pressing it.');
+RX('back_row', 'Rowing from the floor lets each side work while the other braces, and the bell resting between reps keeps you honest about the hinge.',
+  'kb_gorilla_row', 'Kettlebell Gorilla Row', 'Back', 'Two kettlebells', ['lats', 'upperBack'], ['biceps', 'rearDelt'], true,
+  ['Stand over two bells set just inside your feet and hinge until your torso is close to parallel.',
+   'Grip both handles with a flat back and braced abs.',
+   'Row one bell to your hip while the other stays on the floor taking your weight.',
+   'Lower it and row the other side. Keep the hips level throughout.'],
+  ['Hips do not rotate as you row', 'Pull to the hip, not the armpit'],
+  'Standing a little further out of the hinge with every rep.');
+RX('ham_hinge', 'Holding the bells in front puts the load ahead of the hips, so the hamstrings work harder for the same weight than they would with a bar held at the thighs.',
+  'kb_rdl', 'Kettlebell Romanian Deadlift', 'Hamstrings', 'One or two kettlebells', ['hamstrings'], ['glutes', 'lowerBack'], true,
+  ['Stand with the bells in front of your thighs, knees softly bent.',
+   'Push your hips back and let the bells travel down your legs.',
+   'Stop when the hamstring stretch is strong and your back is still flat.',
+   'Drive the hips forward to stand tall, squeezing the glutes at the top.'],
+  ['Shins stay nearly vertical', 'Bells stay close to the legs'],
+  'Squatting the weight down instead of hinging back at the hip.');
+RX('side_delt', 'Side delts need load rather than bodyweight. The bell hanging below the hand keeps tension on them through the top of the raise, where a dumbbell starts to ease off.',
+  'kb_lateral_raise', 'Kettlebell Lateral Raise', 'Shoulders', 'Two light kettlebells', ['sideDelt'], ['traps', 'rearDelt'], false,
+  ['Hold a light bell in each hand at your sides, gripped so the bells hang behind your wrists.',
+   'Lean forward a few degrees and keep a soft bend in the elbows.',
+   'Raise your arms out to the sides until they are level with your shoulders.',
+   'Lower slowly, resisting the whole way down.'],
+  ['Lead with the elbows, not the hands', 'Do not shrug as you reach the top'],
+  'Swinging the bells up with the hips — light and strict beats heavy and loose here.');
+RX('biceps_b', 'The bell hangs below the hand, so the load sits further from the elbow than a dumbbell of the same weight, and the forearms work harder keeping the handle level.',
+  'kb_curl', 'Kettlebell Curl', 'Biceps', 'Two kettlebells', ['biceps'], ['forearms'], false,
+  ['Hold a bell in each hand at your sides, palms forward, gripping the middle of the handle.',
+   'Pin your elbows to your ribs.',
+   'Curl the bells up, keeping the wrists straight so the bells stay level.',
+   'Lower slowly to straight arms.'],
+  ['Elbows stay still, only the forearms move', 'Wrists neutral, not bent back'],
+  'Letting the bells tip back over the wrists at the top.');
+RX('glute', 'A bell across the hips loads the glutes through the top of the lift where they work hardest, and one bell goes a long way because the range is short.',
+  'kb_hip_thrust', 'Kettlebell Hip Thrust', 'Glutes', 'One kettlebell + a bench or sofa', ['glutes'], ['hamstrings', 'abs'], true,
+  ['Sit on the floor with your upper back against a bench and the bell resting over your hips.',
+   'Plant your feet flat, about shoulder-width, heels under your knees.',
+   'Drive through the heels and lift your hips until your body is flat from knees to shoulders.',
+   'Squeeze the glutes for a second at the top, then lower under control.'],
+  ['Tuck the chin and keep the ribs down', 'Push the floor away through the heels'],
+  'Arching the lower back at the top instead of finishing with the glutes.');
+RX('triceps_a', 'Holding one bell overhead in both hands keeps the long head of the triceps stretched through the whole set, which is the position it grows best in.',
+  'kb_overhead_ext', 'Kettlebell Overhead Extension', 'Triceps', 'One kettlebell', ['triceps'], ['abs'], false,
+  ['Hold one bell by the horns with both hands and press it overhead.',
+   'Keep your elbows pointing forward and close to your head.',
+   'Lower the bell behind your head until you feel a strong stretch in the triceps.',
+   'Press it back overhead without letting the elbows drift wide.'],
+  ['Elbows stay narrow and still', 'Ribs down, do not arch to get more range'],
+  'Letting the elbows flare out, which shortens the stretch that makes the exercise work.');
 EXTRA_EX.forEach(id => { const s = SLOTS[EX[id].slot]; if (s && !s.vars.includes(id)) s.vars.push(id); });
 
 const CARDIO = {};
 const CARDIO_GROUPS = ['Walking & running', 'Machines', 'Outdoors & water', 'Boxing & martial arts', 'Intervals & conditioning'];
-function CD(id, name, group, met, how, opts) { CARDIO[id] = Object.assign({ id, name, group, met, how }, opts || {}); }
+/* short: what fits in a calendar cell. The full name is still used in menus and tooltips. */
+function CD(id, name, group, met, how, opts) { CARDIO[id] = Object.assign({ id, name, group, met, how, short: name }, opts || {}); }
 
-CD('walk_brisk', 'Brisk Walk', 'Walking & running', 4.3, 'A pace where holding a conversation takes a little effort. Flat ground or a treadmill at 0 to 2%.');
+CD('walk_brisk', 'Brisk Walk', 'Walking & running', 4.3, 'A pace where holding a conversation takes a little effort. Flat ground or a treadmill at 0 to 2%.', { short: 'Walk' });
 CD('walk_incline', 'Incline Treadmill Walk', 'Walking & running', 6.0, 'Treadmill at 8 to 12% and 3 to 3.5 mph. Do not hold the rails; if you need to, lower the incline.');
-CD('jog', 'Easy Jog', 'Walking & running', 8.3, 'Conversational running pace, roughly 5 mph. If you cannot finish a sentence, slow down.');
-CD('run', 'Run', 'Walking & running', 9.8, 'Steady running, roughly 6 mph. Land under your hips and keep the cadence quick.');
-CD('treadmill_intervals', 'Treadmill Intervals', 'Intervals & conditioning', 9.0, 'Alternate a hard minute with a slow two. Use the lap button for each work interval.', { laps: true });
-CD('bike_stationary', 'Stationary Bike', 'Machines', 7.0, 'Seat height so your knee is almost straight at the bottom. Moderate resistance, 80 to 95 rpm.');
-CD('bike_outdoor', 'Cycling', 'Outdoors & water', 8.0, 'Outdoor riding at 12 to 14 mph. Ride terrain you can hold a steady effort on.');
-CD('air_bike', 'Air Bike', 'Machines', 8.0, 'Arms and legs together. The fan gives back exactly what you put in, so pace the first minute.', { laps: true });
-CD('row_erg', 'Rowing Machine', 'Machines', 7.0, 'Legs, then back, then arms; reverse it on the way in. Damper 4 to 6, not 10.', { laps: true });
-CD('ski_erg', 'Ski Erg', 'Machines', 7.0, 'Hinge at the hips and finish the pull past your thighs. Let the arms come all the way back up.', { laps: true });
-CD('elliptical', 'Elliptical', 'Machines', 5.0, 'Push through the whole foot and use the handles. Add resistance before adding speed.');
-CD('stair', 'Stair Climber', 'Machines', 9.0, 'Stand tall, full steps, light hands. Leaning on the rails cuts the work roughly in half.');
-CD('swim', 'Swimming', 'Outdoors & water', 8.3, 'Freestyle at a steady effort. Rest on the wall as needed and keep the clock running.', { laps: true });
-CD('hike', 'Hiking', 'Outdoors & water', 6.0, 'Trail walking with some elevation. A pack makes it harder without making it faster.');
-CD('jump_rope', 'Jump Rope', 'Intervals & conditioning', 11.8, 'Small jumps, wrists turning the rope. Start with 30 seconds on and 30 off until the misses stop.', { laps: true });
+CD('jog', 'Easy Jog', 'Walking & running', 8.3, 'Conversational running pace, roughly 5 mph. If you cannot finish a sentence, slow down.', { short: 'Jog' });
+CD('run', 'Run', 'Walking & running', 9.8, 'Steady running, roughly 6 mph. Land under your hips and keep the cadence quick.', { short: 'Run' });
+CD('treadmill_intervals', 'Treadmill Intervals', 'Intervals & conditioning', 9.0, 'Alternate a hard minute with a slow two. Use the lap button for each work interval.', { short: 'Intervals',  laps: true });
+CD('bike_stationary', 'Stationary Bike', 'Machines', 7.0, 'Seat height so your knee is almost straight at the bottom. Moderate resistance, 80 to 95 rpm.', { short: 'Bike' });
+CD('bike_outdoor', 'Cycling', 'Outdoors & water', 8.0, 'Outdoor riding at 12 to 14 mph. Ride terrain you can hold a steady effort on.', { short: 'Cycling' });
+CD('air_bike', 'Air Bike', 'Machines', 8.0, 'Arms and legs together. The fan gives back exactly what you put in, so pace the first minute.', { short: 'Air bike',  laps: true });
+CD('row_erg', 'Rowing Machine', 'Machines', 7.0, 'Legs, then back, then arms; reverse it on the way in. Damper 4 to 6, not 10.', { short: 'Row',  laps: true });
+CD('ski_erg', 'Ski Erg', 'Machines', 7.0, 'Hinge at the hips and finish the pull past your thighs. Let the arms come all the way back up.', { short: 'Ski erg',  laps: true });
+CD('elliptical', 'Elliptical', 'Machines', 5.0, 'Push through the whole foot and use the handles. Add resistance before adding speed.', { short: 'Elliptical' });
+CD('stair', 'Stair Climber', 'Machines', 9.0, 'Stand tall, full steps, light hands. Leaning on the rails cuts the work roughly in half.', { short: 'Stairs' });
+CD('swim', 'Swimming', 'Outdoors & water', 8.3, 'Freestyle at a steady effort. Rest on the wall as needed and keep the clock running.', { short: 'Swim',  laps: true });
+CD('hike', 'Hiking', 'Outdoors & water', 6.0, 'Trail walking with some elevation. A pack makes it harder without making it faster.', { short: 'Hike' });
+CD('jump_rope', 'Jump Rope', 'Intervals & conditioning', 11.8, 'Small jumps, wrists turning the rope. Start with 30 seconds on and 30 off until the misses stop.', { short: 'Rope',  laps: true });
 CD('boxing_bag', 'Boxing — Heavy Bag', 'Boxing & martial arts', 5.5, 'Three-minute rounds with a minute of rest. Hands up, turn the hips into the shot, breathe out on contact.', { laps: true, round: 180 });
-CD('boxing_pads', 'Boxing — Pads & Sparring', 'Boxing & martial arts', 7.8, 'Rounds with a partner on the pads. Work combinations rather than single hard shots.', { laps: true, round: 180 });
+CD('boxing_pads', 'Boxing — Pads & Sparring', 'Boxing & martial arts', 7.8, 'Rounds with a partner on the pads. Work combinations rather than single hard shots.', { short: 'Pads',  laps: true, round: 180 });
 CD('boxing_shadow', 'Shadow Boxing', 'Boxing & martial arts', 4.5, 'Rounds in front of a mirror with no bag. Footwork and form first, speed second.', { laps: true, round: 180 });
 CD('kickboxing', 'Kickboxing', 'Boxing & martial arts', 10.3, 'Punches and kicks in rounds. Reset your stance after every combination.', { laps: true, round: 180 });
 CD('martial_arts', 'Martial Arts Class', 'Boxing & martial arts', 10.3, 'A class at a moderate to vigorous pace, including drilling and rolling or sparring.');
-CD('hiit', 'HIIT Circuit', 'Intervals & conditioning', 8.0, 'Hard 20 to 40 second efforts with equal or longer rest. Pick movements you can do with good form when tired.', { laps: true });
-CD('sled', 'Sled Push or Drag', 'Intervals & conditioning', 8.0, 'Heavy enough to be slow, light enough to keep moving. Walk back as the rest.', { laps: true });
-CD('battle_ropes', 'Battle Ropes', 'Intervals & conditioning', 8.0, 'Alternating waves for 20 to 30 seconds. Stay in a quarter squat and keep the ribs down.', { laps: true });
-CD('dance', 'Dance Cardio', 'Intervals & conditioning', 7.3, 'Any class or routine at a steady effort. It counts.');
+CD('hiit', 'HIIT Circuit', 'Intervals & conditioning', 8.0, 'Hard 20 to 40 second efforts with equal or longer rest. Pick movements you can do with good form when tired.', { short: 'HIIT',  laps: true });
+CD('sled', 'Sled Push or Drag', 'Intervals & conditioning', 8.0, 'Heavy enough to be slow, light enough to keep moving. Walk back as the rest.', { short: 'Sled',  laps: true });
+CD('battle_ropes', 'Battle Ropes', 'Intervals & conditioning', 8.0, 'Alternating waves for 20 to 30 seconds. Stay in a quarter squat and keep the ribs down.', { short: 'Ropes',  laps: true });
+CD('dance', 'Dance Cardio', 'Intervals & conditioning', 7.3, 'Any class or routine at a steady effort. It counts.', { short: 'Dance' });
 const CARDIO_IDS = Object.keys(CARDIO);
 const CARDIO_DEFAULT = ['walk_incline', 'bike_stationary', 'row_erg'];
 

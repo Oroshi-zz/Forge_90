@@ -112,7 +112,9 @@ function migrateState() {
   if (S.onboarded === undefined) S.onboarded = true;
   // research-backed extra exercises start switched off — applied once per exercise, so a user's own choice sticks
   S.exDefaults = S.exDefaults || {}; S.exOff = S.exOff || {};
-  EXTRA_EX.forEach(id => { if (S.exDefaults[id]) return; S.exDefaults[id] = 1; const per = S.exOff[id] = S.exOff[id] || []; if (!per.some(([, t]) => !t)) per.push(['0000-01-01', null]); });
+  /* An extra marked on:true is meant to be scheduled, not just offered in the swap library, so it
+     is recorded as handled and never switched off. */
+  EXTRA_EX.forEach(id => { if (S.exDefaults[id]) return; S.exDefaults[id] = 1; if (EX[id] && EX[id].on) return; const per = S.exOff[id] = S.exOff[id] || []; if (!per.some(([, t]) => !t)) per.push(['0000-01-01', null]); });
   if (!S.v || S.v < 2) { S.planEnd = S.planEnd || addDays(S.settings.startDate, LAUNCH_DAYS - 1); S.v = 2; }
   if (S.v < 4) migratePrefsV4();
 }
@@ -140,6 +142,16 @@ function loadState(from) {
   if (!S.v || S.v < 3) { rescheduleWorkouts(maxISO(todayISO(), S.settings.startDate)); S.v = 3; }
   if (S.v < 4) { substitutePlan(maxISO(todayISO(), S.settings.startDate)); S.v = 4; }
   if (S.v < 5) { replanMeals(nextPlanWeekStart()); S.v = 5; S._sharingIntro = true; }   // v5: ingredient-sharing planner
+  /* v6: some library extras became scheduled defaults. Clear only the pristine default-off record,
+     so anyone who switched one off on purpose keeps their choice. */
+  if (S.v < 6) {
+    EXTRA_EX.forEach(id => {
+      if (!EX[id] || !EX[id].on) return;
+      const per = S.exOff[id];
+      if (per && per.length === 1 && per[0][0] === '0000-01-01' && per[0][1] === null) delete S.exOff[id];
+    });
+    S.v = 6;
+  }
   if (!(+S.settings.bgDim >= 0 && +S.settings.bgDim <= 1)) S.settings.bgDim = 0.7;
   saveState();
   return S;

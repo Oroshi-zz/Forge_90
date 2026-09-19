@@ -443,7 +443,7 @@ function trainingCardHTML(coll) {
     <div class="note" style="margin-top:10px">${icon('info')}<span>Cardio lands on days without a lifting session. If a week has fewer free days than sessions asked for, the rest double up on lifting days. A day's calorie target still comes from the lifting session alone, so cardio never moves your macros.</span></div>` : '';
   const body = `<div class="set-togs">${sw}</div><div class="note" style="margin-top:12px">${icon('info')}<span>${esc(note)}</span></div>${cd}<hr class="sep">${trainingDaysBodyHTML()}`;
   return coll ? `<div class="card ${collCls('styles')}" data-coll="styles"><div class="card-h">${collHead('styles', 'Training style & days', pill)}</div><div class="coll-body">${body}</div></div>`
-    : `<div class="card"><div class="card-h"><h2>Training style &amp; days</h2>${pill}</div>${body}</div>`;
+    : `<div class="card" data-tour="training"><div class="card-h"><h2>Training style &amp; days</h2>${pill}</div>${body}</div>`;
 }
 function styleApply(msg) {
   const from = maxISO(todayISO(), S.settings.startDate);
@@ -477,15 +477,15 @@ const GOALS = [['cut', 'Lose fat', 'Calorie deficit, protein held high to keep m
 function lossRateCardHTML() { const st = S.settings; const k = goalKind(); const cur = latestStats();
   const goalPick = `<div class="field" style="margin-bottom:12px"><label>Goal</label><div class="seg seg-goal">${GOALS.map(([v, l]) => `<button type="button" class="${k === v ? 'on' : ''}" data-act="set-goal" data-v="${v}">${l}</button>`).join('')}</div>
     <div class="tiny muted" style="margin-top:6px">${esc((GOALS.find(g => g[0] === k) || GOALS[0])[2])}</div></div>`;
-  if (k === 'maintain') return `<div class="card"><div class="card-h"><h2>Goal</h2><span class="pill acc">Maintenance</span></div>${goalPick}
+  if (k === 'maintain') return `<div class="card" data-tour="goal"><div class="card-h"><h2>Goal</h2><span class="pill acc">Maintenance</span></div>${goalPick}
     <div class="tiny muted">Calories sit at maintenance for the day — no deficit, no surplus. The trend coach still flags drift in either direction.</div></div>`;
-  if (k === 'bulk') return `<div class="card"><div class="card-h"><h2>Goal</h2><span class="pill" id="rate-pill">${fmt(st.bulkPct, 2)} % / week</span></div>${goalPick}
+  if (k === 'bulk') return `<div class="card" data-tour="goal"><div class="card-h"><h2>Goal</h2><span class="pill" id="rate-pill">${fmt(st.bulkPct, 2)} % / week</span></div>${goalPick}
         <label class="tiny muted">Weekly gain, as a share of body weight</label>
         <input type="range" min="0.15" max="0.6" step="0.05" value="${st.bulkPct}" data-input="bulkpct" style="margin:6px 0 4px">
         <div class="row" style="justify-content:space-between"><span class="tiny muted">0.15</span><span class="tiny muted">0.35</span><span class="tiny muted">0.6 %/wk</span></div>
         <div id="rate-info" style="margin-top:10px">${bulkInfoHTML(st.bulkPct)}</div></div>`;
   const R = RATE_SLIDER();
-  return `<div class="card"><div class="card-h"><h2>Goal</h2><span class="pill" id="rate-pill">${fmt(toW(st.rate), 2)} ${wU()} / week</span></div>${goalPick}
+  return `<div class="card" data-tour="goal"><div class="card-h"><h2>Goal</h2><span class="pill" id="rate-pill">${fmt(toW(st.rate), 2)} ${wU()} / week</span></div>${goalPick}
         <label class="tiny muted">Target loss rate</label>
         <input type="range" min="${R.min}" max="${R.max}" step="${R.step}" value="${R.val(st.rate)}" data-input="rate" style="margin:6px 0 4px">
         <div class="row" style="justify-content:space-between" ><span class="tiny muted">${R.ticks[0]}</span><span class="tiny muted">${R.ticks[1]}</span><span class="tiny muted">${R.ticks[2]} ${wU()}/wk</span></div>
