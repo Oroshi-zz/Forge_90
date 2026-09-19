@@ -1160,6 +1160,9 @@ CD('walk_brisk', 'Brisk Walk', 'Walking & running', 4.3, 'A pace where holding a
 CD('walk_incline', 'Incline Treadmill Walk', 'Walking & running', 6.0, 'Treadmill at 8 to 12% and 3 to 3.5 mph. Do not hold the rails; if you need to, lower the incline.');
 CD('jog', 'Easy Jog', 'Walking & running', 8.3, 'Conversational running pace, roughly 5 mph. If you cannot finish a sentence, slow down.', { short: 'Jog' });
 CD('run', 'Run', 'Walking & running', 9.8, 'Steady running, roughly 6 mph. Land under your hips and keep the cadence quick.', { short: 'Run' });
+/* A flat-out sprint is 19 to 23 METs, but the clock on a sprint session is mostly walking back to
+   the line, so 11 is the honest average for the whole session. */
+CD('sprints', 'Sprints', 'Walking & running', 11.0, 'All-out efforts of 10 to 30 seconds with a full walk back between them. A hill works too and is easier on the hamstrings. Stop when your times start dropping, not when you get tired.', { short: 'Sprints', laps: true });
 CD('treadmill_intervals', 'Treadmill Intervals', 'Intervals & conditioning', 9.0, 'Alternate a hard minute with a slow two. Use the lap button for each work interval.', { short: 'Intervals',  laps: true });
 CD('bike_stationary', 'Stationary Bike', 'Machines', 7.0, 'Seat height so your knee is almost straight at the bottom. Moderate resistance, 80 to 95 rpm.', { short: 'Bike' });
 CD('bike_outdoor', 'Cycling', 'Outdoors & water', 8.0, 'Outdoor riding at 12 to 14 mph. Ride terrain you can hold a steady effort on.', { short: 'Cycling' });
@@ -1180,7 +1183,10 @@ CD('hiit', 'HIIT Circuit', 'Intervals & conditioning', 8.0, 'Hard 20 to 40 secon
 CD('sled', 'Sled Push or Drag', 'Intervals & conditioning', 8.0, 'Heavy enough to be slow, light enough to keep moving. Walk back as the rest.', { short: 'Sled',  laps: true });
 CD('battle_ropes', 'Battle Ropes', 'Intervals & conditioning', 8.0, 'Alternating waves for 20 to 30 seconds. Stay in a quarter squat and keep the ribs down.', { short: 'Ropes',  laps: true });
 CD('dance', 'Dance Cardio', 'Intervals & conditioning', 7.3, 'Any class or routine at a steady effort. It counts.', { short: 'Dance' });
+/* CARDIO_IDS is the ordered list every picker and rotation walks. rebuildCardio() refills it in
+   place with the built-ins plus whatever the user has added, so the binding never moves. */
 const CARDIO_IDS = Object.keys(CARDIO);
+const CARDIO_BUILTIN = CARDIO_IDS.slice();
 const CARDIO_DEFAULT = ['walk_incline', 'bike_stationary', 'row_erg'];
 
 /* ============================================================

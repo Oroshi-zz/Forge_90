@@ -102,12 +102,12 @@ function defaultSettings() {
 }
 let S = null;
 function freshState() {
-  return { v: 5, onboarded: false, profile: null, settings: defaultSettings(), plan: {}, planEnd: null, weights: [], logs: {}, done: {}, created: todayISO(), customExercises: {},
+  return { v: 5, onboarded: false, profile: null, settings: defaultSettings(), plan: {}, planEnd: null, weights: [], logs: {}, done: {}, created: todayISO(), customExercises: {}, customCardio: {},
     foodPrefs: Object.assign({}, DEFAULT_FOOD_PREFS), favRecipes: {}, exOff: {}, customFoods: {}, foodOverrides: {}, customRecipes: {}, recipeOverrides: {}, recipeOff: {}, bgCustom: {}, grocery: {}, importMap: {}, favFoods: {}, pantry: [], gymCards: [] };
 }
 function migrateState() {
   const f = freshState();
-  ['weights', 'logs', 'done', 'customExercises', 'foodPrefs', 'favRecipes', 'exOff', 'customFoods', 'foodOverrides', 'customRecipes', 'recipeOverrides', 'recipeOff', 'bgCustom', 'grocery', 'importMap', 'favFoods', 'pantry', 'gymCards'].forEach(k => { if (!S[k]) S[k] = f[k]; });
+  ['weights', 'logs', 'done', 'customExercises', 'customCardio', 'foodPrefs', 'favRecipes', 'exOff', 'customFoods', 'foodOverrides', 'customRecipes', 'recipeOverrides', 'recipeOff', 'bgCustom', 'grocery', 'importMap', 'favFoods', 'pantry', 'gymCards'].forEach(k => { if (!S[k]) S[k] = f[k]; });
   S.settings = Object.assign(defaultSettings(), S.settings);
   if (S.onboarded === undefined) S.onboarded = true;
   // research-backed extra exercises start switched off — applied once per exercise, so a user's own choice sticks
@@ -136,7 +136,7 @@ function loadState(from) {
   else { let raw = null; try { raw = localStorage.getItem(STORE_KEY); } catch (e) { } if (raw) { try { S = JSON.parse(raw); } catch (e) { S = null; } } }
   if (!S || !S.settings) { S = freshState(); if (NEW_STATE_DEFAULTS && NEW_STATE_DEFAULTS.theme) S.settings.theme = NEW_STATE_DEFAULTS.theme; }
   migrateState();
-  rebuildCatalog(); rebuildExercises();
+  rebuildCatalog(); rebuildExercises(); rebuildCardio();
   ensureHorizon();
   migrateGrocery();
   if (!S.v || S.v < 3) { rescheduleWorkouts(maxISO(todayISO(), S.settings.startDate)); S.v = 3; }
@@ -397,13 +397,17 @@ function styleRow(type, sets, reps, rest) {
   if (want === 'S') { const lo = clamp(Math.round(rr[0] * 0.55), 3, 8); return { type: 'S', sets, reps: `${lo}–${lo + 2}`, rest: Math.max(rest, 150) }; }
   const lo = clamp(Math.round(rr[0] * 1.6), 8, 15); return { type: 'H', sets, reps: `${lo}–${lo + 4}`, rest: Math.min(rest, 90) };
 }
+/* Split out so the custom-cardio editor can price an effort level that has no id yet. */
+function metKcal(met, minutes, lb) {
+  const w = +lb > 0 ? +lb : (S && S.settings ? S.settings.startWeight : 180);
+  return Math.round((+met || 0) * 3.5 * (w * 0.45359237) / 200 * (+minutes || 0));
+}
 function cardioKcal(kind, minutes, lb) {
   const c = CARDIO[kind]; if (!c) return 0;
-  const w = +lb > 0 ? +lb : (S && S.settings ? S.settings.startWeight : 180);
-  return Math.round(c.met * 3.5 * (w * 0.45359237) / 200 * (+minutes || 0));
+  return metKcal(c.met, minutes, lb);
 }
 const cardioPlan = () => Object.assign({ perWeek: 3, minutes: 30, types: CARDIO_DEFAULT.slice() }, (S && S.settings && S.settings.cardio) || {});
-function cardioTypes() { const t = (cardioPlan().types || []).filter(k => CARDIO[k]); return t.length ? t : CARDIO_DEFAULT.slice(); }
+function cardioTypes() { const t = (cardioPlan().types || []).filter(k => CARDIO[k] && !CARDIO[k].gone); return t.length ? t : CARDIO_DEFAULT.slice(); }
 /* Cardio goes on the days without a lifting session, so the lifting week is untouched. If a week
    has fewer free days than sessions asked for, the remainder doubles up on lifting days — the
    day holds both, and the macros still only count the lifting session. */
@@ -419,7 +423,9 @@ function assignCardio(plan, settings, dates, fromDate, overwrite) {
     const pick = spread(free).concat(busy.slice(0, Math.max(0, want - free.length)));
     wkDates.forEach(d => {
       if (d < fromDate || !plan[d]) return;
-      const keep = !overwrite && plan[d].c && plan[d].c.by === 'user';
+      /* A session that has already been done is history, not plan, so no reschedule touches it —
+         not a settings change, not overwrite. Only an untouched day is up for reassignment. */
+      const keep = plan[d].c && (plan[d].c.doneMin || (!overwrite && plan[d].c.by === 'user'));
       if (keep) { n++; return; }
       if (pick.includes(d)) plan[d].c = { k: kinds[n++ % kinds.length], min: clamp(Math.round(+cp.minutes || 30), 5, 180) };
       else if (plan[d].c && plan[d].c.by !== 'user') delete plan[d].c;
@@ -473,6 +479,22 @@ function rebuildExercises() {
   Object.values(S.customExercises || {}).forEach(e => {
     EX[e.id] = Object.assign({ steps: [], cues: [], mistake: '', primary: [], secondary: [], equip: '', compound: false }, e, { custom: true });
     if (e.slot && SLOTS[e.slot]) (CUSTOM_SLOT[e.slot] = CUSTOM_SLOT[e.slot] || []).push(e);
+  });
+  invalidate();
+}
+
+/* ---------- custom cardio ---------- */
+/* A user's own kinds live in CARDIO beside the built-ins, so every screen that renders cardio by
+   id works on them unchanged. A kind that was deleted after it had already been done is kept in
+   CARDIO but left out of CARDIO_IDS: finished sessions still render, while it is gone from every
+   picker, the library and the rotation. */
+function rebuildCardio() {
+  Object.keys(CARDIO).forEach(k => { if (CARDIO[k].custom) delete CARDIO[k]; });
+  CARDIO_IDS.length = 0; CARDIO_BUILTIN.forEach(id => CARDIO_IDS.push(id));
+  Object.values(S.customCardio || {}).forEach(c => {
+    if (!c || !c.id) return;
+    CARDIO[c.id] = Object.assign({ group: CARDIO_GROUPS[0], met: 7, how: '', short: c.name }, c, { custom: true });
+    if (!c.gone) CARDIO_IDS.push(c.id);
   });
   invalidate();
 }
