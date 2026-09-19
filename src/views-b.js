@@ -76,7 +76,7 @@ function viewDiet() {
   const nextR = dates.find(d => d >= ref && !A.days[d].isTrain) || dates.find(d => !A.days[d].isTrain);
   const trend = weightTrend(); const pj = projection();
   const weeklyAvg = Math.round((tT.kcal * st.trainDays.length + tR.kcal * (7 - st.trainDays.length)) / 7);
-  const targets = `<div class="card"><div class="card-h"><h2>Your targets</h2>${tT.maintMode ? '<span class="pill acc">Goal reached · maintenance</span>' : ''}<span class="pill">${wTxt(cur.w, 1)} · ${fmt(cur.bf, 1)}% BF${cur.est ? ' est.' : ''}</span></div>
+  const targets = `<div class="card"><div class="card-h"><h2>Your targets</h2>${tT.maintMode ? `<span class="pill acc">${goalKind() === 'maintain' ? 'Maintenance' : 'Goal reached · maintenance'}</span>` : ''}<span class="pill">${wTxt(cur.w, 1)} · ${fmt(cur.bf, 1)}% BF${cur.est ? ' est.' : ''}</span></div>
     <div class="grid g4" style="gap:12px">
       <div class="card stat" style="box-shadow:none;background:var(--surface-2)"><div class="lbl">${icon('dumbbell')}Training day</div><div class="val">${fmt(tT.kcal)}<small>kcal</small></div><div class="delta neu">${fmt(tT.protein)} g protein</div></div>
       <div class="card stat" style="box-shadow:none;background:var(--surface-2)"><div class="lbl">${icon('moon')}Rest day</div><div class="val">${fmt(tR.kcal)}<small>kcal</small></div><div class="delta neu">${fmt(tR.protein)} g protein</div></div>
@@ -365,7 +365,7 @@ function viewProgress() {
     const lr = rate != null && rate > 0.05 ? rate : null; const when = lr ? addDays(last.d, Math.round(Math.max(0, cur.w - st.goalWeight) / lr * 7)) : null;
     const bulking = goalKind() === 'bulk'; const ahead = bulking ? gap < 0 : gap > 0;
     const moved = lr == null ? '' : bulking ? `Gaining <b>${fmt(toW(-lr), 2)} ${wU()}/week</b> (plan ${fmt(toW(planRate(cur.w)), 2)}). ` : goalKind() === 'maintain' ? `Scale moving <b>${sign(toW(-lr), 2)} ${wU()}/week</b> (plan: hold). ` : `Losing <b>${fmt(toW(lr), 2)} ${wU()}/week</b> (plan ${fmt(toW(st.rate), 2)}). `;
-    pace = `<div class="note ${Math.abs(gap) <= 0.3 || ahead ? 'acc' : 'warn'}" style="margin-top:12px">${icon('trend')}<span>${moved}The 7-day average is ${Math.abs(gap) <= 0.3 ? '<b>on the plan line</b>' : `<b>${wTxt(Math.abs(gap), 1)} ${gap > 0 ? 'above' : 'below'}</b> the plan`}.${when && (bulking ? cur.w < st.goalWeight : cur.w > st.goalWeight) ? ` At this pace you reach ${wTxt(st.goalWeight)} around <b>${esc(fmtDate(when, { month: 'long', year: 'numeric' }))}</b>.` : ''}</span></div>`;
+    pace = `<div class="note ${Math.abs(gap) <= 0.3 || ahead ? 'acc' : 'warn'}" style="margin-top:12px">${icon('trend')}<span>${moved}The 7-day average is ${Math.abs(gap) <= 0.3 ? '<b>on the plan line</b>' : `<b>${wTxt(Math.abs(gap), 1)} ${gap > 0 ? 'above' : 'below'}</b> the plan`}.${when && goalKind() !== 'maintain' && (bulking ? cur.w < st.goalWeight : cur.w > st.goalWeight) ? ` At this pace you reach ${wTxt(st.goalWeight)} around <b>${esc(fmtDate(when, { month: 'long', year: 'numeric' }))}</b>.` : ''}</span></div>`;
   }
   const range = `<div class="seg prange" role="group" aria-label="Time range">${[['all', 'Since day 1'], ['14', 'Last 2 weeks']].map(([k, l]) => `<button class="${R.key === k ? 'on' : ''}" data-act="pr-range" data-v="${k}" aria-pressed="${R.key === k}">${l}</button>`).join('')}</div>`;
   const weighCard = phone ? '' : `<div class="card"><div class="card-h"><h2>Log a weigh-in</h2></div>${weighForm()}<div class="tiny muted" style="margin-top:8px">Weigh in first thing in the morning, after the bathroom, 3–7× a week. Body fat is optional — when it’s blank, the app estimates it by holding your last measured lean mass.</div></div><div style="height:16px"></div>`;
@@ -399,7 +399,7 @@ function progressCharts() {
     else { const e0 = phone ? minISO(projection().endPlan, addDays(maxISO(todayISO(), ws[ws.length - 1].d), 14)) : projection().endPlan; for (let i = 0; i <= dayDiff(PL.s0, e0); i += 7) planPts.push({ d: addDays(PL.s0, i), v: PL.at(addDays(PL.s0, i)) }); planPts.push({ d: e0, v: PL.at(e0) }); } }
   const wIn = ws.filter(inR); const avg = movingAvg(ws).filter(inR);
   lineChart($('#ch-weight'), { h: phone ? 220 : 280, empty: 'Log a weigh-in to start your chart', unit: '', label: 'Body weight', xMin: R.key === '14' ? R.from : undefined, xMax: R.key === '14' ? R.to : undefined,
-    refs: [{ v: toW(st.goalWeight), label: 'Goal ' + wTxt(st.goalWeight), color: col('--good'), inRange: false }],
+    refs: goalKind() === 'maintain' ? [] : [{ v: toW(st.goalWeight), label: 'Goal ' + wTxt(st.goalWeight), color: col('--good'), inRange: false }],
     series: wIn.length ? [{ label: 'Plan', color: col('--accent-2'), pts: planPts.map(x => ({ d: x.d, v: toW(x.v) })), width: 1.5, muted: true, fmt: v => fmt(v, 1) + ' ' + wU() }, { label: 'Weigh-in', color: col('--muted'), pts: wIn.map(x => ({ d: x.d, v: toW(x.w) })), line: false, dots: true, r: 3.5, fmt: v => fmt(v, 1) + ' ' + wU() }, { label: '7-day avg', color: col('--prot'), pts: avg.map(x => ({ d: x.d, v: toW(x.v) })), fmt: v => fmt(v, 1) + ' ' + wU() }] : [] });
   const bfPts = ws.filter(x => x.bf != null && x.bf !== '' && inR(x)).map(x => ({ d: x.d, v: +x.bf }));
   lineChart($('#ch-bf'), { h: phone ? 170 : 220, empty: 'Add body-fat % to a weigh-in to chart it', unit: '%', label: 'Body fat', refs: [{ v: st.goalBF, label: 'Goal ' + st.goalBF + '%', color: col('--good'), inRange: false }], series: bfPts.length ? [{ label: 'Body fat', color: col('--kcal'), pts: bfPts, dots: true, area: true, fmt: v => fmt(v, 1) + '%' }] : [] });
@@ -527,7 +527,7 @@ function bodyGoalsCardHTML() { const st = S.settings; const f = setField; const 
         <div class="set-tog set-units" style="margin-bottom:12px"><b class="small">Units</b><span class="u ${met ? '' : 'on'}">Imperial</span>${sw(met, 'units-tog')}<span class="u ${met ? 'on' : ''}">Metric</span></div>
         <form data-form="body" class="grid g2" style="gap:12px">
         ${f(`Starting weight (${wU()})`, 'startWeight', wNum(st.startWeight), 'type="number" step="0.1"')}${f('Starting body fat %', 'startBF', st.startBF, 'type="number" step="0.1"')}
-        ${f(`Goal weight (${wU()})`, 'goalWeight', wNum(st.goalWeight), 'type="number" step="0.1"')}${f('Goal body fat %', 'goalBF', st.goalBF, 'type="number" step="0.1"')}
+        ${goalKind() === 'maintain' ? '' : f(`Goal weight (${wU()})`, 'goalWeight', wNum(st.goalWeight), 'type="number" step="0.1"')}${f('Goal body fat %', 'goalBF', st.goalBF, 'type="number" step="0.1"')}
         ${goalBFWarnHTML()}
         ${height}
         ${f('Age', 'age', pr.age == null ? '' : pr.age, 'type="number" min="13" max="100" step="1"')}

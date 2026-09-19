@@ -858,7 +858,10 @@ function projection() {
   const ws0 = sortedWeights(); const staleBy = ws0.length ? dayDiff(ws0[ws0.length - 1].d, todayISO()) : null;
   const signed = planRate(st.w);
   const rate = Math.abs(signed) || 0.0001;
-  const toGoal = kind === 'bulk' ? Math.max(0, S.settings.goalWeight - st.w) : Math.max(0, st.w - S.settings.goalWeight);
+  /* Maintenance has no goal weight to close, so there is no distance to it and the projected
+     end weight is simply where they are now. Without this the divide by a zero plan rate
+     produced dates centuries out. */
+  const toGoal = kind === 'maintain' ? 0 : kind === 'bulk' ? Math.max(0, S.settings.goalWeight - st.w) : Math.max(0, st.w - S.settings.goalWeight);
   const weeks = toGoal / rate;
   const refDate = maxISO(ws0.length ? ws0[ws0.length - 1].d : S.settings.startDate, todayISO());
   const ref = maxISO(maxISO(todayISO(), refDate), S.settings.startDate);
@@ -866,7 +869,7 @@ function projection() {
   const cyc = ref <= launchEnd ? 1 : cycleOfWeek(planWeek(ref));
   const endPlan = cyc === 1 ? launchEnd : cycleEndDate(cyc);
   const daysLeft = Math.max(0, dayDiff(refDate, endPlan));
-  const endW = kind === 'bulk' ? Math.min(S.settings.goalWeight, st.w + rate * daysLeft / 7) : Math.max(S.settings.goalWeight, st.w - rate * daysLeft / 7);
+  const endW = kind === 'maintain' ? st.w : kind === 'bulk' ? Math.min(S.settings.goalWeight, st.w + rate * daysLeft / 7) : Math.max(S.settings.goalWeight, st.w - rate * daysLeft / 7);
   const goalDate = addDays(refDate, Math.round(weeks * 7));
   const wAtGoalBF = st.lbm / (1 - S.settings.goalBF / 100);
   return { weeks, goalDate, endW, endPlan, cyc, wAtGoalBF, lbm: st.lbm, kind, rate: signed, staleBy, stale: staleBy != null && staleBy > TREND_STALE_DAYS, reached: goalReached(st.w, st.bf) };

@@ -41,7 +41,7 @@ function obSummaryHTML() {
   obApplyDraft(); const st = S.settings; const tT = targetsFor(st.startWeight, st.startBF, true), tR = targetsFor(st.startWeight, st.startBF, false);
   const pr = Math.abs(planRate(st.startWeight)) || 0.0001;
   const weeks = Math.abs(st.startWeight - st.goalWeight) / pr; const when = addDays(maxISO(todayISO(), st.startDate), Math.round(weeks * 7));
-  return `<div class="onb-sum"><div><span class="tiny muted">Calories · training / rest day</span><b class="num">${fmt(tT.kcal)} / ${fmt(tR.kcal)}</b></div><div><span class="tiny muted">Protein</span><b class="num">${fmt(tT.protein)} g</b></div><div><span class="tiny muted">Reach ${wTxt(st.goalWeight)}</span><b>${fmtDate(when, { month: 'short', day: 'numeric', year: 'numeric' })}</b></div></div>`;
+  return `<div class="onb-sum"><div><span class="tiny muted">Calories · training / rest day</span><b class="num">${fmt(tT.kcal)} / ${fmt(tR.kcal)}</b></div><div><span class="tiny muted">Protein</span><b class="num">${fmt(tT.protein)} g</b></div>${goalKind() === 'maintain' ? `<div><span class="tiny muted">Body-fat goal</span><b>${st.goalBF}%</b></div>` : `<div><span class="tiny muted">Reach ${wTxt(st.goalWeight)}</span><b>${fmtDate(when, { month: 'short', day: 'numeric', year: 'numeric' })}</b></div>`}</div>`;
 }
 function renderOnboarding() {
   const s = OB; const el = $('#onb'); if (!el) return;
@@ -76,7 +76,7 @@ function renderOnboarding() {
         <div class="row" style="justify-content:space-between"><span class="tiny muted">${R.ticks[0]}</span><span class="tiny muted">${R.ticks[1]}</span><span class="tiny muted">${R.ticks[2]} ${wU()}/wk</span></div></div>`)(RATE_SLIDER());
     body = `<h1>Your goal</h1><p class="sub">${sub}</p>${msg}
     <div class="field"><label>What are you after?</label><div class="seg seg-goal">${[['cut', 'Lose fat'], ['maintain', 'Maintain'], ['bulk', 'Build muscle']].map(([v, l]) => `<button type="button" class="${gk === v ? 'on' : ''}" data-act="ob-mode" data-v="${v}">${l}</button>`).join('')}</div></div>
-    <div class="grid g2" style="gap:12px;margin-top:12px">${fld(`Goal weight (${wU()})`, 'goal', s.goal, `type="number" inputmode="decimal" step="0.1" ${gk === 'bulk' ? `min="${wNum(w)}" max="${wNum(700)}"` : `min="${wNum(70)}" max="${wNum(w)}"`} ${gk === 'maintain' ? '' : 'required'}`)}
+    <div class="grid g2" style="gap:12px;margin-top:12px">${gk === 'maintain' ? '' : fld(`Goal weight (${wU()})`, 'goal', s.goal, `type="number" inputmode="decimal" step="0.1" ${gk === 'bulk' ? `min="${wNum(w)}" max="${wNum(700)}"` : `min="${wNum(70)}" max="${wNum(w)}"`} required`)}
       <div class="field"><label for="ob-activity">Activity level <span class="muted" style="font-weight:500">— outside the gym</span></label><select class="inp" id="ob-activity" name="activity">${ACTIVITY_LEVELS.map(([v, l, d]) => `<option value="${v}" ${+s.activity === v ? 'selected' : ''}>${l} — ${d}</option>`).join('')}</select></div></div>
     ${rateCtl}
     <div id="ob-rate-info" style="margin-top:6px">${obRateInfo()}</div>`; }

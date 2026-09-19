@@ -5,9 +5,9 @@ const TOUR_DESK = [
     body: 'The dashboard is where you check your 13-week cycle progress and goals, along with some quick actions to access gym cards, log workouts, weight checkins, edit workouts and meals.' },
   { k: 'calendar', hash: '#/calendar', sel: ['.cal', '.ag-day'], title: 'Your personal planner',
     body: "FORGE 90 automatically generates all of your workouts and meals in advance based on your preferences. Don't like the generated plan? No problem. Use drag & drop to fully customize your workouts and meals, or drag in new items from the library on the right. You can change your training days or your goals in Settings and the calendar rebuilds itself from today forward while past days are left alone." },
-  { k: 'day', hash: () => '#/day/' + todayISO(), sel: ['[data-tour="day"]', '.day-head'], title: 'One day at a time',
+  { k: 'day', hash: () => '#/day/' + tourDay(), sel: ['.day-head'], title: 'One day at a time',
     body: 'Open a day to log your sets, swap a meal you don’t fancy, or add something you ate that wasn’t in the plan. The day’s calories and protein update as you go.' },
-  { k: 'wo', hash: () => '#/day/' + todayISO(), sel: ['[data-act="wo-open"]', '[data-tour="day"]'], title: 'Workout mode',
+  { k: 'wo', hash: () => '#/day/' + tourDay(), sel: ['[data-act="wo-open"]', '.day-head'], title: 'Workout mode',
     body: 'This walks you through the session one exercise at a time, with the rest timer running between sets and your last weights already filled in.' },
   { k: 'grocery', hash: '#/grocery', sel: ['[data-tour="grocery"]', '.gro-aisle', '.gro-list'], title: 'The shopping sorts itself',
     body: 'This list is built from the week’s meals, grouped by aisle. Tell the Pantry what you already have at home and it comes off the list instead of being bought twice.' },
@@ -26,6 +26,16 @@ const TOUR_PHONE = [
     body: 'Weigh-ins, progress and settings. Log your weight a few times a week and the plan adjusts your calories.' },
 ];
 
+/* A new user runs the tour before their plan starts, so today is not in the plan yet and the day
+   view would show "That day isn't in the plan". Both day steps use the next day carrying a
+   session instead, falling back to the most recent one for someone already part-way through. */
+function tourDay() {
+  const t = todayISO();
+  if (typeof ensureHorizon === 'function') ensureHorizon();
+  const days = Object.keys(S.plan || {}).filter(inPlan).sort();
+  const sessions = days.filter(d => S.plan[d] && S.plan[d].w);
+  return sessions.find(d => d >= t) || sessions[sessions.length - 1] || days.find(d => d >= t) || days[days.length - 1] || t;
+}
 const tourSteps = () => (isPhone() ? TOUR_PHONE : TOUR_DESK);
 function tourTarget(st) {
   for (const s of st.sel || []) { const el = $(s); if (el) { const r = el.getBoundingClientRect(); if (r.width > 4 && r.height > 4) return el; } }
