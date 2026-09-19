@@ -72,6 +72,70 @@ Object.assign(ACT, {
     delete S.customExercises[x.id]; rebuildExercises(); saveState(); render(); toast('Exercise deleted'); }, true); }
 });
 
+/* ============================================================
+   FORGE 90 — Custom cardio editor
+   ============================================================ */
+/* The calorie estimate needs a MET and nobody knows their own MET, so the form asks the talk test
+   instead and carries the number behind it. These are the Compendium of Physical Activities
+   figures for a general activity at each effort, the same source the built-in kinds are set from. */
+const CD_EFFORT = [[3.5, 'Easy', 'You could keep talking all day'], [5, 'Light', 'Conversation is comfortable'],
+  [7, 'Moderate', 'Full sentences take effort'], [9.5, 'Hard', 'A few words at a time'], [12, 'All out', 'Intervals — talking is not happening']];
+let XC = null;
+const xcWhy = () => { const e = CD_EFFORT.find(x => x[0] === XC.met) || CD_EFFORT[2];
+  return `${e[2]} · about ${fmt(metKcal(e[0], 30, latestStats().w))} kcal in 30 minutes at your weight.`; };
+function cardioEditor(id, group) {
+  const c = id ? S.customCardio[id] : null;
+  const g = c ? c.group : (CARDIO_GROUPS.includes(group) ? group : CARDIO_GROUPS[0]);
+  XC = { id: id || null, met: c ? +c.met : 7, laps: c ? !!c.laps : false };
+  modal(`<div class="row"><h2 style="flex:1">${id ? 'Edit cardio' : 'New cardio'}</h2><button class="btn icon ghost" data-act="close-modal">${icon('x')}</button></div>
+    <form data-form="cardio" class="xe" style="margin-top:12px">
+      <div class="grid g2" style="gap:10px">
+        <div class="field"><label>Name</label><input class="inp" name="name" value="${esc(c ? c.name : '')}" placeholder="e.g. Stair Sprints" maxlength="40" required></div>
+        <div class="field"><label>Group</label><select class="inp" name="group">${CARDIO_GROUPS.map(x => `<option ${x === g ? 'selected' : ''}>${esc(x)}</option>`).join('')}</select></div></div>
+      <div class="field" style="margin-top:12px"><label>Effort</label>
+        <div class="seg seg-goal">${CD_EFFORT.map(([m, l]) => `<button type="button" class="${m === XC.met ? 'on' : ''}" data-act="xc-met" data-v="${m}">${l}</button>`).join('')}</div>
+        <span class="tiny muted" id="xc-why">${esc(xcWhy())}</span></div>
+      <div class="field" style="margin-top:12px"><label>How to do it</label><textarea class="inp" name="how" rows="3" style="height:auto;padding:8px 11px" maxlength="400" placeholder="Pace, resistance, what to watch for.">${esc(c ? c.how : '')}</textarea></div>
+      <div class="grid g2" style="gap:10px;margin-top:12px">
+        <div class="field"><label>Calendar label</label><input class="inp" name="short" value="${esc(c && c.short !== c.name ? c.short : '')}" maxlength="14" placeholder="${esc(c ? c.name : 'Same as the name')}"><span class="tiny muted">What fits in a calendar cell. Leave it blank to use the name.</span></div>
+        <div class="field"><label>Style</label><label class="small" style="padding-top:9px"><input type="checkbox" name="laps" ${XC.laps ? 'checked' : ''}> Intervals or rounds</label><span class="tiny muted">Tags it for the lap button in cardio mode.</span></div></div>
+      <div class="row" style="justify-content:flex-end;margin-top:16px">
+        ${id ? `<button type="button" class="btn danger" data-act="cd-del" data-id="${id}" style="margin-right:auto">${icon('trash')}Delete</button>` : ''}
+        <button type="button" class="btn" data-act="close-modal">Cancel</button><button class="btn primary" type="submit">${id ? 'Save changes' : 'Add cardio'}</button></div></form>`);
+}
+function saveCardio(form) {
+  const fd = new FormData(form); const name = String(fd.get('name') || '').trim();
+  if (!name) { toast('Give it a name'); return; }
+  const group = CARDIO_GROUPS.includes(fd.get('group')) ? fd.get('group') : CARDIO_GROUPS[0];
+  const prev = XC.id ? S.customCardio[XC.id] : null;
+  const id = XC.id || 'uc_' + name.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 24) + '_' + Date.now().toString(36).slice(-4);
+  S.customCardio[id] = { id, name, group, met: XC.met, laps: !!fd.get('laps'),
+    short: String(fd.get('short') || '').trim() || name,
+    how: String(fd.get('how') || '').trim() || 'Your own session, at your own pace.' };
+  rebuildCardio(); closeModal();
+  /* A kind nobody switched on never gets planned, and you do not invent one you have no intention
+     of doing, so a new kind joins the rotation straight away. Editing leaves the switches alone. */
+  if (prev) { saveState(); render(); toast(`${name} updated`); return; }
+  const cp = cardioPlan();
+  S.settings.cardio = Object.assign(cp, { types: CARDIO_IDS.filter(k => (cp.types || []).includes(k) || k === id) });
+  styleApply(`${name} added to the cardio rotation`);
+}
+document.addEventListener('submit', e => { if (e.target.dataset && e.target.dataset.form === 'cardio') { e.preventDefault(); saveCardio(e.target); } });
+Object.assign(ACT, {
+  'cd-new': el => cardioEditor(null, el.dataset.group),
+  'cd-edit': el => cardioEditor(el.dataset.id),
+  'xc-met': el => { XC.met = +el.dataset.v; $$('[data-act="xc-met"]').forEach(b => b.classList.toggle('on', b === el)); const w = $('#xc-why'); if (w) w.textContent = xcWhy(); },
+  'cd-del': el => { const x = S.customCardio[el.dataset.id]; if (!x) return;
+    const logged = Object.values(S.plan || {}).some(e => e && e.c && e.c.k === x.id && e.c.doneMin);
+    confirmBox('Delete cardio?', `Delete <b>${esc(x.name)}</b>? It leaves the rotation and any planned day still using it.${logged ? ' Sessions you already finished keep their minutes and calories.' : ''}`, 'Delete', () => {
+      closeModal();
+      Object.values(S.plan || {}).forEach(e => { if (e && e.c && e.c.k === x.id && !e.c.doneMin) delete e.c; });
+      const cp = cardioPlan(); S.settings.cardio = Object.assign(cp, { types: (cp.types || []).filter(k => k !== x.id) });
+      if (logged) S.customCardio[x.id] = Object.assign({}, x, { gone: 1 }); else delete S.customCardio[x.id];
+      rebuildCardio(); styleApply(`${x.name} deleted`);
+    }, true); }
+});
+
 let QE = null;
 function quickEdit(date, focus) { QE = { date, focus: focus || 'meals' }; renderQuickEdit(); }
 function renderQuickEdit() {

@@ -18,10 +18,58 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 function fmtDate(s, opts) { return parseISO(s).toLocaleDateString(undefined, opts || { weekday: 'short', month: 'short', day: 'numeric' }); }
 const maxISO = (a, b) => a > b ? a : b;
 
+/* ---------- units ----------
+   Everything is stored imperial: body weight and logged loads in pounds, height in inches,
+   food in grams. Metric is a display-and-input layer on top, so switching back and forth
+   never rewrites a single saved number and one user's choice cannot affect another's data. */
+const KG_PER_LB = 0.45359237, CM_PER_IN = 2.54;
+function isMetric() { return !!(typeof S !== 'undefined' && S && S.settings && S.settings.units === 'metric'); }
+function wU() { return isMetric() ? 'kg' : 'lb'; }
+function toW(lb) { return isMetric() ? (+lb || 0) * KG_PER_LB : (+lb || 0); }
+function frW(v) { return isMetric() ? (+v || 0) / KG_PER_LB : (+v || 0); }
+/* Leave dp off in prose and a round number loses its ".0": "Reach 180 lb", "Reach 81.6 kg". */
+function wTxt(lb, dp) { const v = toW(lb); return fmt(v, dp == null ? (Math.abs(v % 1) > 0.049 ? 1 : 0) : dp) + ' ' + wU(); }
+function wNum(lb, dp = 1) { const v = toW(lb); return Math.round(v * 10 ** dp) / 10 ** dp; }
+function rateTxt(lb, dp = 2) { return fmt(toW(lb), dp) + ' ' + wU() + '/wk'; }
+function pU() { return isMetric() ? 'g/kg' : 'g/lb'; }
+function toP(p) { return isMetric() ? (+p || 0) / KG_PER_LB : (+p || 0); }
+function frP(v) { return isMetric() ? (+v || 0) * KG_PER_LB : (+v || 0); }
+function pNum(p) { return Math.round(toP(p) * 100) / 100; }
+function hU() { return isMetric() ? 'cm' : 'in'; }
+function toH(inch) { return Math.round((+inch || 0) * (isMetric() ? CM_PER_IN : 1) * 10) / 10; }
+function frH(v) { return Math.round((+v || 0) / (isMetric() ? CM_PER_IN : 1) * 100) / 100; }
+/* The rate slider works in whole display-unit steps rather than converted pounds, so the
+   tick labels stay round in both systems. Stored value is always lb/week. */
+function RATE_SLIDER() {
+  const m = isMetric();
+  return m
+    ? { min: 0.1, max: 0.9, step: 0.025, ticks: ['0.1', '0.5', '0.9'], val: lb => Math.round(toW(lb) / 0.025) * 0.025, get: v => frW(v) }
+    : { min: 0.25, max: 2, step: 0.05, ticks: ['0.25', '1.0', '2.0'], val: lb => +lb, get: v => +v };
+}
+function PROT_SLIDER() {
+  return isMetric()
+    ? { min: 1.1, max: 2.2, step: 0.1, val: p => Math.round(toP(p) * 10) / 10, get: v => frP(v) }
+    : { min: 0.5, max: 1, step: 0.05, val: p => +p, get: v => +v };
+}
+/* A logged load is held in display units while a set is being entered, then stored in pounds. */
+function dLoad(lb) { return Math.round(toW(lb) * 100) / 100; }
+function sLoad(v) { return Math.round(frW(v) * 1000) / 1000; }
+/* snapped to the smallest plate the system actually has, so a converted load reads as a real weight */
+function qLoad(lb) { const q = isMetric() ? 4 : 2; return Math.round(toW(lb) * q) / q; }
+function loadNum(v) { return fmt(v, v % 1 ? 1 : 0); }
+function loadTxt(lb) { return loadNum(dLoad(lb)); }
+/* Progression and the +/- buttons use real plate steps in whichever system, never a converted pound. */
+function loadInc(ex) { const small = /Dumbbell|DB/.test(ex.name) || ['Shoulders', 'Biceps', 'Triceps'].includes(ex.group); return isMetric() ? (small ? 2.5 : 5) : (small ? 5 : 10); }
+function loadStep(cur, dir) {
+  const m = isMetric(), step = m ? (cur < 10 && dir < 0 ? 1.25 : 2.5) : (cur < 20 && dir < 0 ? 2.5 : 5), q = m ? 4 : 2;
+  return Math.max(0, Math.round((cur + dir * step) * q) / q);
+}
+
 /* ---------- state ---------- */
 function defaultSettings() {
   return {
     startDate: nextMonday(todayISO()),
+    units: 'imperial',
     trainDays: [1, 3, 5],
     startWeight: 230, startBF: 30,
     goalWeight: 180, goalBF: 15,
@@ -54,17 +102,19 @@ function defaultSettings() {
 }
 let S = null;
 function freshState() {
-  return { v: 5, onboarded: false, profile: null, settings: defaultSettings(), plan: {}, planEnd: null, weights: [], logs: {}, done: {}, created: todayISO(), customExercises: {},
+  return { v: 5, onboarded: false, profile: null, settings: defaultSettings(), plan: {}, planEnd: null, weights: [], logs: {}, done: {}, created: todayISO(), customExercises: {}, customCardio: {},
     foodPrefs: Object.assign({}, DEFAULT_FOOD_PREFS), favRecipes: {}, exOff: {}, customFoods: {}, foodOverrides: {}, customRecipes: {}, recipeOverrides: {}, recipeOff: {}, bgCustom: {}, grocery: {}, importMap: {}, favFoods: {}, pantry: [], gymCards: [] };
 }
 function migrateState() {
   const f = freshState();
-  ['weights', 'logs', 'done', 'customExercises', 'foodPrefs', 'favRecipes', 'exOff', 'customFoods', 'foodOverrides', 'customRecipes', 'recipeOverrides', 'recipeOff', 'bgCustom', 'grocery', 'importMap', 'favFoods', 'pantry', 'gymCards'].forEach(k => { if (!S[k]) S[k] = f[k]; });
+  ['weights', 'logs', 'done', 'customExercises', 'customCardio', 'foodPrefs', 'favRecipes', 'exOff', 'customFoods', 'foodOverrides', 'customRecipes', 'recipeOverrides', 'recipeOff', 'bgCustom', 'grocery', 'importMap', 'favFoods', 'pantry', 'gymCards'].forEach(k => { if (!S[k]) S[k] = f[k]; });
   S.settings = Object.assign(defaultSettings(), S.settings);
   if (S.onboarded === undefined) S.onboarded = true;
   // research-backed extra exercises start switched off — applied once per exercise, so a user's own choice sticks
   S.exDefaults = S.exDefaults || {}; S.exOff = S.exOff || {};
-  EXTRA_EX.forEach(id => { if (S.exDefaults[id]) return; S.exDefaults[id] = 1; const per = S.exOff[id] = S.exOff[id] || []; if (!per.some(([, t]) => !t)) per.push(['0000-01-01', null]); });
+  /* An extra marked on:true is meant to be scheduled, not just offered in the swap library, so it
+     is recorded as handled and never switched off. */
+  EXTRA_EX.forEach(id => { if (S.exDefaults[id]) return; S.exDefaults[id] = 1; if (EX[id] && EX[id].on) return; const per = S.exOff[id] = S.exOff[id] || []; if (!per.some(([, t]) => !t)) per.push(['0000-01-01', null]); });
   if (!S.v || S.v < 2) { S.planEnd = S.planEnd || addDays(S.settings.startDate, LAUNCH_DAYS - 1); S.v = 2; }
   if (S.v < 4) migratePrefsV4();
 }
@@ -86,12 +136,22 @@ function loadState(from) {
   else { let raw = null; try { raw = localStorage.getItem(STORE_KEY); } catch (e) { } if (raw) { try { S = JSON.parse(raw); } catch (e) { S = null; } } }
   if (!S || !S.settings) { S = freshState(); if (NEW_STATE_DEFAULTS && NEW_STATE_DEFAULTS.theme) S.settings.theme = NEW_STATE_DEFAULTS.theme; }
   migrateState();
-  rebuildCatalog(); rebuildExercises();
+  rebuildCatalog(); rebuildExercises(); rebuildCardio();
   ensureHorizon();
   migrateGrocery();
   if (!S.v || S.v < 3) { rescheduleWorkouts(maxISO(todayISO(), S.settings.startDate)); S.v = 3; }
   if (S.v < 4) { substitutePlan(maxISO(todayISO(), S.settings.startDate)); S.v = 4; }
   if (S.v < 5) { replanMeals(nextPlanWeekStart()); S.v = 5; S._sharingIntro = true; }   // v5: ingredient-sharing planner
+  /* v6: some library extras became scheduled defaults. Clear only the pristine default-off record,
+     so anyone who switched one off on purpose keeps their choice. */
+  if (S.v < 6) {
+    EXTRA_EX.forEach(id => {
+      if (!EX[id] || !EX[id].on) return;
+      const per = S.exOff[id];
+      if (per && per.length === 1 && per[0][0] === '0000-01-01' && per[0][1] === null) delete S.exOff[id];
+    });
+    S.v = 6;
+  }
   if (!(+S.settings.bgDim >= 0 && +S.settings.bgDim <= 1)) S.settings.bgDim = 0.7;
   saveState();
   return S;
@@ -337,13 +397,17 @@ function styleRow(type, sets, reps, rest) {
   if (want === 'S') { const lo = clamp(Math.round(rr[0] * 0.55), 3, 8); return { type: 'S', sets, reps: `${lo}–${lo + 2}`, rest: Math.max(rest, 150) }; }
   const lo = clamp(Math.round(rr[0] * 1.6), 8, 15); return { type: 'H', sets, reps: `${lo}–${lo + 4}`, rest: Math.min(rest, 90) };
 }
+/* Split out so the custom-cardio editor can price an effort level that has no id yet. */
+function metKcal(met, minutes, lb) {
+  const w = +lb > 0 ? +lb : (S && S.settings ? S.settings.startWeight : 180);
+  return Math.round((+met || 0) * 3.5 * (w * 0.45359237) / 200 * (+minutes || 0));
+}
 function cardioKcal(kind, minutes, lb) {
   const c = CARDIO[kind]; if (!c) return 0;
-  const w = +lb > 0 ? +lb : (S && S.settings ? S.settings.startWeight : 180);
-  return Math.round(c.met * 3.5 * (w * 0.45359237) / 200 * (+minutes || 0));
+  return metKcal(c.met, minutes, lb);
 }
 const cardioPlan = () => Object.assign({ perWeek: 3, minutes: 30, types: CARDIO_DEFAULT.slice() }, (S && S.settings && S.settings.cardio) || {});
-function cardioTypes() { const t = (cardioPlan().types || []).filter(k => CARDIO[k]); return t.length ? t : CARDIO_DEFAULT.slice(); }
+function cardioTypes() { const t = (cardioPlan().types || []).filter(k => CARDIO[k] && !CARDIO[k].gone); return t.length ? t : CARDIO_DEFAULT.slice(); }
 /* Cardio goes on the days without a lifting session, so the lifting week is untouched. If a week
    has fewer free days than sessions asked for, the remainder doubles up on lifting days — the
    day holds both, and the macros still only count the lifting session. */
@@ -359,7 +423,9 @@ function assignCardio(plan, settings, dates, fromDate, overwrite) {
     const pick = spread(free).concat(busy.slice(0, Math.max(0, want - free.length)));
     wkDates.forEach(d => {
       if (d < fromDate || !plan[d]) return;
-      const keep = !overwrite && plan[d].c && plan[d].c.by === 'user';
+      /* A session that has already been done is history, not plan, so no reschedule touches it —
+         not a settings change, not overwrite. Only an untouched day is up for reassignment. */
+      const keep = plan[d].c && (plan[d].c.doneMin || (!overwrite && plan[d].c.by === 'user'));
       if (keep) { n++; return; }
       if (pick.includes(d)) plan[d].c = { k: kinds[n++ % kinds.length], min: clamp(Math.round(+cp.minutes || 30), 5, 180) };
       else if (plan[d].c && plan[d].c.by !== 'user') delete plan[d].c;
@@ -413,6 +479,22 @@ function rebuildExercises() {
   Object.values(S.customExercises || {}).forEach(e => {
     EX[e.id] = Object.assign({ steps: [], cues: [], mistake: '', primary: [], secondary: [], equip: '', compound: false }, e, { custom: true });
     if (e.slot && SLOTS[e.slot]) (CUSTOM_SLOT[e.slot] = CUSTOM_SLOT[e.slot] || []).push(e);
+  });
+  invalidate();
+}
+
+/* ---------- custom cardio ---------- */
+/* A user's own kinds live in CARDIO beside the built-ins, so every screen that renders cardio by
+   id works on them unchanged. A kind that was deleted after it had already been done is kept in
+   CARDIO but left out of CARDIO_IDS: finished sessions still render, while it is gone from every
+   picker, the library and the rotation. */
+function rebuildCardio() {
+  Object.keys(CARDIO).forEach(k => { if (CARDIO[k].custom) delete CARDIO[k]; });
+  CARDIO_IDS.length = 0; CARDIO_BUILTIN.forEach(id => CARDIO_IDS.push(id));
+  Object.values(S.customCardio || {}).forEach(c => {
+    if (!c || !c.id) return;
+    CARDIO[c.id] = Object.assign({ group: CARDIO_GROUPS[0], met: 7, how: '', short: c.name }, c, { custom: true });
+    if (!c.gone) CARDIO_IDS.push(c.id);
   });
   invalidate();
 }
@@ -709,21 +791,25 @@ function amountText(id, amt) {
   }
   let grams = amt >= 60 ? Math.round(amt / 5) * 5 : Math.round(amt);
   const unit = g.ml ? 'ml' : 'g';
+  /* In metric the gram figure is the measurement, so the cup/spoon translation beside it is dropped.
+     A scoop is a scoop in either system, so that one stays. */
   let sub = '';
-  if (TBSP[id] && amt < TBSP[id] * 4) { const t = amt / TBSP[id]; sub = t < 0.9 ? fracStr(t * 3) + ' tsp' : fracStr(t) + ' tbsp'; }
-  else if (id === 'whey') sub = fracStr(amt / 30) + ' scoop' + (amt / 30 > 1.2 ? 's' : '');
+  if (id === 'whey') sub = fracStr(amt / 30) + ' scoop' + (amt / 30 > 1.2 ? 's' : '');
+  else if (isMetric()) sub = '';
+  else if (TBSP[id] && amt < TBSP[id] * 4) { const t = amt / TBSP[id]; sub = t < 0.9 ? fracStr(t * 3) + ' tsp' : fracStr(t) + ' tbsp'; }
   else if (CUP[id]) { const c = amt / CUP[id]; sub = c < 0.2 ? Math.max(1, Math.round(c * 16)) + ' tbsp' : fracStr(c) + ' cup'; }
   else if (g.a === 'Meat & Seafood' || id === 'tuna_can' || id === 'jerky') sub = (amt / 28.35).toFixed(1) + ' oz';
   return { main: grams + ' ' + unit, sub };
 }
 function groceryText(id, amt) {
-  const g = ING[id];
-  if (g.dry) { const d = amt * g.dry; return { name: g.dryName, qty: Math.round(d / 10) * 10 + ' g', sub: (d / 453.6).toFixed(1) + ' lb' }; }
+  const g = ING[id], met = isMetric();
+  const bulk = (a, dp) => met ? (a / 1000).toFixed(dp) + ' kg' : (a / 453.6).toFixed(dp) + ' lb';
+  if (g.dry) { const d = amt * g.dry; return { name: g.dryName, qty: Math.round(d / 10) * 10 + ' g', sub: bulk(d, 1) }; }
   if (g.u) { const n = Math.ceil(amt); return { name: g.n, qty: n + ' ' + (n === 1 ? g.u : g.u + (g.u.endsWith('ch') ? 'es' : 's')), sub: '' }; }
-  if (g.a === 'Meat & Seafood') return { name: g.n, qty: (amt / 453.6).toFixed(2) + ' lb', sub: Math.round(amt) + ' g' };
-  if (g.ml) return { name: g.n, qty: Math.round(amt / 10) * 10 + ' ml', sub: (amt / 946).toFixed(2) + ' qt' };
-  if (amt >= 900) return { name: g.n, qty: (amt / 453.6).toFixed(1) + ' lb', sub: Math.round(amt) + ' g' };
-  return { name: g.n, qty: Math.round(amt) + ' g', sub: CUP[id] ? fracStr(amt / CUP[id]) + ' cup' : (TBSP[id] ? fracStr(amt / TBSP[id]) + ' tbsp' : '') };
+  if (g.a === 'Meat & Seafood') return met ? { name: g.n, qty: Math.round(amt) + ' g', sub: amt >= 1000 ? bulk(amt, 2) : '' } : { name: g.n, qty: bulk(amt, 2), sub: Math.round(amt) + ' g' };
+  if (g.ml) return { name: g.n, qty: Math.round(amt / 10) * 10 + ' ml', sub: met ? (amt >= 500 ? (amt / 1000).toFixed(2) + ' L' : '') : (amt / 946).toFixed(2) + ' qt' };
+  if (amt >= 900) return met ? { name: g.n, qty: Math.round(amt) + ' g', sub: bulk(amt, 1) } : { name: g.n, qty: bulk(amt, 1), sub: Math.round(amt) + ' g' };
+  return { name: g.n, qty: Math.round(amt) + ' g', sub: met ? '' : (CUP[id] ? fracStr(amt / CUP[id]) + ' cup' : (TBSP[id] ? fracStr(amt / TBSP[id]) + ' tbsp' : '')) };
 }
 
 /* ---------- strength log / PRs ---------- */
@@ -757,11 +843,11 @@ function suggestion(exId, reps, beforeDate) {
   const ex = EX[exId];
   const w = last.bestSet ? +last.bestSet.w : 0;
   const allTop = last.sets.every(s => +s.r >= hi);
-  const inc = /Dumbbell|DB/.test(ex.name) || ex.group === 'Shoulders' || ex.group === 'Biceps' || ex.group === 'Triceps' ? 5 : 10;
+  const inc = loadInc(ex), dw = qLoad(w), u = wU(), drop = isMetric() ? 5 : 10;
   if (isBW(exId)) return { text: `Last best: ${last.bestReps} reps → aim for ${last.bestReps + 1}+`, last };
-  if (ex.assist) return { text: allTop ? `Hit the top of the range — drop assistance to ${Math.max(0, w - 10)} lb` : `Keep ${w} lb assist, add a rep per set`, last };
-  if (allTop) return { text: `Hit ${hi}+ on all sets → go up to ${w + inc} lb and aim for ${lo}+`, last };
-  return { text: `Stay at ${w} lb and beat ${last.sets.map(s => s.r).join('/')} reps`, last };
+  if (ex.assist) return { text: allTop ? `Hit the top of the range — drop assistance to ${loadNum(Math.max(0, dw - drop))} ${u}` : `Keep ${loadNum(dw)} ${u} assist, add a rep per set`, last };
+  if (allTop) return { text: `Hit ${hi}+ on all sets → go up to ${loadNum(dw + inc)} ${u} and aim for ${lo}+`, last };
+  return { text: `Stay at ${loadNum(dw)} ${u} and beat ${last.sets.map(s => s.r).join('/')} reps`, last };
 }
 
 /* ---------- trend & projections ---------- */
@@ -780,22 +866,22 @@ function weightTrend() {
   let advice = null, delta = 0;
   if (kind === 'maintain') {
     const drift = -rate;
-    if (Math.abs(drift) <= 0.35) advice = `Holding steady: ${drift >= 0 ? '+' : ''}${drift.toFixed(2)} lb/wk. Maintenance calories look right.`;
-    else { delta = drift > 0 ? -150 : 150; advice = `You’re ${drift > 0 ? 'gaining' : 'losing'} ${Math.abs(drift).toFixed(2)} lb/wk while aiming to hold. ${delta > 0 ? 'Add' : 'Trim'} ${Math.abs(delta)} kcal/day.`; }
+    if (Math.abs(drift) <= 0.35) advice = `Holding steady: ${drift >= 0 ? '+' : ''}${rateTxt(drift, 2)}. Maintenance calories look right.`;
+    else { delta = drift > 0 ? -150 : 150; advice = `You’re ${drift > 0 ? 'gaining' : 'losing'} ${rateTxt(Math.abs(drift), 2)} while aiming to hold. ${delta > 0 ? 'Add' : 'Trim'} ${Math.abs(delta)} kcal/day.`; }
     return { rate, advice, delta, points: pts.length, kind };
   }
   if (kind === 'bulk') {
     const gain = -rate;
     const target = bulkLb(st0.w);
-    if (gain < target * 0.5) { delta = gain < 0 ? 300 : 200; advice = `You’re gaining ${gain.toFixed(2)} lb/wk against a ${target.toFixed(2)} lb/wk target. Add ${delta} kcal/day.`; }
-    else if (gain > target * 1.6) { delta = -150; advice = `You’re gaining ${gain.toFixed(2)} lb/wk — faster than the ${target.toFixed(2)} lb/wk target, and the extra is mostly fat. Trim ${-delta} kcal/day.`; }
-    else advice = `On track: ${gain.toFixed(2)} lb/wk against a ${target.toFixed(2)} lb/wk target. Keep going.`;
+    if (gain < target * 0.5) { delta = gain < 0 ? 300 : 200; advice = `You’re gaining ${rateTxt(gain, 2)} against a ${rateTxt(target, 2)} target. Add ${delta} kcal/day.`; }
+    else if (gain > target * 1.6) { delta = -150; advice = `You’re gaining ${rateTxt(gain, 2)} — faster than the ${rateTxt(target, 2)} target, and the extra is mostly fat. Trim ${-delta} kcal/day.`; }
+    else advice = `On track: ${rateTxt(gain, 2)} against a ${rateTxt(target, 2)} target. Keep going.`;
     return { rate, advice, delta, points: pts.length, kind };
   }
   const target = S.settings.rate;
-  if (rate < target * 0.7) { delta = rate < target * 0.4 ? -200 : -125; advice = `You’re losing ${rate.toFixed(2)} lb/wk vs a ${target} lb/wk target. Trim ${-delta} kcal/day.`; }
-  else if (rate > target * 1.35 && rate > 1.5) { delta = 150; advice = `You’re losing ${rate.toFixed(2)} lb/wk — faster than planned. Add ${delta} kcal/day to protect muscle and training quality.`; }
-  else advice = `On track: ${rate.toFixed(2)} lb/wk vs ${target} lb/wk target. Keep going.`;
+  if (rate < target * 0.7) { delta = rate < target * 0.4 ? -200 : -125; advice = `You’re losing ${rateTxt(rate, 2)} vs a ${rateTxt(target, 2)} target. Trim ${-delta} kcal/day.`; }
+  else if (rate > target * 1.35 && rate > 1.5) { delta = 150; advice = `You’re losing ${rateTxt(rate, 2)} — faster than planned. Add ${delta} kcal/day to protect muscle and training quality.`; }
+  else advice = `On track: ${rateTxt(rate, 2)} vs ${rateTxt(target, 2)} target. Keep going.`;
   return { rate, advice, delta, points: pts.length, kind };
 }
 function movingAvg(ws, days = 7) {
@@ -806,7 +892,10 @@ function projection() {
   const ws0 = sortedWeights(); const staleBy = ws0.length ? dayDiff(ws0[ws0.length - 1].d, todayISO()) : null;
   const signed = planRate(st.w);
   const rate = Math.abs(signed) || 0.0001;
-  const toGoal = kind === 'bulk' ? Math.max(0, S.settings.goalWeight - st.w) : Math.max(0, st.w - S.settings.goalWeight);
+  /* Maintenance has no goal weight to close, so there is no distance to it and the projected
+     end weight is simply where they are now. Without this the divide by a zero plan rate
+     produced dates centuries out. */
+  const toGoal = kind === 'maintain' ? 0 : kind === 'bulk' ? Math.max(0, S.settings.goalWeight - st.w) : Math.max(0, st.w - S.settings.goalWeight);
   const weeks = toGoal / rate;
   const refDate = maxISO(ws0.length ? ws0[ws0.length - 1].d : S.settings.startDate, todayISO());
   const ref = maxISO(maxISO(todayISO(), refDate), S.settings.startDate);
@@ -814,7 +903,7 @@ function projection() {
   const cyc = ref <= launchEnd ? 1 : cycleOfWeek(planWeek(ref));
   const endPlan = cyc === 1 ? launchEnd : cycleEndDate(cyc);
   const daysLeft = Math.max(0, dayDiff(refDate, endPlan));
-  const endW = kind === 'bulk' ? Math.min(S.settings.goalWeight, st.w + rate * daysLeft / 7) : Math.max(S.settings.goalWeight, st.w - rate * daysLeft / 7);
+  const endW = kind === 'maintain' ? st.w : kind === 'bulk' ? Math.min(S.settings.goalWeight, st.w + rate * daysLeft / 7) : Math.max(S.settings.goalWeight, st.w - rate * daysLeft / 7);
   const goalDate = addDays(refDate, Math.round(weeks * 7));
   const wAtGoalBF = st.lbm / (1 - S.settings.goalBF / 100);
   return { weeks, goalDate, endW, endPlan, cyc, wAtGoalBF, lbm: st.lbm, kind, rate: signed, staleBy, stale: staleBy != null && staleBy > TREND_STALE_DAYS, reached: goalReached(st.w, st.bf) };

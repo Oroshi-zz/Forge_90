@@ -7,7 +7,7 @@ const isPhone = () => !!(PHONE_MQ && PHONE_MQ.matches);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const fmt = (n, d = 0) => (n == null || isNaN(n)) ? '—' : Number(n).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
-const UI = { calView: 'month', calMonth: null, calWeek: null, libTab: 'workouts', libFilter: 'all', libQ: '', dietFilter: 'all', groWeek: null, prEx: null, planPhase: 1, showLib: true };
+const UI = { calView: 'month', calMonth: null, calWeek: null, libTab: 'workouts', libFilter: 'all', libQ: '', dietFilter: 'all', groWeek: null, prEx: null, planPhase: 1, showLib: true, lowFx: null };
 /* Per-account, because two people on one machine were inheriting each other's grocery week,
    calendar position, searches and theme. The bare key stays for signed-out (local) use. */
 const UI_DEFAULTS = JSON.parse(JSON.stringify(UI));
@@ -21,6 +21,25 @@ function loadUI() {
 }
 loadUI();
 function saveUI() { try { localStorage.setItem(uiKey(), JSON.stringify(UI)); } catch (e) { } }
+
+/* ---------- visual effects ----------
+   Whether this browser can composite on the GPU is a property of the machine, not the account,
+   so the choice lives in per-device UI state and never syncs. WebGL falling back to a software
+   renderer is the same switch that turns off GPU compositing, so it stands in for it; it only
+   picks the first-run default and an explicit choice is never overridden. */
+function gpuIsSoftware() {
+  try {
+    const cv = document.createElement('canvas');
+    const gl = cv.getContext('webgl') || cv.getContext('experimental-webgl');
+    if (!gl) return true;
+    const dbg = gl.getExtension('WEBGL_debug_renderer_info');
+    const r = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || '') : '';
+    const lose = gl.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext();
+    return /swiftshader|softwarerasterizer|llvmpipe|basic render|microsoft basic/i.test(r);
+  } catch (e) { return false; }
+}
+function lowFxOn() { if (UI.lowFx == null) { UI.lowFx = gpuIsSoftware(); saveUI(); } return !!UI.lowFx; }
+function applyFx() { if (document.body) document.body.classList.toggle('low-fx', lowFxOn()); }
 
 /* ---------- icons (24px stroke) ---------- */
 const IC = {

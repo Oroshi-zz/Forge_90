@@ -53,8 +53,12 @@
 .cd-ex .pill { display: inline-block; }
 
 /* ---------- cardio ---------- */
-.chip.cd { --k: var(--kcal); display: inline-flex; align-items: center; gap: 5px; }
-.chip.cd small { opacity: .75; font-weight: 600; }
+.chip.cd { --k: var(--kcal); display: inline-flex; align-items: center; gap: 5px; font-weight: 600;
+  border: 0; padding: 5px 7px; color: var(--kcal); background: color-mix(in srgb, var(--kcal) 16%, transparent); }
+.chip.cd:hover { background: color-mix(in srgb, var(--kcal) 24%, transparent); }
+/* Without this the icon has no intrinsic size and grows to fill the cell. */
+.chip.cd svg { width: 13px; height: 13px; flex: none; }
+.chip.cd small { opacity: .75; font-weight: 600; flex: none; }
 .cell.cardio:not(.train) { background: linear-gradient(180deg, color-mix(in srgb, var(--kcal) 6%, var(--surface)) 0%, var(--surface) 42%); }
 .cd-pill { background: color-mix(in srgb, var(--kcal) 18%, transparent); color: var(--kcal); display: inline-flex; align-items: center; gap: 4px; }
 .cd-pill svg { width: 13px; height: 13px; }
@@ -915,8 +919,20 @@ body.auth-page { background: var(--bg); }
 .onb-steps em { font-style: normal; }
 .onb-steps .on { color: var(--text); background: var(--accent-soft); } .onb-steps .on i { background: var(--accent); color: var(--accent-ink); }
 .onb-steps .done i { background: var(--accent-2); color: #fff; }
-.onb-card .field { display: grid; gap: 5px; } .onb-card .inp { width: 100%; height: 42px; font-size: 15px; }
+/* align-content:start keeps the label row at its own height. Without it a field sitting next to a
+   taller one (Height, which carries Feet/Inches captions) stretches its label and pushes its input
+   down, so the boxes across a row no longer line up. */
+.onb-card .field { display: grid; gap: 5px; align-content: start; } .onb-card .inp { width: 100%; height: 42px; font-size: 15px; }
 .onb-card select.inp { height: 42px; }
+/* The switch sits between the two words it picks between, so the control reads as one thing. */
+.onb-units { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.onb-units > b { color: var(--text-2); font-weight: 600; margin-right: 2px; }
+.onb-units .u, .set-units .u { font-size: 12.5px; font-weight: 600; color: var(--muted); transition: color .15s; }
+.onb-units .u.on, .set-units .u.on { color: var(--text); }
+.onb-units .switch, .set-units .switch { margin: 0 1px; }
+/* .set-tog stretches its spans to push the switch to the far edge, and is defined later in this
+   file, so these need the doubled class to win on specificity rather than order. */
+.set-tog.set-units { gap: 8px; } .set-tog.set-units > span { flex: none; display: inline; } .set-tog.set-units > b { margin-right: 2px; }
 .onb-est { margin-top: 12px; }
 .onb-nav { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 22px; }
 .onb-nav .btn.big { min-width: 190px; }
@@ -957,7 +973,24 @@ body.auth-page { background: var(--bg); }
 
 body.no-bg #bg { background: radial-gradient(900px 600px at 100% 0%, var(--bg-glow1), transparent 60%), radial-gradient(800px 600px at 0% 100%, var(--bg-glow2), transparent 60%), var(--bg); }
 body.no-bg #bg::after, body.no-bg #bg .bg-layer { display: none; }
-body.no-bg .card, body.no-bg .side, body.no-bg .lib, body.no-bg .hero { -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* Frosted glass is the single most expensive thing on the page when the browser has no GPU:
+   every blurred panel is re-rasterised each scroll frame. Measured on a software-composited
+   Chrome, dropping it halves the cost of painting the dashboard and removes the frame spikes.
+   Two switches land here: "background photos off", and the explicit Reduce visual effects. */
+body.no-bg .card, body.no-bg .side, body.no-bg .lib, body.no-bg .hero,
+body.no-bg .cell:not(.out), body.no-bg .ag-day, body.no-bg .modal, body.no-bg .modal-bg,
+body.no-bg #tip, body.no-bg .chart .tt, body.no-bg .float-trash, body.no-bg .swap-grp,
+body.no-bg .emo-pop, body.no-bg .adm-tabs, body.no-bg .tabbar, body.no-bg .fav-btn.on-art,
+body.low-fx .card, body.low-fx .side, body.low-fx .lib, body.low-fx .hero,
+body.low-fx .cell:not(.out), body.low-fx .ag-day, body.low-fx .modal, body.low-fx .modal-bg,
+body.low-fx #tip, body.low-fx .chart .tt, body.low-fx .float-trash, body.low-fx .swap-grp,
+body.low-fx .emo-pop, body.low-fx .adm-tabs, body.low-fx .tabbar, body.low-fx .fav-btn.on-art,
+body.low-fx .auth-card {
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+}
+/* Without the blur a 56%-opaque panel would show the photo through it, so the panels move to
+   the near-opaque surface the app already defines per theme. Photos stay on, behind them. */
+body.low-fx:not(.no-bg) { --surface: var(--glass-strong); --surface-2: var(--glass-strong); }
 .set-tog { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-3); cursor: pointer; }
 .set-tog > span { flex: 1; display: grid; gap: 2px; min-width: 0; }
 .set-tog input { position: absolute; opacity: 0; width: 1px; height: 1px; }
