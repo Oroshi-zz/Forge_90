@@ -969,7 +969,24 @@ body.auth-page { background: var(--bg); }
 
 body.no-bg #bg { background: radial-gradient(900px 600px at 100% 0%, var(--bg-glow1), transparent 60%), radial-gradient(800px 600px at 0% 100%, var(--bg-glow2), transparent 60%), var(--bg); }
 body.no-bg #bg::after, body.no-bg #bg .bg-layer { display: none; }
-body.no-bg .card, body.no-bg .side, body.no-bg .lib, body.no-bg .hero { -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* Frosted glass is the single most expensive thing on the page when the browser has no GPU:
+   every blurred panel is re-rasterised each scroll frame. Measured on a software-composited
+   Chrome, dropping it halves the cost of painting the dashboard and removes the frame spikes.
+   Two switches land here: "background photos off", and the explicit Reduce visual effects. */
+body.no-bg .card, body.no-bg .side, body.no-bg .lib, body.no-bg .hero,
+body.no-bg .cell:not(.out), body.no-bg .ag-day, body.no-bg .modal, body.no-bg .modal-bg,
+body.no-bg #tip, body.no-bg .chart .tt, body.no-bg .float-trash, body.no-bg .swap-grp,
+body.no-bg .emo-pop, body.no-bg .adm-tabs, body.no-bg .tabbar, body.no-bg .fav-btn.on-art,
+body.low-fx .card, body.low-fx .side, body.low-fx .lib, body.low-fx .hero,
+body.low-fx .cell:not(.out), body.low-fx .ag-day, body.low-fx .modal, body.low-fx .modal-bg,
+body.low-fx #tip, body.low-fx .chart .tt, body.low-fx .float-trash, body.low-fx .swap-grp,
+body.low-fx .emo-pop, body.low-fx .adm-tabs, body.low-fx .tabbar, body.low-fx .fav-btn.on-art,
+body.low-fx .auth-card {
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important;
+}
+/* Without the blur a 56%-opaque panel would show the photo through it, so the panels move to
+   the near-opaque surface the app already defines per theme. Photos stay on, behind them. */
+body.low-fx:not(.no-bg) { --surface: var(--glass-strong); --surface-2: var(--glass-strong); }
 .set-tog { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-3); cursor: pointer; }
 .set-tog > span { flex: 1; display: grid; gap: 2px; min-width: 0; }
 .set-tog input { position: absolute; opacity: 0; width: 1px; height: 1px; }

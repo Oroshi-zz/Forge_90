@@ -570,6 +570,7 @@ function appearanceCardHTML() {
         <div class="field"><label>Theme</label><div class="seg">${['dark', 'light', 'system'].map(t => `<button class="${st.theme === t ? 'on' : ''}" data-act="theme" data-v="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></div>
         <div class="field" style="margin-top:12px"><label>Accent color</label><div class="acc-pick" role="group" aria-label="Accent color">${ACCENTS.map(([v, l]) => `<button type="button" class="acc-sw acc-${v} ${(st.accent || 'lime') === v ? 'on' : ''}" data-act="accent" data-v="${v}" title="${l}" aria-label="${l}" aria-pressed="${(st.accent || 'lime') === v}"><i></i><span class="tiny">${l}</span></button>`).join('')}</div></div>
         <label class="set-tog" style="margin-top:12px"><span><b class="small">Background photos</b><span class="tiny muted">${st.bgPhotos !== false ? 'A fitness photo behind each page.' : 'Off — plain background. Pages load faster and text is easier to read.'}</span></span><input type="checkbox" data-input="bg-photos" ${st.bgPhotos !== false ? 'checked' : ''}><i class="switch ${st.bgPhotos !== false ? 'on' : ''}" aria-hidden="true"><i></i></i></label>
+        <label class="set-tog" style="margin-top:12px"><span><b class="small">Reduce visual effects</b><span class="tiny muted">${lowFxOn() ? 'On — the frosted blur behind panels is off. Scrolling is smoother on machines without graphics acceleration.' : 'Off — panels use a frosted blur. Turn this on if scrolling feels laggy.'} This browser only.</span></span>${sw(lowFxOn(), 'lowfx-tog')}</label>
         ${st.bgPhotos !== false ? `<hr class="sep">${backgroundsHTML()}` : ''}
         <hr class="sep"><div class="row wrap"><button class="btn" data-act="export">${icon('download')}Export backup</button><label class="btn">${icon('upload')}Import backup<input type="file" accept="application/json" data-input="import" hidden></label>
         <button class="btn danger" data-act="reset">${icon('trash')}Reset everything</button></div>
@@ -651,6 +652,7 @@ function render() {
    after a reload use the last ones seen, instead of flashing the defaults. */
 const ACCENTS = [['lime', 'Lime'], ['red', 'Red'], ['blue', 'Blue'], ['purple', 'Purple'], ['yellow', 'Yellow']];
 function applyTheme() {
+  applyFx();
   const t = (S && S.settings.theme) || UI.lastTheme || 'dark'; document.documentElement.dataset.theme = t;
   const a = (S && S.settings.accent) || UI.lastAccent || 'lime';
   if (a === 'lime') delete document.documentElement.dataset.accent; else document.documentElement.dataset.accent = a;
@@ -684,6 +686,7 @@ const ACT = {
   'toggle-done': el => { const d = el.dataset.date; if (S.done[d]) delete S.done[d]; else S.done[d] = true; saveState(); render(); toast(S.done[d] ? 'Workout marked complete 💪' : 'Marked not complete'); },
   'set-rate': el => { S.settings.rate = +el.dataset.v; saveState(); render(); toast(`Loss rate set to ${rateTxt(+el.dataset.v, 2)} — portions updated`); },
   /* Nothing stored changes: the same pounds, inches and grams are simply read back in the other system. */
+  'lowfx-tog': () => { UI.lowFx = !lowFxOn(); saveUI(); applyFx(); render(); toast(UI.lowFx ? 'Visual effects reduced — the blur behind panels is off' : 'Visual effects restored'); },
   'units-tog': () => { S.settings.units = isMetric() ? 'imperial' : 'metric'; saveState(); render(); toast(isMetric() ? 'Metric — weights in kg, height in cm' : 'Imperial — weights in lb, height in feet and inches'); },
   'set-goal': el => { const v = el.dataset.v; if (v === S.settings.goal) return; S.settings.goal = v; S.settings.kcalAdjust = 0; saveState(); render();
     toast(v === 'bulk' ? 'Building muscle — calories, macros and portions updated' : v === 'maintain' ? 'Maintenance — calories held level' : 'Losing fat — deficit back on'); },
