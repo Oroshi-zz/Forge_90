@@ -8,7 +8,10 @@ RUN node build.js
 
 # ---- runtime: tiny, dependency-free Node server ----
 FROM node:22-alpine
-RUN apk add --no-cache tzdata
+# tesseract powers receipt scanning. The browser does the image work and the app bundle
+# does the parsing, so the server needs only the binary and an English language pack.
+# Without it the feature reports itself unavailable; nothing else is affected.
+RUN apk add --no-cache tzdata tesseract-ocr tesseract-ocr-data-eng
 WORKDIR /app
 COPY --from=build /src/server/server.js ./server.js
 COPY --from=build /src/server/lib ./lib

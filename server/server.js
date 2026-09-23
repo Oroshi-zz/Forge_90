@@ -962,6 +962,53 @@ route('GET', '/api/admin/backup', { admin: true }, async (req, res, ctx) => {
   send(res, 200, out, { 'Content-Disposition': `attachment; filename="forge90-backup-${new Date().toISOString().slice(0, 10)}.json"` });
 });
 
+/* ---------- receipt OCR (experimental) ----------
+   A dumb proxy to tesseract, and deliberately nothing more. The browser does the image work
+   and the app bundle does the parsing, matching and merging, so this handles bytes only.
+   Images are written to a private temp file, read back as text and deleted; nothing touches
+   the data folder and nothing is kept. */
+const os = require('os');
+const { execFile } = require('child_process');
+const RC_MAX_IMAGES = 6, RC_MAX_PIXELS_B64 = 8 * 1024 * 1024;
+let ocrReady = null;
+function ocrAvailable() {
+  if (ocrReady !== null) return Promise.resolve(ocrReady);
+  return new Promise(resolve => {
+    execFile('tesseract', ['--version'], { timeout: 5000 }, e => { ocrReady = !e; resolve(ocrReady); });
+  });
+}
+function runOcr(buf, psm) {
+  return new Promise((resolve) => {
+    const base = path.join(os.tmpdir(), 'f90ocr-' + crypto.randomBytes(8).toString('hex'));
+    const img = base + '.png';
+    const done = (text) => { [img, base + '.txt'].forEach(f => { try { fs.unlinkSync(f); } catch (e) { } }); resolve(text); };
+    try { fs.writeFileSync(img, buf, { mode: 0o600 }); } catch (e) { return resolve(''); }
+    /* Every argument is ours; nothing from the request reaches the command line except a psm
+       number that is clamped to the two modes the app uses. */
+    const mode = psm === 6 ? '6' : '4';
+    execFile('tesseract', [img, base, '--psm', mode], { timeout: 45000 }, (e) => {
+      if (e) return done('');
+      let t = ''; try { t = fs.readFileSync(base + '.txt', 'utf8'); } catch (x) { t = ''; }
+      done(t);
+    });
+  });
+}
+route('POST', '/api/receipt/ocr', { auth: true, limit: 'state', maxBody: 24 * 1024 * 1024 }, async (req, res, ctx) => {
+  if (!ctx.me) err(401, 'Sign in first.');
+  if (!(await ocrAvailable())) err(503, 'Receipt scanning is not available on this server: tesseract is not installed.');
+  const imgs = Array.isArray(ctx.body.images) ? ctx.body.images.slice(0, RC_MAX_IMAGES) : [];
+  if (!imgs.length) err(400, 'No images were sent.');
+  const texts = [];
+  for (const im of imgs) {
+    const b64 = typeof im.b64 === 'string' ? im.b64 : '';
+    if (!b64 || b64.length > RC_MAX_PIXELS_B64 || !/^[A-Za-z0-9+/=]+$/.test(b64)) { texts.push({ id: String(im.id || ''), text: '' }); continue; }
+    const buf = Buffer.from(b64, 'base64');
+    if (buf.length < 64 || buf.slice(0, 8).toString('hex') !== '89504e470d0a1a0a') { texts.push({ id: String(im.id || ''), text: '' }); continue; }
+    texts.push({ id: String(im.id || ''), text: await runOcr(buf, +im.psm) });
+  }
+  send(res, 200, { texts });
+});
+
 /* ---------- dispatcher ---------- */
 async function handle(req, res) {
   const url = new URL(req.url, 'http://x'); const pathname = decodeURIComponent(url.pathname);

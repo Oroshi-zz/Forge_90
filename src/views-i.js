@@ -544,10 +544,14 @@ const PANTRY_SOON = 14;
 function pantryShared() { return typeof SY !== 'undefined' && SY && SY.data && SY.data.status === 'active' && SY.data.pantry && SY.data.pantry.on; }
 function pantryItems() { return pantryShared() ? (SY.data.pantry.items || []) : (S.pantry || []); }
 function pantryInUse() { return pantryShared() || (S.pantry || []).length > 0; }
-function defaultExp(id) {
+/* `from` is the day the food was actually bought, which a receipt supplies and a barcode scan
+   does not. Counting shelf life from the purchase date rather than from today is the whole
+   point of reading the date off a receipt: a Saturday shop scanned on Tuesday should not give
+   the chicken three extra days. */
+function defaultExp(id, from) {
   const g = ING[id]; if (!g) return null; const w = packInfo(id).w; let days;
   if (g.a === 'Frozen') days = 180; else if (w >= .9) days = 5; else if (w >= .6) days = 10; else if (w >= .4) days = 21; else if (w >= .2) days = 60; else days = 365;
-  return addDays(todayISO(), days);
+  return addDays(from || todayISO(), days);
 }
 const pid = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 function pantryQtyText(id, q) { const g = ING[id]; if (!g) return ''; return g.u ? amountText(id, q).main : groceryText(id, q).qty; }
@@ -677,7 +681,7 @@ function viewPantry() {
       ${soon.map(x => `<div class="pan-srow ${daysLeft(x.exp) < 0 ? 'bad' : ''}"><b>${esc(pantryName(x.food))}</b><span class="num tiny">${esc(pantryQtyText(x.food, x.qty))}</span><span class="tiny">${esc(expText(x.exp))}</span><button type="button" class="btn sm ghost" data-act="pan-del" data-id="${x.id}">Used up</button></div>`).join('')}
       <div class="tiny muted" style="margin-top:6px">Anything within ${PANTRY_SOON} days of its use-by date shows here.</div></div>` : '';
   return `<div class="page-head"><div class="t"><h1>Pantry</h1><p>What you already have at home. The shopping list ticks off what’s here, and planned meals use the pantry up automatically as each day passes${shared ? ` — shared with ${esc(syncName())}` : ''}.</p></div>
-      <div class="row wrap">${scanBtnHTML('pantry', 'primary')}<button class="btn ${canScan() ? '' : 'primary'}" data-act="pan-add">${icon('plus')}Add item</button></div></div>
+      <div class="row wrap">${scanBtnHTML('pantry', 'primary')}${canReceipt() ? `<button class="btn" data-act="rc-scan" title="Photograph a receipt and add everything on it">${icon('list')}Scan a receipt <span class="pill" style="font-size:10px;margin-left:6px">Experimental</span></button>` : ''}<button class="btn ${canScan() ? '' : 'primary'}" data-act="pan-add">${icon('plus')}Add item</button></div></div>
     ${soonCard}${soon.length ? '<div style="height:16px"></div>' : ''}
     <div class="card"><div class="card-h"><h2>In the pantry</h2><span class="pill">${foods.length < all.length ? `${foods.length} of ${all.length}` : all.length} food${all.length === 1 ? '' : 's'}</span>${shared ? `<span class="pill acc">${icon('users')}Shared</span>` : ''}</div>
       ${tools}${all.length && !foods.length ? `<div class="muted small" style="padding:10px 2px">Nothing in the pantry matches “${esc(String(UI.panQ || '').trim())}”.</div>` : ''}
