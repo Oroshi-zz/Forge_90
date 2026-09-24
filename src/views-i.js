@@ -420,9 +420,12 @@ function qpListHTML(q, act, d) {
 let FP = null;
 function foodByName(mode, date, ingIndex, tab) {
   scanStop();
-  FP = { mode, d: date || (SCN && SCN.date) || todayISO(), i: ingIndex, tab: tab === 'online' && onlineFoodOK() ? 'online' : 'list' };
+  FP = { mode, d: date || (SCN && SCN.date) || todayISO(), i: ingIndex, raw: '', tab: tab === 'online' && onlineFoodOK() ? 'online' : 'list' };
   FO = { q: '', rows: null, busy: false, err: '' };
-  const title = mode === 'pantry' ? 'Add to the pantry by name' : mode === 'foods' ? 'Find a food' : mode === 'ing' ? 'Pick an ingredient' : `Add food to ${FP.d === todayISO() ? 'today' : fmtDate(FP.d, { weekday: 'short', month: 'short', day: 'numeric' })}`;
+  /* A receipt pick opens already searching for the cleaned-up line, so the list is filtered
+     before the user types anything. */
+  if (mode === 'receipt' && RC && RC.rows[ingIndex]) { FP.raw = RC.rows[ingIndex].line.d; FO.q = rcClean(FP.raw); }
+  const title = mode === 'pantry' ? 'Add to the pantry by name' : mode === 'foods' ? 'Find a food' : mode === 'ing' ? 'Pick an ingredient' : mode === 'receipt' ? 'Which food is this?' : `Add food to ${FP.d === todayISO() ? 'today' : fmtDate(FP.d, { weekday: 'short', month: 'short', day: 'numeric' })}`;
   modal(`<div class="qp-m"><div class="row"><h2 style="flex:1">${esc(title)}</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
     <div id="fp-body">${fpBodyHTML()}</div></div>`, 'qp-modal');
   fpFocus();
@@ -437,11 +440,12 @@ function fpBodyHTML() {
   const hint = mode === 'pantry' ? 'Pick a food to put one package in the pantry — handy for loose produce and anything without a barcode.'
     : mode === 'foods' ? 'Search everything on the food list, including products other people scanned. Pick one to see or edit it.'
     : mode === 'ing' ? 'Search the whole food database. Your recipe is untouched while this is open.'
+    : mode === 'receipt' ? 'Search your food list, look the product up online, or add it yourself. Whichever you pick is remembered for this store.'
     : 'Search the food list and anything scanned on this server.';
-  return tabs + `<div class="tiny muted" style="margin:2px 0 8px">${esc(hint)}</div>
+  return tabs + `${mode === 'receipt' && FP.raw ? `<div class="fp-from">${esc(FP.raw)}</div>` : ''}<div class="tiny muted" style="margin:2px 0 8px">${esc(hint)}</div>
     <div class="row" style="gap:8px;margin-bottom:10px"><input class="inp" type="search" id="fp-q" data-input="fp-q" placeholder="Search foods and scanned products…" style="flex:1;min-width:0" autocomplete="off" value="${esc(FO.q || '')}">${mode !== 'foods' && mode !== 'ing' && canScan() ? `<button type="button" class="btn" data-act="fp-scan">${icon('scan')}Scan</button>` : ''}</div>
     <div class="qp-list" id="fp-list">${qpListHTML(FO.q || '', 'fp-pick', FP.d)}</div>
-    ${mode === 'foods' || mode === 'ing' ? `<div class="row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="btn" data-act="${mode === 'ing' ? 'food-new-inline' : 'food-new-from-pick'}">${icon('plus')}None of these — create a new food</button></div>` : ''}`;
+    ${mode === 'foods' || mode === 'ing' || mode === 'receipt' ? `<div class="row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="btn" data-act="${mode === 'ing' ? 'food-new-inline' : mode === 'receipt' ? 'food-new-for-receipt' : 'food-new-from-pick'}">${icon('plus')}None of these — create a new food</button></div>` : ''}`;
 }
 function foOnlineHTML() {
   const rows = FO.rows;
@@ -482,7 +486,9 @@ function fpPick(id) {
   fpUse(id, m, d, ii);
 }
 function fpUse(id, m, d, ii) {
+  const raw = FP ? FP.raw : '';
   FP = null; FO = null;
+  if (m === 'receipt') { closeModal(); rcPicked(ii, id); return; }
   if (m === 'ing') { closeModal(); reSetIng(ii, id); return; }
   if (m === 'foods') { const g = ING[id]; closeModal(); if (g && g.shared) sharedFoodEditor(id); else foodEditor(id); return; }
   if (m === 'pantry') {

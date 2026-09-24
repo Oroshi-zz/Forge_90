@@ -331,6 +331,10 @@ function modal(html, cls = '', backable) {
    one dialog is open: on UI it was written to storage and stayed set when the dialog was
    cancelled. Declared beside closeModal so closing the dialog can always clear it. */
 let RE_ADDFOOD = false;
+/* Set while a food is being created from a receipt line, so saving binds it back to that line.
+   Declared here beside RE_ADDFOOD because the food editor lives earlier in the bundle than the
+   receipt code that uses it. */
+let RC_PICK = null;
 function closeModal() { RE_ADDFOOD = false; const m = $('#modal'); if (m) m.remove(); backDrop('modal'); }
 
 const BACK_STACK = []; let BACK_SELF = false;

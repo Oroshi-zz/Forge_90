@@ -405,6 +405,7 @@ function rcRowHTML(r, i) {
     <div class="rc-side">
       <span class="pill ${r.conf === 'high' ? 'acc' : ''}" style="font-size:10.5px">${rcConf[r.conf] || 'Check it'}</span>
       <button type="button" class="btn sm" data-act="rc-pick" data-i="${i}">${g ? 'Change' : 'Pick'}</button>
+      <button type="button" class="btn sm icon ghost" data-act="rc-skip" data-i="${i}" title="Not a food — leave it out and remember that" aria-label="Not a food">${icon('x')}</button>
     </div></div>`;
 }
 
@@ -480,21 +481,11 @@ Object.assign(ACT, {
   'rc-scan': () => { if (!canReceipt()) { toast('Receipt scanning needs the server build.'); return; } rcStart(); },
   'rc-close': () => rcClose(),
   'rc-add': () => rcCommit(),
-  'rc-pick': el => {
-    const i = +el.dataset.i; const r = RC && RC.rows[i]; if (!r) return;
-    const opts = (r.sugg || []).filter(id => ING[id]);
-    modal(`<div><div class="row"><h2 style="flex:1">Which food is this?</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
-      <div class="rc-was">${esc(r.line.d)}${r.line.n ? ` · ${esc(r.line.n)}` : ''}</div>
-      ${opts.length ? `<div class="rc-opts">${opts.map(id => `<button type="button" class="rc-opt ${id === r.food ? 'on' : ''}" data-act="rc-set" data-i="${i}" data-id="${id}"><b>${esc(foodLabel(id))}</b><span class="tiny muted">${esc(ING[id].a || '')}</span></button>`).join('')}</div>` : '<div class="small muted" style="margin:10px 0">Nothing close was found.</div>'}
-      <div class="field" style="margin-top:12px"><label>Or search</label><input class="inp" list="rc-foods" data-input="rc-search" data-i="${i}" placeholder="Search foods…" autocomplete="off">
-        <datalist id="rc-foods">${Object.values(ING).sort((a, b) => a.n.localeCompare(b.n)).map(g => `<option value="${esc(foodLabel(g.id))}">`).join('')}</datalist></div>
-      <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px"><button type="button" class="btn" data-act="rc-skip" data-i="${i}">Not a food</button><button type="button" class="btn" data-act="close-modal">Cancel</button></div></div>`, 'sm');
-  },
-  'rc-set': el => {
-    const i = +el.dataset.i, r = RC && RC.rows[i]; if (!r) return;
-    r.food = el.dataset.id; r.on = true; r.st = 'ok'; r.conf = r.conf === 'high' ? 'high' : 'medium';
-    closeModal(); rcRender();
-  },
+  /* Hands off to the app's own food picker rather than a bespoke list. That is where the
+     Open Food Facts search, the barcode scanner and "create a new food" already live, and a
+     receipt line is exactly the case that needs all three: a product the food list has never
+     seen. */
+  'rc-pick': el => { const i = +el.dataset.i; if (RC && RC.rows[i]) foodByName('receipt', null, i); },
   'rc-skip': el => {
     const i = +el.dataset.i, r = RC && RC.rows[i]; if (!r) return;
     r.food = ''; r.on = false; r.st = 'skip';
@@ -503,12 +494,17 @@ Object.assign(ACT, {
   }
 });
 
+/* Called back by the food picker, and by the food editor when a new food was created for this
+   line. Kept out of the picker so the picker needs to know nothing about receipts. */
+function rcPicked(i, id) {
+  const r = RC && RC.rows[i]; if (!r || !id || !ING[id]) { rcRender(); return; }
+  r.food = id; r.on = true; r.st = 'ok';
+  if (r.conf !== 'high') r.conf = 'medium';
+  rcRender();
+}
+
 document.addEventListener('change', e => {
   const t = e.target; if (!t.dataset || !RC) return;
   if (t.dataset.input === 'rc-on') { const r = RC.rows[+t.dataset.i]; if (r) { r.on = t.checked; rcRender(); } }
   else if (t.dataset.input === 'rc-date') { RC.date = t.value || todayISO(); RC.dateRead = true; rcRender(); }
-  else if (t.dataset.input === 'rc-search') {
-    const g = panFindFood(t.value); const r = RC.rows[+t.dataset.i];
-    if (g && r) { r.food = g.id; r.on = true; r.st = 'ok'; closeModal(); rcRender(); }
-  }
 });

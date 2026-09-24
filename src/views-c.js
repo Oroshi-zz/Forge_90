@@ -327,6 +327,9 @@ function saveFood(form) {
   const newId = id || Object.keys(S.customFoods).find(k => S.customFoods[k] === rec);
   rebuildCatalog(); saveState();
   if (RE_ADDFOOD && RE) { RE_ADDFOOD = false; if (!id) RE.ing.push([newId, ING[newId].u ? 1 : 100]); closeModal(); renderRecipeEditor(); toast(`${rec.n} added to the recipe`); return; }
+  /* Same idea for a receipt line: a food created from the picker binds straight back to the
+     line that had no match, rather than leaving the user to go and find it again. */
+  if (RC_PICK != null && typeof RC !== 'undefined' && RC) { const i = RC_PICK; RC_PICK = null; closeModal(); rcPicked(i, newId); toast(`${rec.n} added`); return; }
   closeModal(); render(); toast(`${rec.n} saved — every recipe using it is updated`);
 }
 
@@ -591,6 +594,7 @@ Object.assign(ACT, {
   're-save': () => saveRecipe(),
   'food-new': () => foodEditor(null),
   'food-new-inline': () => { const keep = RE; FP = null; foodEditor(null); RE = keep; RE_ADDFOOD = true; },
+  'food-new-for-receipt': () => { const i = FP ? FP.i : null; FP = null; FO = null; foodEditor(null); RC_PICK = i; },
   'food-edit': el => foodEditor(el.dataset.id),
   'fe-calc': () => { const f = $('#modal form[data-form="food"]'); const v = n => +f.elements[n].value || 0; f.elements.k.value = Math.round(v('p') * 4 + v('c') * 4 + v('f') * 9); feSuggest(); },
   'food-reset': el => { const id = el.dataset.id; if (!BASE_ING[id]) return; const keep = RE_ADDFOOD, re = RE;
