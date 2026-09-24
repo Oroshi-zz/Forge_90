@@ -1792,3 +1792,23 @@ body.low-fx .modal-bg, body.no-bg .modal-bg { background: rgba(5, 8, 12, .78); }
 /* The picker sits above the review, which is itself a full-screen layer. */
 body.wo-on .modal-bg { z-index: 120; }
 .fp-from { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13.5px; color: var(--text-2); background: var(--surface-3); border-radius: 9px; padding: 8px 11px; margin: 2px 0 10px; }
+.rc-head { display: flex; align-items: center; gap: 8px; margin: 6px 2px 0; }
+.rc-sec { display: flex; align-items: baseline; gap: 8px; margin: 16px 2px 2px; font-size: 12.5px; }
+.rc-sec b { color: var(--text-2); letter-spacing: .02em; text-transform: uppercase; font-size: 11.5px; }
+.rc-sec + .rc-list { margin-top: 2px; }
+.rc-row.skipped { opacity: .55; border-style: dashed; }
+.rc-row.skipped .rc-raw { font-size: 13px; color: var(--text-2); font-weight: 400; }
+.rc-tick.off { width: 34px; height: 34px; flex: none; border-radius: 9px; background: var(--surface-3); display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.rc-tick.off svg { width: 15px; height: 15px; }
+.rc-side { flex-wrap: wrap; justify-content: flex-end; }
+/* Three actions plus a confidence pill do not fit beside the text on a phone: measured at
+   390px the button group overflowed 15 of 25 rows. Below 560px the actions take a line of
+   their own, which also gives them full-size tap targets. */
+@media (max-width: 560px) {
+  .rc-row { flex-wrap: wrap; row-gap: 9px; }
+  .rc-main { flex: 1 1 60%; }
+  .rc-side { width: 100%; justify-content: flex-start; gap: 6px; flex-wrap: nowrap; }
+  .rc-side .pill { margin-right: auto; }
+  .rc-side .btn { padding: 8px 11px; font-size: 12.5px; }
+  .rc-row.skipped .rc-side { width: auto; }
+}

@@ -335,7 +335,14 @@ let RE_ADDFOOD = false;
    Declared here beside RE_ADDFOOD because the food editor lives earlier in the bundle than the
    receipt code that uses it. */
 let RC_PICK = null;
-function closeModal() { RE_ADDFOOD = false; const m = $('#modal'); if (m) m.remove(); backDrop('modal'); }
+/* Dismissing the scanner by the backdrop or the phone back button never went through an action
+   handler, so the camera stayed live behind a closed dialog. Only the scanner's own modal is
+   matched, so the pantry session that reopens itself is left alone. */
+function closeModal() {
+  RE_ADDFOOD = false; const m = $('#modal');
+  if (m && m.querySelector('.scan-m')) scanStop();
+  if (m) m.remove(); backDrop('modal');
+}
 
 const BACK_STACK = []; let BACK_SELF = false;
 function backPush(name, close) {

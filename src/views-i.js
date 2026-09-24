@@ -171,16 +171,25 @@ const addFoodBtnHTML = (date = '', cls = '') => `<button class="btn ${cls}" data
 
 /* ---------- scanner ---------- */
 let SCN = null;
-function openScanner(mode, date, draft) {
+/* `back` turns the scanner into a lookup that hands the food it resolves back to whoever opened
+   it, instead of doing something with it. Without this every picker that offered a Scan button
+   fell through to the day-logging scanner, so scanning a receipt line dropped the line index and
+   logged the product to today instead of binding it to the line. */
+function openScanner(mode, date, draft, back) {
   if (mode !== 'gym' && !canScan()) { toast('Scanning needs the FORGE 90 server.'); return; }
-  scanStop(); SCN = { mode, date: date || todayISO(), added: [], last: '', lastAt: 0, draft: draft || null };
+  scanStop(); SCN = { mode, date: date || todayISO(), added: [], last: '', lastAt: 0, draft: draft || null, back: back || null };
   const gym = mode === 'gym';
-  modal(`<div class="scan-m"><div class="row"><h2 style="flex:1">${gym ? 'Scan your membership card' : mode === 'pantry' ? 'Scan into the pantry' : 'Scan a barcode'}</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
-    <div class="tiny muted" style="margin:2px 0 10px">${gym ? 'Hold the card or key tag flat, with the whole barcode inside the box. Most gym barcodes work, including QR codes on phones that can read them.' : mode === 'pantry' ? 'Each scan adds one package with a typical use-by date — keep scanning, then fix dates or amounts on the Pantry page.' : `Scan a snack or meal to add it to ${SCN.date === todayISO() ? 'today' : fmtDate(SCN.date, { weekday: 'long', month: 'short', day: 'numeric' })}.`}</div>
+  const bm = (back && back.mode) || '';
+  const pickHint = bm === 'receipt' ? 'Scan the product on this line and it goes straight onto it.'
+    : bm === 'pantry-add' ? 'Scan the product, then set the amount and use-by date.'
+    : bm === 'ing' ? 'Scan the product to use it as this ingredient.'
+    : 'Scan the product and it goes back to what you were filling in.';
+  modal(`<div class="scan-m"><div class="row"><h2 style="flex:1">${gym ? 'Scan your membership card' : mode === 'pantry' ? 'Scan into the pantry' : 'Scan a barcode'}</h2><button class="btn icon ghost" data-act="${mode === 'pick' ? 'scan-back' : 'close-modal'}" aria-label="Close">${icon('x')}</button></div>
+    <div class="tiny muted" style="margin:2px 0 10px">${gym ? 'Hold the card or key tag flat, with the whole barcode inside the box. Most gym barcodes work, including QR codes on phones that can read them.' : mode === 'pantry' ? 'Each scan adds one package with a typical use-by date — keep scanning, then fix dates or amounts on the Pantry page.' : mode === 'pick' ? esc(pickHint) : `Scan a snack or meal to add it to ${SCN.date === todayISO() ? 'today' : fmtDate(SCN.date, { weekday: 'long', month: 'short', day: 'numeric' })}.`}</div>
     <div class="scan-view" id="scan-view"><video id="scan-video" playsinline muted></video><div class="scan-guide"></div><div class="scan-msg" id="scan-msg">Starting the camera…</div>
       <button type="button" class="btn sm scan-torch hidden" id="scan-torch" data-act="scan-torch">${icon('bolt')}Light</button></div>
     ${gym ? `<div class="row wrap" style="gap:8px;margin-top:10px"><button type="button" class="btn" data-act="gym-type">${icon('edit')}Type the number instead</button></div>` : `<form class="row" data-form="scan-code" style="gap:8px;margin-top:10px"><input class="inp" id="scan-code" inputmode="numeric" pattern="[0-9 ]*" placeholder="Or type the barcode number" autocomplete="off" style="flex:1"><button class="btn" type="submit">Look up</button></form>
-      <div class="row" style="margin-top:8px"><button type="button" class="btn sm ghost" style="flex:1" data-act="food-by-name" data-v="${mode}" data-d="${esc(date || todayISO())}" data-tab="online">${icon('search')}Search online by name instead</button></div>`}
+      <div class="row" style="margin-top:8px"><button type="button" class="btn sm ghost" style="flex:1" data-act="${mode === 'pick' ? 'scan-back' : 'food-by-name'}" data-v="${mode}" data-d="${esc(date || todayISO())}" data-tab="online">${icon('search')}Search online by name instead</button></div>`}
     <label class="btn sm ghost scan-photo">${icon('upload')}<span class="scan-photo-t">Use a photo instead</span><input type="file" accept="image/*" capture="environment" data-input="scan-photo" hidden></label>
     ${mode === 'pantry' ? `<div class="scan-added" id="scan-added">${scanAddedHTML()}</div>` : ''}</div>`, 'scan-modal');
   scanStart();
@@ -261,6 +270,9 @@ async function barcodeFood(code) {
 }
 function scanUse(id) {
   if (!SCN) return;
+  /* A lookup scan is finished the moment the barcode resolves: hand the food to the caller and
+     let it decide, which is how a receipt line gets bound rather than logged to today. */
+  if (SCN.mode === 'pick') { const b = SCN.back || {}; scanStop(); SCN = null; fpUse(id, b.mode || 'today', b.d || todayISO(), b.i); return; }
   if (SCN.mode === 'pantry') {
     const e = SCN.added.find(x => x.food === id);
     if (e) { scanCount(id, e.n + 1); scanMsg(`${foodLabel(id)} again — that’s ${e.n}`, 'ok'); }
@@ -349,6 +361,13 @@ async function productSave(form) {
   catch (e) { btn.disabled = false; toast(e.message); }
 }
 function openScannerKeep() { const added = (SCN && SCN.added) || []; openScanner('pantry'); if (SCN) { SCN.added = added; scanPaint(); } }
+/* Closing a lookup scan, or cancelling the new-product form it opened, has to land back on the
+   picker it came from. Closing the modal outright would strand a receipt review behind it. */
+function scanBack(tab) {
+  const b = (SCN && SCN.back) || null; scanStop(); SCN = null;
+  if (!b) { closeModal(); return; }
+  foodByName(b.mode, b.d, b.i, tab || null);
+}
 function scanReview() {
   if (!SCN || !SCN.added.length) return;
   const added = SCN.added; scanStop();
@@ -781,7 +800,11 @@ Object.assign(ACT, {
   'prod-del': el => { const g = ING[el.dataset.id]; if (!g) return; confirmBox(`Delete ${esc(g.n)}?`, 'It comes off the shared food list for everyone. Meals and pantry items that use it lose it too.', 'Delete', async () => {
     try { await api('DELETE', '/api/foods/shared/' + encodeURIComponent(g.id)); delete SHARED_FOODS[g.id]; rebuildCatalog(); render(); toast(`${g.n} deleted`); } catch (e) { toast(e.message); } }, true); },
   'food-edit': el => { const g = ING[el.dataset.id]; if (g && g.shared) sharedFoodEditor(g.id); else foodEditor(el.dataset.id); },
-  'prod-cancel': () => { const r = PF && PF.resolve; PF = null; if (SCN && SCN.mode === 'pantry') { openScannerKeep(); } else { scanStop(); closeModal(); } if (r) r(null); },
+  'prod-cancel': () => { const r = PF && PF.resolve; PF = null;
+    if (SCN && SCN.mode === 'pantry') openScannerKeep();
+    else if (SCN && SCN.mode === 'pick') scanBack();
+    else { scanStop(); closeModal(); }
+    if (r) r(null); },
   'scan-less': el => { scanCount(el.dataset.f, (SCN.added.find(x => x.food === el.dataset.f) || { n: 0 }).n - 1); scanPaint(); },
   'scan-more': el => { scanCount(el.dataset.f, (SCN.added.find(x => x.food === el.dataset.f) || { n: 0 }).n + 1); scanPaint(); },
   'scan-review': () => scanReview(),
@@ -789,8 +812,16 @@ Object.assign(ACT, {
   'fp-tab': el => { if (!FP) return; FP.tab = el.dataset.v; fpRepaint(); },
   'fo-pick': el => foPick(+el.dataset.i),
   'fp-pick': el => fpPick(el.dataset.id),
-  'fp-scan': () => { const m0 = FP ? FP.mode : 'today'; const m = m0 === 'pantry-add' ? 'pantry' : m0, d = FP ? FP.d : todayISO(); FP = null; FO = null;
-    if (m === 'pantry' && SCN && SCN.mode === 'pantry') openScannerKeep(); else openScanner(m === 'pantry' ? 'pantry' : 'today', d); },
+  /* Every mode that expects the picked food back gets the lookup scanner. Anything else falls
+     through to the scanner that acts on the food itself. */
+  'fp-scan': () => {
+    const m = FP ? FP.mode : 'today', d = FP ? FP.d : todayISO(), i = FP ? FP.i : null;
+    FP = null; FO = null;
+    if (m === 'receipt' || m === 'pantry-add' || m === 'ing' || m === 'foods') { openScanner('pick', d, null, { mode: m, d, i }); return; }
+    if (m === 'pantry' && SCN && SCN.mode === 'pantry') { openScannerKeep(); return; }
+    openScanner(m === 'pantry' ? 'pantry' : 'today', d);
+  },
+  'scan-back': el => scanBack(el.dataset.tab || null),
   'food-new-from-pick': () => { FP = null; closeModal(); foodEditor(null); },
   'scan-again': () => openScannerKeep(),
   'scan-done': () => { const n = SCN ? SCN.added.reduce((a, e) => a + e.n, 0) : 0; scanStop(); SCN = null; closeModal(); render(); if (n) toast(`${n} item${n === 1 ? '' : 's'} in the pantry`); },

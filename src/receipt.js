@@ -349,7 +349,9 @@ function rcLoadImage(file) {
 let RC = null;
 /* OCR runs on the server, so this is only offered when there is one. */
 const canReceipt = () => AUTH.mode === 'server';
-const rcConf = { high: 'Confident', medium: 'Check it', rescued: 'Recovered', low: 'Unsure' };
+/* This pill is about how well the LINE was read, not about the food match. Labelled "Confident"
+   it sat directly above "No food matched" and read as confidence that the item is not a food. */
+const rcConf = { high: 'Text clear', medium: 'Check text', rescued: 'Recovered', low: 'Unsure' };
 
 function rcStart() {
   const inp = document.createElement('input');
@@ -391,24 +393,61 @@ async function rcRun(file) {
   rcRender();
 }
 
+/* Skipping had no rendered state, so a row that already matched nothing looked identical
+   afterwards and the button appeared dead. A skipped row now dims, says which kind of skip it
+   was, and offers a way back.
+   Skip and Not food are deliberately different. Skip leaves a line out of this scan only.
+   Not food records against the item number that this line is never a food, so the next receipt
+   from the same store does not ask again. */
 function rcRowHTML(r, i) {
   const g = r.food && ING[r.food] ? ING[r.food] : null;
-  const cls = r.on ? 'on' : '';
   const exp = g ? defaultExp(r.food, RC.date) : null;
-  return `<div class="rc-row ${cls} ${r.st === 'none' ? 'none' : ''}" data-i="${i}">
+  const raw = `<div class="rc-raw">${esc(r.line.d)}${r.line.n ? `<span class="tiny muted"> · ${esc(r.line.n)}</span>` : ''}</div>`;
+
+  if (r.skip) return `<div class="rc-row skipped" data-i="${i}">
+    <span class="rc-tick off" aria-hidden="true">${icon('x')}</span>
+    <div class="rc-main">${raw}
+      <b class="muted">${r.skip === 'always' ? 'Not a food' : 'Skipped'}</b>
+      <span class="tiny muted">${r.skip === 'always' ? 'Remembered, so it will not be asked again' : 'Left out of this scan'}</span></div>
+    <div class="rc-side"><button type="button" class="btn sm" data-act="rc-unskip" data-i="${i}">Undo</button></div></div>`;
+
+  return `<div class="rc-row ${r.on ? 'on' : ''} ${g ? '' : 'none'}" data-i="${i}">
     <label class="rc-tick"><input type="checkbox" data-input="rc-on" data-i="${i}" ${r.on ? 'checked' : ''} ${g ? '' : 'disabled'}><i class="switch ${r.on ? 'on' : ''}" aria-hidden="true"><i></i></i></label>
-    <div class="rc-main">
-      <div class="rc-raw">${esc(r.line.d)}${r.line.n ? `<span class="tiny muted"> · ${esc(r.line.n)}</span>` : ''}</div>
-      ${g ? `<b>${esc(foodLabel(r.food))}</b><span class="tiny muted">${exp ? 'use by ' + esc(expDate(exp)) : ''}${r.learned ? ' · remembered' : ''}</span>`
-          : `<b class="muted">No food matched</b><span class="tiny muted">Pick one, or leave it out</span>`}
+    <div class="rc-main">${raw}
+      ${/* The per-row hint said the same thing as the section heading above it, twenty-five
+            times over, and it was the tallest part of the row on a phone. */
+        g ? `<b>${esc(foodLabel(r.food))}</b><span class="tiny muted">${exp ? 'use by ' + esc(expDate(exp)) : ''}${r.learned ? ' · remembered' : ''}</span>`
+          : `<b class="muted">No food matched</b>`}
     </div>
     <div class="rc-side">
       <span class="pill ${r.conf === 'high' ? 'acc' : ''}" style="font-size:10.5px">${rcConf[r.conf] || 'Check it'}</span>
       <button type="button" class="btn sm" data-act="rc-pick" data-i="${i}">${g ? 'Change' : 'Pick'}</button>
-      <button type="button" class="btn sm icon ghost" data-act="rc-skip" data-i="${i}" title="Not a food — leave it out and remember that" aria-label="Not a food">${icon('x')}</button>
+      <button type="button" class="btn sm ghost" data-act="rc-skip" data-i="${i}" title="Leave this line out of this scan">Skip</button>
+      <button type="button" class="btn sm ghost" data-act="rc-notfood" data-i="${i}" title="Never a food — remember that for this store">Not food</button>
     </div></div>`;
 }
-
+/* Receipt order put the lines that still need a decision anywhere in a list of twenty-five, so
+   the work was a scroll hunt. They are grouped by what the scan actually knows instead, ordered
+   by how much attention each group wants, with the confident matches last so they sit directly
+   above the button that adds them.
+   The split is on `st`, the match quality, not on `on`, the tick. Keying it on the tick would
+   make a row jump to another section the moment the user toggled it, moving the list out from
+   under their finger.
+   The index passed to rcRowHTML stays the row's real index, so every data-i still addresses
+   RC.rows even though the rows render out of order. */
+function rcSectionsHTML() {
+  const idx = RC.rows.map((r, i) => [r, i]);
+  const need = idx.filter(([r]) => !r.skip && !r.food);
+  const check = idx.filter(([r]) => !r.skip && r.food && r.st !== 'ok');
+  const gone = idx.filter(([r]) => r.skip);
+  const sure = idx.filter(([r]) => !r.skip && r.food && r.st === 'ok');
+  const sec = (rows, label, note) => rows.length ? `<div class="rc-sec"><b>${label} · ${rows.length}</b>${note ? `<span class="spacer"></span><span class="tiny muted">${note}</span>` : ''}</div>
+    <div class="rc-list">${rows.map(([r, i]) => rcRowHTML(r, i)).join('')}</div>` : '';
+  return sec(need, 'Needs a food', 'Pick one, skip it, or mark it not food')
+    + sec(check, 'Check the match', 'Guessed from the line, so worth a look')
+    + sec(gone, 'Left out', 'Undo any you did not mean')
+    + sec(sure, 'Matched', 'Change any that came out wrong');
+}
 function rcRender() {
   const root = $('#wo-root'); if (!root) return;
   if (!RC) { root.innerHTML = ''; document.body.classList.remove('wo-on'); return; }
@@ -430,7 +469,10 @@ function rcRender() {
   }
 
   const on = RC.rows.filter(r => r.on && r.food).length;
-  const unmatched = RC.rows.filter(r => !r.food).length;
+  /* A skipped line is a decision, not an outstanding task, so it stops being counted as one. */
+  const unmatched = RC.rows.filter(r => !r.food && !r.skip).length;
+  const skipped = RC.rows.filter(r => r.skip).length;
+  const allSkipped = skipped === RC.rows.length && RC.rows.length > 0;
   const rec = RC.reconcile || {};
   /* A failing subtotal is the honest signal that lines are missing. Saying so beats quietly
      handing someone a pantry that is short. */
@@ -443,7 +485,7 @@ function rcRender() {
     ? `<div class="note warn">${icon('info')}<span>${missing > 0
         ? `The receipt rang up <b>${RC.checks.count}</b> items and only <b>${RC.rows.length}</b> came through${short > 0 ? `, about ${fmt(short, 2)} worth` : ''}.`
         : `The lines read come to ${fmt(RC.sum, 2)} but the receipt says ${fmt(RC.checks.subtotal, 2)}, so about <b>${fmt(short, 2)}</b> is missing.`}
-        Some lines did not survive the photo — add those by hand, or retake it flatter.</span></div>`
+        Some lines did not survive the photo. Add those by hand, or try retaking the picture.</span></div>`
     : rec.subtotal === true || rec.count === true ? `<div class="note acc">${icon('check')}<span>Every line adds up to what the receipt printed, so nothing was missed.</span></div>` : '';
 
   root.innerHTML = `<div class="wom" role="dialog" aria-label="Review the receipt"><div class="wo-in rc">
@@ -456,7 +498,12 @@ function rcRender() {
         <input class="inp" type="date" data-input="rc-date" value="${esc(RC.date)}" style="max-width:190px;margin-top:8px"></span></div>
       ${warn}
       ${unmatched ? `<div class="note">${icon('info')}<span>${unmatched} line${unmatched === 1 ? '' : 's'} matched no food. Pick one and it is remembered for this store next time.</span></div>` : ''}
-      <div class="rc-list">${RC.rows.map(rcRowHTML).join('')}</div>
+      <div class="rc-head">
+        <span class="tiny muted">${RC.rows.length} line${RC.rows.length === 1 ? '' : 's'}${skipped ? ` · ${skipped} skipped` : ''}</span>
+        <span class="spacer"></span>
+        <button type="button" class="btn sm ghost" data-act="rc-skip-all">${allSkipped ? 'Undo skip all' : 'Skip all'}</button>
+      </div>
+      ${rcSectionsHTML()}
       ${RC.suspect && RC.suspect.length ? `<div class="tiny muted" style="margin-top:10px">${RC.suspect.length} unreadable fragment${RC.suspect.length === 1 ? '' : 's'} were left out.</div>` : ''}
     </div>
     <div class="rc-foot"><span class="small muted">${on} of ${RC.rows.length} selected</span><span class="spacer"></span>
@@ -470,7 +517,7 @@ function rcCommit() {
   let n = 0;
   const map = S.rcptMap = S.rcptMap || {};
   RC.rows.forEach(r => {
-    if (!r.on || !r.food || !ING[r.food]) return;
+    if (r.skip || !r.on || !r.food || !ING[r.food]) return;
     pantryAdd(r.food, null, defaultExp(r.food, RC.date), 'receipt');
     /* Only a line the user left selected teaches the map. An item number is wrong on roughly a
        fifth of lines, and a mapping learned from an unconfirmed read would bind a real product
@@ -493,13 +540,30 @@ Object.assign(ACT, {
      receipt line is exactly the case that needs all three: a product the food list has never
      seen. */
   'rc-pick': el => { const i = +el.dataset.i; if (RC && RC.rows[i]) foodByName('receipt', null, i); },
-  'rc-skip': el => {
-    const i = +el.dataset.i, r = RC && RC.rows[i]; if (!r) return;
-    r.food = ''; r.on = false; r.st = 'skip';
-    if (r.line.n) { S.rcptMap = S.rcptMap || {}; S.rcptMap[RC.store + ':' + r.line.n] = 'skip'; saveState(); }
-    closeModal(); rcRender();
+  'rc-skip': el => rcSkip(+el.dataset.i, 'once'),
+  'rc-notfood': el => rcSkip(+el.dataset.i, 'always'),
+  'rc-unskip': el => {
+    const r = RC && RC.rows[+el.dataset.i]; if (!r) return;
+    /* Undoing a "not food" has to clear what it remembered too, or the next scan silently
+       repeats the decision the user just took back. */
+    if (r.skip === 'always' && r.line.n && S.rcptMap) { delete S.rcptMap[RC.store + ':' + r.line.n]; saveState(); }
+    r.skip = null; r.on = !!r.food; rcRender();
+  },
+  'rc-skip-all': () => {
+    const any = RC.rows.some(r => !r.skip);
+    RC.rows.forEach(r => { if (any) { r.skip = 'once'; r.on = false; } else if (r.skip === 'once') { r.skip = null; r.on = !!r.food; } });
+    rcRender();
   }
 });
+
+/* kind 'once' leaves the line out of this scan; 'always' also records it against the item
+   number so the same product is not asked about on the next receipt from this store. */
+function rcSkip(i, kind) {
+  const r = RC && RC.rows[i]; if (!r) return;
+  r.skip = kind; r.on = false;
+  if (kind === 'always' && r.line.n) { S.rcptMap = S.rcptMap || {}; S.rcptMap[RC.store + ':' + r.line.n] = 'skip'; saveState(); }
+  closeModal(); rcRender();
+}
 
 /* Called back by the food picker, and by the food editor when a new food was created for this
    line. Kept out of the picker so the picker needs to know nothing about receipts. */
