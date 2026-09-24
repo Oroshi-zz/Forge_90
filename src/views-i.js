@@ -425,7 +425,7 @@ function foodByName(mode, date, ingIndex, tab) {
   /* A receipt pick opens already searching for the cleaned-up line, so the list is filtered
      before the user types anything. */
   if (mode === 'receipt' && RC && RC.rows[ingIndex]) { FP.raw = RC.rows[ingIndex].line.d; FO.q = rcClean(FP.raw); }
-  const title = mode === 'pantry' ? 'Add to the pantry by name' : mode === 'foods' ? 'Find a food' : mode === 'ing' ? 'Pick an ingredient' : mode === 'receipt' ? 'Which food is this?' : `Add food to ${FP.d === todayISO() ? 'today' : fmtDate(FP.d, { weekday: 'short', month: 'short', day: 'numeric' })}`;
+  const title = mode === 'pantry-add' ? 'Add to the pantry' : mode === 'pantry' ? 'Add to the pantry by name' : mode === 'foods' ? 'Find a food' : mode === 'ing' ? 'Pick an ingredient' : mode === 'receipt' ? 'Which food is this?' : `Add food to ${FP.d === todayISO() ? 'today' : fmtDate(FP.d, { weekday: 'short', month: 'short', day: 'numeric' })}`;
   modal(`<div class="qp-m"><div class="row"><h2 style="flex:1">${esc(title)}</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
     <div id="fp-body">${fpBodyHTML()}</div></div>`, 'qp-modal');
   fpFocus();
@@ -441,11 +441,12 @@ function fpBodyHTML() {
     : mode === 'foods' ? 'Search everything on the food list, including products other people scanned. Pick one to see or edit it.'
     : mode === 'ing' ? 'Search the whole food database. Your recipe is untouched while this is open.'
     : mode === 'receipt' ? 'Search your food list, look the product up online, or add it yourself. Whichever you pick is remembered for this store.'
+    : mode === 'pantry-add' ? 'Pick a food, then set the amount and use-by date. Search online or scan a barcode if it is not on your list yet.'
     : 'Search the food list and anything scanned on this server.';
   return tabs + `${mode === 'receipt' && FP.raw ? `<div class="fp-from">${esc(FP.raw)}</div>` : ''}<div class="tiny muted" style="margin:2px 0 8px">${esc(hint)}</div>
     <div class="row" style="gap:8px;margin-bottom:10px"><input class="inp" type="search" id="fp-q" data-input="fp-q" placeholder="Search foods and scanned products…" style="flex:1;min-width:0" autocomplete="off" value="${esc(FO.q || '')}">${mode !== 'foods' && mode !== 'ing' && canScan() ? `<button type="button" class="btn" data-act="fp-scan">${icon('scan')}Scan</button>` : ''}</div>
     <div class="qp-list" id="fp-list">${qpListHTML(FO.q || '', 'fp-pick', FP.d)}</div>
-    ${mode === 'foods' || mode === 'ing' || mode === 'receipt' ? `<div class="row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="btn" data-act="${mode === 'ing' ? 'food-new-inline' : mode === 'receipt' ? 'food-new-for-receipt' : 'food-new-from-pick'}">${icon('plus')}None of these — create a new food</button></div>` : ''}`;
+    ${mode === 'foods' || mode === 'ing' || mode === 'receipt' || mode === 'pantry-add' ? `<div class="row" style="justify-content:flex-end;margin-top:10px"><button type="button" class="btn" data-act="${mode === 'ing' ? 'food-new-inline' : mode === 'receipt' ? 'food-new-for-receipt' : 'food-new-from-pick'}">${icon('plus')}None of these — create a new food</button></div>` : ''}`;
 }
 function foOnlineHTML() {
   const rows = FO.rows;
@@ -489,6 +490,7 @@ function fpUse(id, m, d, ii) {
   const raw = FP ? FP.raw : '';
   FP = null; FO = null;
   if (m === 'receipt') { closeModal(); rcPicked(ii, id); return; }
+  if (m === 'pantry-add') { closeModal(); pantryItemModal(null, id); return; }
   if (m === 'ing') { closeModal(); reSetIng(ii, id); return; }
   if (m === 'foods') { const g = ING[id]; closeModal(); if (g && g.shared) sharedFoodEditor(id); else foodEditor(id); return; }
   if (m === 'pantry') {
@@ -702,8 +704,8 @@ function pantryItemModal(itemId, foodId) {
   const it = itemId ? pantryItems().find(x => x.id === itemId) : null; const food = it ? it.food : (foodId || '');
   if (itemId && !it) { toast('That item is gone — someone may have used it up'); render(); return; }
   modal(`<div><div class="row"><h2 style="flex:1">${it ? 'Edit pantry item' : 'Add to the pantry'}</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
-    <form data-form="pantry" data-id="${it ? it.id : ''}" class="grid" style="gap:12px;margin-top:12px">
-      <div class="field"><label>Food</label>${it ? `<b>${esc(pantryName(food))}${ING[food] && ING[food].brand ? ' · ' + esc(ING[food].brand) : ''}</b>` : `<input class="inp" list="pan-foods" name="foodq" data-input="pan-foodq" value="${food && ING[food] ? esc(foodLabel(food)) : ''}" placeholder="Search foods…" required autocomplete="off"><datalist id="pan-foods">${Object.values(ING).sort((a, b) => (isFavFood(b.id) - isFavFood(a.id)) || a.n.localeCompare(b.n)).map(g => `<option value="${esc(foodLabel(g.id))}">`).join('')}</datalist>`}</div>
+    <form data-form="pantry" data-id="${it ? it.id : ''}" data-food="${!it && food && ING[food] ? esc(food) : ''}" class="grid" style="gap:12px;margin-top:12px">
+      <div class="field"><label>Food</label>${it || (food && ING[food]) ? `<b>${esc(pantryName(food))}${ING[food] && ING[food].brand ? ' · ' + esc(ING[food].brand) : ''}</b>` : `<input class="inp" list="pan-foods" name="foodq" data-input="pan-foodq" value="${food && ING[food] ? esc(foodLabel(food)) : ''}" placeholder="Search foods…" required autocomplete="off"><datalist id="pan-foods">${Object.values(ING).sort((a, b) => (isFavFood(b.id) - isFavFood(a.id)) || a.n.localeCompare(b.n)).map(g => `<option value="${esc(foodLabel(g.id))}">`).join('')}</datalist>`}</div>
       <div class="grid g2" style="gap:12px"><div class="field"><label>Amount <span class="muted" id="pan-unit" style="font-weight:500">${esc(panUnit(food))}</span></label><input class="inp" type="number" min="0" step="1" inputmode="numeric" name="qty" value="${it ? panToShown(food, it.qty) : ''}" placeholder="${it ? '' : 'one package if blank'}"></div>
         <div class="field"><label>Use by</label><input class="inp" type="date" name="exp" value="${it && it.exp ? it.exp : ''}"><span class="tiny muted">${it ? '' : 'Blank = typical shelf life'}</span></div></div>
       <div class="row wrap" style="justify-content:flex-end;gap:8px">${it ? `<button type="button" class="btn danger" data-act="pan-del" data-id="${it.id}" style="margin-right:auto">${icon('trash')}Remove</button>` : ''}<button type="button" class="btn" data-act="close-modal">Cancel</button><button class="btn primary" type="submit">${it ? 'Save' : 'Add'}</button></div></form></div>`, 'sm');
@@ -712,7 +714,11 @@ function pantrySubmit(form) {
   const fd = new FormData(form); const itemId = form.dataset.id; const qs = String(fd.get('qty') || '').trim();
   if (itemId) { const it = pantryItems().find(x => x.id === itemId); if (!it) { closeModal(); render(); return; }
     pantrySet(itemId, { qty: qs === '' ? 0 : Math.max(0, Math.round(panFromShown(it.food, Math.round(+qs)) * 100) / 100), exp: fd.get('exp') || null }); closeModal(); render(); toast('Pantry updated'); return; }
-  const g = panFindFood(fd.get('foodq')); if (!g) { toast('Pick a food from the list'); return; }
+  /* A food chosen in the picker is carried on the form, so the name is shown as a label rather
+     than a text box that invites retyping what was just selected. */
+  const pre = form.dataset.food;
+  const g = pre && ING[pre] ? ING[pre] : panFindFood(fd.get('foodq'));
+  if (!g) { toast('Pick a food from the list'); return; }
   if (qs !== '' && !(+qs > 0)) { toast('Enter an amount above 0, or leave it blank for one package'); return; }
   pantryAdd(g.id, qs === '' ? null : panFromShown(g.id, Math.round(+qs)), fd.get('exp') || null, 'manual'); closeModal(); render(); toast(`${g.n} added to the pantry`);
 }
@@ -783,7 +789,7 @@ Object.assign(ACT, {
   'fp-tab': el => { if (!FP) return; FP.tab = el.dataset.v; fpRepaint(); },
   'fo-pick': el => foPick(+el.dataset.i),
   'fp-pick': el => fpPick(el.dataset.id),
-  'fp-scan': () => { const m = FP ? FP.mode : 'today', d = FP ? FP.d : todayISO(); FP = null; FO = null;
+  'fp-scan': () => { const m0 = FP ? FP.mode : 'today'; const m = m0 === 'pantry-add' ? 'pantry' : m0, d = FP ? FP.d : todayISO(); FP = null; FO = null;
     if (m === 'pantry' && SCN && SCN.mode === 'pantry') openScannerKeep(); else openScanner(m === 'pantry' ? 'pantry' : 'today', d); },
   'food-new-from-pick': () => { FP = null; closeModal(); foodEditor(null); },
   'scan-again': () => openScannerKeep(),
@@ -796,7 +802,10 @@ Object.assign(ACT, {
   'qa-pick': el => quickPick(el.dataset.d || null),
   'x-rm': el => extraRemove(el.dataset.d, +el.dataset.i),
   'fav-food': el => toggleFavFood(el.dataset.id),
-  'pan-add': () => pantryItemModal(null),
+  /* Add item used to open a bare datalist over the local food list, so a product the list had
+     never seen was a dead end. It now opens the picker, which has the online search, the
+     scanner and the create-a-food path, and hands off to the amount and use-by form. */
+  'pan-add': () => foodByName('pantry-add'),
   'pan-edit': el => pantryItemModal(el.dataset.id),
   'pan-del': el => { const it = pantryItems().find(x => x.id === el.dataset.id); pantryDel(el.dataset.id); closeModal(); render(); if (it) toast(`${pantryName(it.food)} removed from the pantry`); },
   'gro-all': el => groAll(el.dataset.v === '1'),

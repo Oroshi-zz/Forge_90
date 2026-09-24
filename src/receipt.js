@@ -58,9 +58,9 @@ ST('costco', 'Costco Wholesale', {
          /Visa|Mastercard|Debit|Resp:/i, /Bottom of Basket/i, /BOB\s*Cou?n?t/i,
          /^\s*[\d.]+%\s/, /^[^A-Za-z0-9]*$/],
   checks: {
-    subtotal: /^\s*SUBTOTAL\s+(\d+[.,]\d{2})/i,
-    count:    /^TOTAL NUMBER OF ITEMS SOLD\s*[-—:=]?\s*(\d+)/i,
-    savings:  /^INSTANT SAVINGS\s*\$?\s*(\d+[.,]\d{2})/i
+    subtotal: /\bSUBTOTAL\s+(\d+[.,]\d{2})/i,
+    count:    /TOTAL NUMBER OF ITEMS SOLD\s*[-—:=]*\s*(\d+)/i,
+    savings:  /INSTANT SAVINGS\s*\$?\s*(\d+[.,]\d{2})/i
   }
 });
 
@@ -436,8 +436,15 @@ function rcRender() {
      handing someone a pantry that is short. */
   const short = rec.subtotal === false && RC.checks && RC.checks.subtotal != null
     ? Math.round((RC.checks.subtotal - RC.sum) * 100) / 100 : 0;
-  const warn = short > 0 ? `<div class="note warn">${icon('info')}<span>The lines read come to ${fmt(RC.sum, 2)} but the receipt says ${fmt(RC.checks.subtotal, 2)}, so about <b>${fmt(short, 2)}</b> is missing. Some lines did not survive the photo — add those by hand.</span></div>`
-    : rec.subtotal === true ? `<div class="note acc">${icon('check')}<span>Every line adds up to the printed total, so nothing was missed.</span></div>` : '';
+  /* The receipt prints how many items it rang up, so when that disagrees the shortfall can be
+     given as a number of lines rather than only as money, which is far easier to act on. */
+  const missing = rec.count === false && RC.checks.count != null ? RC.checks.count - RC.rows.length : 0;
+  const warn = (short > 0 || missing > 0)
+    ? `<div class="note warn">${icon('info')}<span>${missing > 0
+        ? `The receipt rang up <b>${RC.checks.count}</b> items and only <b>${RC.rows.length}</b> came through${short > 0 ? `, about ${fmt(short, 2)} worth` : ''}.`
+        : `The lines read come to ${fmt(RC.sum, 2)} but the receipt says ${fmt(RC.checks.subtotal, 2)}, so about <b>${fmt(short, 2)}</b> is missing.`}
+        Some lines did not survive the photo — add those by hand, or retake it flatter.</span></div>`
+    : rec.subtotal === true || rec.count === true ? `<div class="note acc">${icon('check')}<span>Every line adds up to what the receipt printed, so nothing was missed.</span></div>` : '';
 
   root.innerHTML = `<div class="wom" role="dialog" aria-label="Review the receipt"><div class="wo-in rc">
     <div class="wo-h"><button class="btn icon ghost" data-act="rc-close" aria-label="Close">${icon('x')}</button>

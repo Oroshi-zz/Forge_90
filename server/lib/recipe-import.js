@@ -43,7 +43,7 @@ function lookupFor(allowPrivate) {
     });
   };
 }
-function fetchUrl(url, { allowPrivate = false, headers = {}, maxBytes = 4 * 1024 * 1024, timeout = 15000, redirects = 5 } = {}) {
+function fetchUrl(url, { allowPrivate = false, headers = {}, maxBytes = 4 * 1024 * 1024, timeout = 15000, redirects = 5, method = 'GET', body = null } = {}) {
   allowPrivate = allowPrivate || allowPrivateEnv();
   return new Promise((resolve, reject) => {
     let u; try { u = new URL(url); } catch (e) { return reject(new ImportErr(400, 'That doesn’t look like a web address.')); }
@@ -52,13 +52,21 @@ function fetchUrl(url, { allowPrivate = false, headers = {}, maxBytes = 4 * 1024
     const host = u.hostname.replace(/^\[|\]$/g, '');
     if (net.isIP(host) && !allowPrivate && isPrivateIp(host)) return reject(new ImportErr(400, 'That address is on a private network. Link import only reaches public websites.'));
     const lib = u.protocol === 'https:' ? https : http;
-    const req = lib.request(u, { method: 'GET', lookup: lookupFor(allowPrivate), headers: Object.assign({ 'User-Agent': UA, 'Accept-Encoding': 'gzip, deflate, br', 'Accept-Language': 'en-US,en;q=0.9' }, headers) }, res => {
+    /* POST is supported so an API that takes a JSON body can reuse this helper and everything
+       guarding it: the private-network check, the redirect cap, the size cap and the decoders. */
+    const payload = body == null ? null : (typeof body === 'string' ? body : JSON.stringify(body));
+    const baseHeaders = { 'User-Agent': UA, 'Accept-Encoding': 'gzip, deflate, br', 'Accept-Language': 'en-US,en;q=0.9' };
+    if (payload != null) { baseHeaders['Content-Type'] = 'application/json'; baseHeaders['Content-Length'] = Buffer.byteLength(payload); }
+    const req = lib.request(u, { method, lookup: lookupFor(allowPrivate), headers: Object.assign(baseHeaders, headers) }, res => {
       const code = res.statusCode;
       if (code >= 300 && code < 400 && res.headers.location) {
         res.resume(); clearTimeout(t);
         if (redirects <= 0) return reject(new ImportErr(502, 'That link redirects too many times.'));
         let next; try { next = new URL(res.headers.location, u).toString(); } catch (e) { return reject(new ImportErr(502, 'That link redirects to an invalid address.')); }
-        return fetchUrl(next, { allowPrivate, headers, maxBytes, timeout, redirects: redirects - 1 }).then(resolve, reject);
+        /* 307 and 308 preserve the method and body; everything else becomes a GET, as browsers do. */
+        const keep = code === 307 || code === 308;
+        return fetchUrl(next, { allowPrivate, headers, maxBytes, timeout, redirects: redirects - 1,
+          method: keep ? method : 'GET', body: keep ? body : null }).then(resolve, reject);
       }
       const enc = String(res.headers['content-encoding'] || '').toLowerCase();
       let stream = res;
@@ -87,6 +95,7 @@ function fetchUrl(url, { allowPrivate = false, headers = {}, maxBytes = 4 * 1024
       if (/CERT|SSL|TLS/i.test(e.code || '') || /certificate/i.test(e.message)) return reject(new ImportErr(502, `${u.hostname} has a certificate problem, so it wasn’t trusted.`, { reach: true }));
       reject(new ImportErr(502, `Couldn’t reach ${u.hostname} (${e.code || e.message}).`, { reach: true }));
     });
+    if (payload != null) req.write(payload);
     req.end();
   });
 }
