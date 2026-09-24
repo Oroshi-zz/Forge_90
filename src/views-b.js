@@ -98,7 +98,7 @@ function viewDiet() {
     <div class="small sub" style="margin:-6px 0 12px">Every recipe is written as a standard 1× serving. Each day, protein ingredients (chicken, eggs, yogurt…) are scaled to land your protein target, then carb & fat ingredients (rice, potatoes, oats, oils…) are scaled to land calories. Training days get more carbs.</div>
     <div class="grid g2" style="gap:12px">${portion(nextT, 'Next training day')}${portion(nextR, 'Next rest day')}</div>
     ${trend ? `<div class="note ${trend.stale ? 'warn' : trend.delta ? 'warn' : 'acc'}" style="margin-top:12px">${icon('trend')}<span>${esc(trend.advice)} ${trend.delta ? `<button class="btn sm" data-act="apply-trend" data-delta="${trend.delta}">Apply ${trend.delta > 0 ? '+' : ''}${trend.delta} kcal</button>` : ''}</span></div>` : `<div class="note" style="margin-top:12px">${icon('info')}<span>After ~1–2 weeks of weigh-ins, the app compares what the scale actually did to your ${goalKind() === 'bulk' ? `${rateTxt(bulkLb(cur.w), 2)} gain` : goalKind() === 'maintain' ? 'maintenance' : `${rateTxt(st.rate, 2)} loss`} target and suggests a calorie adjustment.</span></div>`}
-    ${goalKind() === 'maintain' ? '' : `<div class="note" style="margin-top:8px">${icon('target')}<span>At ${goalKind() === 'bulk' ? rateTxt(bulkLb(cur.w), 2) : rateTxt(st.rate, 2)} you’ll be around <b>${wTxt(pj.endW, 0)}</b> ${pj.cyc === 1 ? 'on Day 90' : 'at the end of cycle ' + pj.cyc}${Math.abs(pj.weeks) > 0.01 ? ` and reach ${wTxt(st.goalWeight)} around <b>${fmtDate(pj.goalDate, { month: 'long', year: 'numeric' })}</b>` : ''}. Holding your lean mass, ${st.goalBF}% BF ≈ <b>${wTxt(pj.wAtGoalBF, 0)}</b>.</span></div>`}</div>`;
+    ${goalKind() === 'maintain' ? '' : `<div class="note" style="margin-top:8px">${icon('target')}<span>At ${goalKind() === 'bulk' ? rateTxt(bulkLb(cur.w), 2) : rateTxt(st.rate, 2)} you’ll be around <b>${wTxt(pj.endW, 0)}</b> ${pj.cyc === 1 ? 'on Day 90' : 'at the end of cycle ' + pj.cyc}${Math.abs(pj.weeks) > 0.01 ? ` and reach ${wTxt(st.goalWeight)} around <b>${fmtDate(pj.goalDate, { month: 'long', year: 'numeric' })}</b>` : ''}. ${pj.goalBF == null ? 'No body-fat goal is set, so this tracks scale weight only.' : `Holding your lean mass, ${pj.goalBF}% BF ≈ <b>${wTxt(pj.wAtGoalBF, 0)}</b>.`}</span></div>`}</div>`;
   const perU = `${fmt(pNum(st.proteinPerLb), 2)} g protein per ${wU()}`;
   const goalLine = goalKind() === 'bulk' ? `A ${fmt(st.bulkPct, 2)}%/week lean gain with ${perU}, the surplus weighted toward carbohydrate to fuel training.`
     : goalKind() === 'maintain' ? `Maintenance calories with ${perU}.`
@@ -117,10 +117,13 @@ function recipeParts(rid) {
   const list = rs => rs.map(x => `<span>${esc(x.name)}</span><span class="q">${x.t.main}${x.t.sub ? `<small>${x.t.sub}</small>` : ''}</span>`).join('');
   const roles = { P: 'protein', C: 'carb', F: 'fat', V: 'fixed' };
   return { r, m, per: rows(r.yield), batch: rows(1), list,
-    meta: `${r.cat} · ${r.yield > 1 ? 'makes ' + r.yield : '1 serving'} · ${r.storage === 'freezer' ? 'freezer-friendly' : r.storage === 'fridge' ? 'keeps 4 days' : 'eat fresh'}${r.time ? ' · ' + r.time + ' min' : ''}`,
+    meta: r.virtual ? `Single food · 1 serving · fixed portion`
+      : `${r.cat} · ${r.yield > 1 ? 'makes ' + r.yield : '1 serving'} · ${r.storage === 'freezer' ? 'freezer-friendly' : r.storage === 'fridge' ? 'keeps 4 days' : 'eat fresh'}${r.time ? ' · ' + r.time + ' min' : ''}`,
     tags: r.tags.map(t => `<span class="pill">${esc(t)}</span>`).join(''),
     macros: [['kcal', m.k, 'var(--kcal)'], ['Protein', m.p, 'var(--prot)'], ['Carbs', m.c, 'var(--carb)'], ['Fat', m.f, 'var(--fat)']].map(([l, v, c]) => `<div class="card" style="box-shadow:none;background:var(--surface-2);padding:12px"><div class="tiny muted">${l}${l !== 'kcal' ? ' (g)' : ''}</div><div style="font-size:22px;font-weight:700;border-left:3px solid ${c};padding-left:8px;margin-top:4px" class="num">${fmt(v)}</div></div>`).join(''),
-    steps: r.steps.length ? `<ol class="rec-steps">${r.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>` : '<div class="tiny muted">No steps yet — add them with Edit recipe.</div>',
+    steps: r.steps.length ? `<ol class="rec-steps">${r.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>`
+      : r.virtual ? '<div class="tiny muted">Nothing to make — this slot holds the food itself. Make a recipe from it if you want steps.</div>'
+      : '<div class="tiny muted">No steps yet — add them with Edit recipe.</div>',
     scaling: `<div class="note" style="margin-top:10px">${icon('info')}<span>Portion scaling: ${r.fixed ? 'fixed portion (not scaled).' : r.ing.map(([id]) => `${ING[id].n.split(',')[0]} → ${roles[ING[id].r]}`).join(' · ')}</span></div>`,
     blocked: recipeAllowed(r) ? '' : `<span class="pill warn-pill">Blocked · ${esc(blockedBy(r).join(', '))}</span>` };
 }
@@ -136,7 +139,8 @@ function recipeModal(rid) {
     <h3 style="margin-top:16px">Method</h3>${x.steps}
     ${linksBlockHTML(r)}${x.scaling}
     <div class="row wrap" style="justify-content:flex-end;margin-top:14px;gap:6px">${x.blocked ? `<span style="margin-right:auto">${x.blocked}</span>` : ''}
-      <button class="btn" data-act="recipe-dup" data-rid="${rid}">Duplicate</button>${recipeMayEdit(r) ? `<button class="btn primary" data-act="recipe-edit" data-rid="${rid}">${icon('edit')}Edit recipe</button>` : ''}</div>`);
+      ${r.virtual ? `<button class="btn primary" data-act="food-to-recipe" data-id="${esc(r.fromFood)}">${icon('book')}Make a recipe from this</button>`
+        : `<button class="btn" data-act="recipe-dup" data-rid="${rid}">Duplicate</button>${recipeMayEdit(r) ? `<button class="btn primary" data-act="recipe-edit" data-rid="${rid}">${icon('edit')}Edit recipe</button>` : ''}`}</div>`);
 }
 let REC_FROM = '';
 function viewRecipe(rid) {
@@ -145,7 +149,8 @@ function viewRecipe(rid) {
   const r = x.r;
   return `<div class="page-head rec-head"><div class="t"><a class="rec-back" href="${esc(REC_FROM || '#/foods')}">${icon('left')}Back</a>
       <div class="tiny muted rec-kicker">${x.meta}</div><h1><span class="rec-emo">${esc(r.emoji)}</span>${esc(r.name)}</h1>${x.tags ? `<div class="row wrap" style="margin-top:8px">${x.tags}</div>` : ''}</div>
-    <div class="row wrap">${x.blocked}${favBtnHTML(rid)}<button class="btn" data-act="recipe-print" data-rid="${rid}">${icon('print')}Print</button><button class="btn" data-act="recipe-dup" data-rid="${rid}">Duplicate</button>${recipeMayEdit(r) ? `<button class="btn primary" data-act="recipe-edit" data-rid="${rid}">${icon('edit')}Edit recipe</button>` : ''}</div></div>
+    <div class="row wrap">${x.blocked}${favBtnHTML(rid)}<button class="btn" data-act="recipe-print" data-rid="${rid}">${icon('print')}Print</button>${r.virtual ? `<button class="btn primary" data-act="food-to-recipe" data-id="${esc(r.fromFood)}">${icon('book')}Make a recipe from this</button>`
+      : `<button class="btn" data-act="recipe-dup" data-rid="${rid}">Duplicate</button>${recipeMayEdit(r) ? `<button class="btn primary" data-act="recipe-edit" data-rid="${rid}">${icon('edit')}Edit recipe</button>` : ''}`}</div></div>
     <div class="grid g4" style="gap:10px;margin-bottom:16px">${x.macros}</div>
     <div class="grid ${r.yield > 1 ? 'g2' : ''}" style="margin-bottom:16px"><div class="card"><div class="card-h"><h2>Per standard serving</h2></div><div class="ing-list">${x.list(x.per)}</div></div>
       ${r.yield > 1 ? `<div class="card"><div class="card-h"><h2>Full batch</h2><span class="pill">${r.yield} servings</span></div><div class="ing-list">${x.list(x.batch)}</div></div>` : ''}</div>
@@ -267,7 +272,7 @@ function viewGrocery() {
     return `<label class="gro-item ${st.checked ? 'got' : ''} ${st.covered ? 'pan' : ''}"><input type="checkbox" data-input="gro" data-id="${id}" ${st.covered ? 'data-pan="1"' : ''} ${st.checked ? 'checked' : ''}><span>${esc(g.name)}${st.covered ? `<span class="gro-pan-ic" title="In your pantry">${icon('box')}</span>` : ''}</span><span class="q">${g.qty}${g.sub ? `<small>${g.sub}</small>` : ''}${pkTxt}${panTxt}</span></label>`; }).join('')}</div>`).join('');
   const T = groTools(GL.rows, got); const nAll = GL.rows.length;
   return `<div class="page-head"><div class="t"><h1>Grocery & meal prep</h1><p>Quantities are summed from the exact scaled portions on your calendar — including leftovers — for the selected week.</p></div>
-      <div class="row wrap">${syncBtnHTML()}<select class="inp" data-input="gro-week">${opts}</select><button class="btn" data-act="copy-list">${icon('list')}Copy list</button><button class="btn" data-act="print-gro">${icon('print')}Print list</button></div></div>
+      <div class="row wrap">${syncBtnHTML()}<select class="inp" data-input="gro-week">${opts}</select>${receiptBtnHTML()}<button class="btn" data-act="copy-list">${icon('list')}Copy list</button><button class="btn" data-act="print-gro">${icon('print')}Print list</button></div></div>
     ${syncGroceryNote(wd, A)}
     ${moneySaverHTML(wd)}<div style="height:16px"></div>
     <div class="g-half">
@@ -352,7 +357,7 @@ function viewProgress() {
   const sel = logged.length ? `<select class="inp" data-input="pr-ex" aria-label="Exercise">${['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'].map(g => { const xs = logged.filter(e => EX[e].group === g); return xs.length ? `<optgroup label="${g}">${xs.map(e => `<option value="${e}" ${UI.prEx === e ? 'selected' : ''}>${esc(EX[e].name)}</option>`).join('')}</optgroup>` : ''; }).join('')}</select>` : '';
   const sessRows = UI.prEx ? exerciseHistory(UI.prEx).slice().reverse().map(h => `<tr><td>${fmtDate(h.d)}</td><td>${h.sets.map(s => `${loadTxt(s.w)}×${s.r}`).join(', ')}</td><td class="num">${isBW(UI.prEx) ? h.best + ' reps' : fmt(toW(h.best))}</td><td class="num">${fmt(toW(h.vol))}</td><td>${h.pr ? `<span class="prb">${icon('trophy')}PR</span>` : ''}</td></tr>`).join('') : '';
   const exOpts = Object.values(EX).sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name)).map(e => `<option value="${e.id}">${e.group} — ${esc(e.name)}</option>`).join('');
-  const before = R.key === 'all' ? { w: st.startWeight, bf: st.startBF, lbm: st.startWeight * (1 - st.startBF / 100) } : statsOn(addDays(R.from, -1));
+  const before = R.key === 'all' ? { w: st.startWeight, bf: startBF(), lbm: st.startWeight * (1 - startBF() / 100) } : statsOn(addDays(R.from, -1));
   const sign = (v, d = 1) => (v > 0 ? '+' : v < 0 ? '−' : '±') + fmt(Math.abs(v), d);
   const rate = R.key === '14' ? rateOver(R.from) : (weightTrend() || {}).rate; const hasW = ws.length > 0;
   const dW = cur.w - before.w, dB = cur.bf - before.bf, dL = cur.lbm - before.lbm;
@@ -402,7 +407,7 @@ function progressCharts() {
     refs: goalKind() === 'maintain' ? [] : [{ v: toW(st.goalWeight), label: 'Goal ' + wTxt(st.goalWeight), color: col('--good'), inRange: false }],
     series: wIn.length ? [{ label: 'Plan', color: col('--accent-2'), pts: planPts.map(x => ({ d: x.d, v: toW(x.v) })), width: 1.5, muted: true, fmt: v => fmt(v, 1) + ' ' + wU() }, { label: 'Weigh-in', color: col('--muted'), pts: wIn.map(x => ({ d: x.d, v: toW(x.w) })), line: false, dots: true, r: 3.5, fmt: v => fmt(v, 1) + ' ' + wU() }, { label: '7-day avg', color: col('--prot'), pts: avg.map(x => ({ d: x.d, v: toW(x.v) })), fmt: v => fmt(v, 1) + ' ' + wU() }] : [] });
   const bfPts = ws.filter(x => x.bf != null && x.bf !== '' && inR(x)).map(x => ({ d: x.d, v: +x.bf }));
-  lineChart($('#ch-bf'), { h: phone ? 170 : 220, empty: 'Add body-fat % to a weigh-in to chart it', unit: '%', label: 'Body fat', refs: [{ v: st.goalBF, label: 'Goal ' + st.goalBF + '%', color: col('--good'), inRange: false }], series: bfPts.length ? [{ label: 'Body fat', color: col('--kcal'), pts: bfPts, dots: true, area: true, fmt: v => fmt(v, 1) + '%' }] : [] });
+  lineChart($('#ch-bf'), { h: phone ? 170 : 220, empty: 'Add body-fat % to a weigh-in to chart it', unit: '%', label: 'Body fat', refs: goalBFSet() ? [{ v: +st.goalBF, label: 'Goal ' + st.goalBF + '%', color: col('--good'), inRange: false }] : [], series: bfPts.length ? [{ label: 'Body fat', color: col('--kcal'), pts: bfPts, dots: true, area: true, fmt: v => fmt(v, 1) + '%' }] : [] });
   const lPts = ws.filter(x => x.bf != null && x.bf !== '' && inR(x)).map(x => ({ d: x.d, v: toW(x.w * (1 - x.bf / 100)) }));
   lineChart($('#ch-lbm'), { h: phone ? 170 : 220, empty: 'Lean mass appears when body-fat % is logged', unit: '', label: 'Lean mass', series: lPts.length ? [{ label: 'Lean mass', color: col('--carb'), pts: lPts, dots: true, area: true, fmt: v => fmt(v, 1) + ' ' + wU() }] : [] });
   if ($('#ch-pr')) { const h = UI.prEx ? exerciseHistory(UI.prEx) : [];
@@ -528,9 +533,14 @@ function bodyGoalsCardHTML() { const st = S.settings; const f = setField; const 
   return `<div class="card"><div class="card-h"><h2>Body & goals</h2></div>
         <div class="set-tog set-units" style="margin-bottom:12px"><b class="small">Units</b><span class="u ${met ? '' : 'on'}">Imperial</span>${sw(met, 'units-tog')}<span class="u ${met ? 'on' : ''}">Metric</span></div>
         <form data-form="body" class="grid g2" style="gap:12px">
-        ${f(`Starting weight (${wU()})`, 'startWeight', wNum(st.startWeight), 'type="number" step="0.1"')}${f('Starting body fat %', 'startBF', st.startBF, 'type="number" step="0.1"')}
-        ${goalKind() === 'maintain' ? '' : f(`Goal weight (${wU()})`, 'goalWeight', wNum(st.goalWeight), 'type="number" step="0.1"')}${f('Goal body fat %', 'goalBF', st.goalBF, 'type="number" step="0.1"')}
+        ${/* Blank rather than 0 when unset: 0 in this field used to read as a measurement, which
+              made lean mass equal body weight and the goal look already met. */''}
+        ${f(`Starting weight (${wU()})`, 'startWeight', wNum(st.startWeight), 'type="number" step="0.1"')}${f('Starting body fat %', 'startBF', bfSet(st.startBF) ? st.startBF : '', 'type="number" step="0.1" min="0" max="70" placeholder="Leave blank to estimate"')}
+        ${goalKind() === 'maintain' ? '' : f(`Goal weight (${wU()})`, 'goalWeight', wNum(st.goalWeight), 'type="number" step="0.1"')}${f('Goal body fat %', 'goalBF', bfSet(st.goalBF) ? st.goalBF : '', 'type="number" step="0.1" min="0" max="70" placeholder="Optional"')}
         ${goalBFWarnHTML()}
+        <div class="tiny muted" style="grid-column:1/-1">${bfSet(st.startBF)
+          ? 'Body fat drives your calorie targets and the goal projection, so keep it current with a weigh-in when you measure it.'
+          : `Body fat is <b>not set</b>, so it is estimated at ${fmt(startBF(), 1)}% from your height, age and sex. Calorie targets and goal tracking both depend on it — measure it when you can and the plan sharpens up. A goal body fat % is optional; without one, progress is tracked by scale weight.`}</div>
         ${height}
         ${f('Age', 'age', pr.age == null ? '' : pr.age, 'type="number" min="13" max="100" step="1"')}
         <div class="field"><label>Sex <span class="muted" style="font-weight:500">— for the body-fat estimate</span></label><select class="inp" name="sex"><option value="" ${!pr.sex ? 'selected' : ''}>Prefer not to say</option><option value="m" ${pr.sex === 'm' ? 'selected' : ''}>Male</option><option value="f" ${pr.sex === 'f' ? 'selected' : ''}>Female</option></select></div>
@@ -589,7 +599,9 @@ function settingsFootHTML() { return `<div style="margin-top:16px;text-align:cen
   <div class="tiny muted" style="margin-top:14px;text-align:center">FORGE 90 ${APP_VERSION} · <a href="${SOURCE_URL}/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0</a> · <a href="${SOURCE_URL}" target="_blank" rel="noopener">Source code</a></div>`; }
 
 /* ---------------- router ---------------- */
-const NAV = [['', 'Dashboard', 'grid'], ['calendar', 'Calendar', 'cal'], ['workouts', 'Workout plan', 'dumbbell'], ['diet', 'Diet plan', 'food'], ['foods', 'Foods & recipes', 'book'], ['grocery', 'Grocery & prep', 'cart'], ['pantry', 'Pantry', 'box'], ['progress', 'Progress', 'trend'], ['settings', 'Settings', 'sliders']];
+/* Pantry left this list when it became a tab of Foods & recipes; its expiring-soon badge moved
+   onto that entry. */
+const NAV = [['', 'Dashboard', 'grid'], ['calendar', 'Calendar', 'cal'], ['workouts', 'Workout plan', 'dumbbell'], ['diet', 'Diet plan', 'food'], ['foods', 'Foods & recipes', 'book'], ['grocery', 'Grocery & prep', 'cart'], ['progress', 'Progress', 'trend'], ['settings', 'Settings', 'sliders']];
 function shell() {
   document.body.innerHTML = `<div id="bg" aria-hidden="true"><div class="bg-layer"></div><div class="bg-layer"></div></div><div class="app"><aside class="side"><div class="brand"><a class="brand-link" href="#/" title="FORGE 90 — Dashboard">${LOGO}<b class="wm">FORGE<em>90</em></b></a><button class="side-toggle" data-act="nav-toggle" id="side-toggle"></button></div>
     <nav class="nav">${navItems().map(([k, l, i]) => `<a href="#/${k}" data-nav="${k}" title="${l}">${icon(i)}<span>${l}</span></a>`).join('')}</nav><div class="side-foot" id="side-foot"></div></aside>
@@ -611,13 +623,20 @@ function render() {
   const h = location.hash.replace(/^#\/?/, ''); const [page, arg] = h.split('/');
   const phone = isPhone(); document.body.classList.toggle('phone', phone);
   if (page === 'plan') { location.replace('#/' + (phone ? (UI.lastPlan || 'calendar') : 'calendar')); return; }
-  if (page === 'kitchen') { location.replace('#/' + (phone ? (UI.lastKit || 'grocery') : 'grocery')); return; }
+  /* lastKit can still hold 'pantry' from before it became a tab, so it is checked against the hub
+     rather than trusted. */
+  if (page === 'kitchen') { const k = phone && hubOf(String(UI.lastKit || '').split('/')[0]) === 'kitchen' ? UI.lastKit : 'grocery'; location.replace('#/' + k); return; }
   if (page === 'prep' && !phone) { location.replace('#/grocery'); return; }
+  /* The pantry became a tab of Foods & recipes. Old links, bookmarks and the tour still point at
+     #/pantry, so it redirects rather than 404ing to the dashboard. */
+  if (page === 'pantry') { location.replace('#/foods/pantry'); return; }
   if (phone && hubOf(page) === 'plan' && UI.lastPlan !== page) { UI.lastPlan = page; saveUI(); }
-  if (phone && hubOf(page) === 'kitchen' && page !== 'recipe' && UI.lastKit !== page) { UI.lastKit = page; saveUI(); }
+  /* Remember the tab as well as the page, so coming back to Kitchen returns to the pantry if
+     that is where you were. */
+  if (phone && hubOf(page) === 'kitchen' && page !== 'recipe') { const k = page === 'foods' && arg ? page + '/' + arg : page; if (UI.lastKit !== k) { UI.lastKit = k; saveUI(); } }
   document.body.classList.toggle('compact', !!UI.navCollapsed);
   if (page === 'day' && arg) ensurePlanThrough(arg);
-  const sec = ({ '': 'dashboard', calendar: 'calendar', day: 'day', workouts: 'workouts', diet: 'diet', foods: 'foods', recipe: 'foods', 'recipe-edit': 'foods', grocery: 'grocery', pantry: 'grocery', prep: 'grocery', progress: 'progress', settings: 'settings', account: 'settings', admin: 'settings', you: 'settings' })[page || ''] || 'dashboard';
+  const sec = ({ '': 'dashboard', calendar: 'calendar', day: 'day', workouts: 'workouts', diet: 'diet', foods: 'foods', recipe: 'foods', 'recipe-edit': 'foods', grocery: 'grocery', prep: 'grocery', progress: 'progress', settings: 'settings', account: 'settings', admin: 'settings', you: 'settings' })[page || ''] || 'dashboard';
   document.body.dataset.sec = sec; applyBackground(sec);
   $$('.nav a').forEach(a => a.classList.toggle('on', a.dataset.nav === (page === 'day' ? 'calendar' : (page === 'recipe' || page === 'recipe-edit') ? 'foods' : (page || ''))));
   const sy = window.scrollY; const same = render._last === h; render._last = h;
@@ -630,12 +649,11 @@ function render() {
     case 'workouts': html = viewWorkouts(); break;
     case 'diet': html = viewDiet(); break;
     case 'grocery': html = viewGrocery(); break;
-    case 'pantry': html = viewPantry(); break;
     case 'progress': html = viewProgress(); break;
     case 'settings': html = viewSettings(arg); break;
     case 'you': html = viewYou(); break;
     case 'prep': html = viewPrep(); break;
-    case 'foods': html = viewFoods(); break;
+    case 'foods': html = viewFoods(arg); break;
     case 'recipe': html = viewRecipe(decodeURIComponent(arg || '')); break;
     case 'account': html = viewAccount(); break;
     case 'admin': html = viewAdmin(); break;
@@ -798,7 +816,13 @@ document.addEventListener('submit', e => {
         UI.calMonth = null; UI.calWeek = null; UI.groWeek = null; UI.groWeekFor = null; S.grocery = {}; saveUI(); saveState(); render(); toast('Plan rebuilt'); };
       if (syncActive()) syncFetch(true).then(go); else go(); });
   } else if (kind === 'body' || kind === 'nut') {
-    if (kind === 'body' && S.settings.bfEstimated && +fd.get('startBF') !== +S.settings.startBF) S.settings.bfEstimated = false;
+    /* Clearing the body-fat field, or typing 0 into it, means "I have not measured this" — so the
+       height/age/sex estimate comes back rather than the app recording a measurement of zero. */
+    if (kind === 'body') {
+      const typed = fd.get('startBF');
+      if (!bfSet(typed)) S.settings.bfEstimated = true;
+      else if (S.settings.bfEstimated && +typed !== +S.settings.startBF) S.settings.bfEstimated = false;
+    }
     const PROFILE = ['hFt', 'hIn', 'hCm', 'age', 'sex', 'nick'];
     /* Weights are typed in whichever system is on screen; everything below the form is pounds. */
     const IN_LB = ['startWeight', 'goalWeight'];

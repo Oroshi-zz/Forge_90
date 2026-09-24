@@ -13,7 +13,10 @@ function swapStartWeek(exId) {
   return logged ? addDays(from, 7) : from;
 }
 function swapOpenDay(date, i, back) {
-  const e = S.plan[date]; if (!e || !e.w) return; const r = sessionRows(e.w)[i]; if (!r) return;
+  /* data-i carries the row's own index, not its position in the list — the two stopped matching
+     once sessions were reordered to group equipment, and looking up by position swapped the
+     wrong exercise. */
+  const e = S.plan[date]; if (!e || !e.w) return; const r = sessionRows(e.w).find(x => x.i === i); if (!r) return;
   SWP = { mode: 'day', date, i, slot: r.slot, exId: r.ex.id, planned: r.planned.id, back: back || null, all: false }; renderSwap();
 }
 function swapOpenProg(slot, exId) { SWP = { mode: 'prog', slot, exId, all: false }; renderSwap(); }

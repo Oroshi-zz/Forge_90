@@ -161,8 +161,14 @@ Object.assign(ACT, { 'onb-back': () => { const f = $('form[data-form="onb"]'); i
     OB.error = null; OB.noFocus = true; renderOnboarding();
   } });
 function bfEstimateNote() {
-  if (!S.settings.bfEstimated || S.weights.some(x => x.bf != null && x.bf !== '')) return '';
-  return `<div class="note warn bf-est-note">${icon('info')}<span>Your body fat (${fmt(S.settings.startBF, 1)}%) is an <b>estimate</b> from height, age and sex, so your calorie targets are approximate. When you can, measure it (smart scale, calipers or DEXA) and add it to a weigh-in — targets update automatically.</span><a class="btn sm" href="#/progress">Add a weigh-in</a></div>`;
+  if (!bfIsEstimated() || S.weights.some(x => bfSet(x.bf))) return '';
+  /* Two different situations, and the difference matters: a figure was never entered at all, or
+     one was estimated from height, age and sex. The first is the one worth being blunt about,
+     because every calorie target and the whole goal projection rest on it. */
+  const missing = !bfSet(S.settings.startBF);
+  return `<div class="note warn bf-est-note">${icon('info')}<span>${missing
+    ? `No body fat % is set, so it is being <b>estimated</b> at ${fmt(startBF(), 1)}% from your height, age and sex. Calorie targets and goal tracking both work from that figure, so they are approximate until you measure it.`
+    : `Your body fat (${fmt(startBF(), 1)}%) is an <b>estimate</b> from height, age and sex, so your calorie targets are approximate.`} When you can, measure it (smart scale, calipers or DEXA) and add it to a weigh-in — targets update automatically.</span><a class="btn sm" href="#/progress">Add a weigh-in</a></div>`;
 }
 
 /* ================================================================
@@ -230,7 +236,7 @@ function syncTake(next) {
 function syncRerender() {
   const h = location.hash; invalidate(); if (typeof pantrySyncReconcile === 'function') pantrySyncReconcile();
   if (typeof grocerySyncReconcile === 'function') grocerySyncReconcile();
-  if (($('#view')) && (/^#\/(calendar|day|diet|grocery|pantry)(\/|$)/.test(h) || h === '' || h === '#/' || h === '#')) {
+  if (($('#view')) && (/^#\/(calendar|day|diet|grocery|foods)(\/|$)/.test(h) || h === '' || h === '#/' || h === '#')) {
     const ae = document.activeElement; if (ae && ae.closest && ae.closest('#view input, #view select, #view textarea')) SY.needRender = true; else render();
   }
   refreshSyncUI();

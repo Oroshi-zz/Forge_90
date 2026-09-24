@@ -1225,8 +1225,10 @@ details.dmeal-note .ing-list { margin-top: 6px; }
 .prod-ph { display: grid; place-items: center; background: var(--surface-2); color: var(--muted); }
 .prod-ph svg { width: 26px; height: 26px; }
 .prod-m .field .row .inp { min-width: 0; }
-.qa-modal .qa-food { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
-.qa-modal .qa-food b { flex: 1; min-width: 0; }
+/* The meal picker reuses this block for its amount step, so the rule is on the class rather than
+   scoped to the quick-add dialog it started in. */
+.qa-food { display: flex; align-items: center; gap: 8px; margin-top: 6px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); }
+.qa-food b { flex: 1; min-width: 0; }
 .qa-mac { margin: 14px 0 6px; font-size: 15px; font-variant-numeric: tabular-nums; }
 .qp-modal { width: min(560px, 100%); }
 .seg.sm button { padding: 5px 10px; font-size: 12.5px; }

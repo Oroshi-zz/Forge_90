@@ -33,8 +33,9 @@ function viewDashboard() {
   const wk = planWeek(focus); const ph = phaseForWeek(wk); const cyc = ph.cycle;
   const cStartWk = cyc === 1 ? 1 : 14 + (cyc - 2) * 13; const cStart = cycleStartDate(cyc), cEnd = cycleEndDate(cyc);
   const cur = latestStats(); const trend = weightTrend(); const pj = projection();
-  const startLBM = st.startWeight * (1 - st.startBF / 100);
-  const dW = cur.w - st.startWeight, dBF = cur.bf - st.startBF, dL = cur.lbm - startLBM;
+  const bf0 = startBF();
+  const startLBM = st.startWeight * (1 - bf0 / 100);
+  const dW = cur.w - st.startWeight, dBF = cur.bf - bf0, dL = cur.lbm - startLBM;
   const eyebrow = idx < 0 ? `Starts ${fmtDate(start, { weekday: 'long', month: 'long', day: 'numeric' })}` : `Cycle ${cyc} · Week ${ph.wic} of 13 · ${ph.name}`;
   const title = idx < 0 ? `${-idx} day${-idx === 1 ? '' : 's'} until Day 1` : cyc === 1 && idx < LAUNCH_DAYS ? `Day ${idx + 1} of 90` : `Day ${idx + 1}`;
   const bars = Array.from({ length: 13 }, (_, i) => { const w = cStartWk + i; const p = phaseForWeek(w); const cw = idx < 0 ? 0 : wk; return `<i class="${p.cls} ${w < cw ? 'done' : ''} ${w === cw && idx >= 0 ? 'now' : ''}" data-tip="Week ${w} · ${p.name}"></i>`; }).join('');
@@ -46,7 +47,7 @@ function viewDashboard() {
   const maint = goalKind() === 'maintain';
   const tiles = `<div class="grid g${maint ? 4 : 5}">
     ${tile('Body weight', 'scale', fmt(toW(cur.w), 1), wU(), hasW ? `${sign(toW(dW))} ${wU()} since start` : null, goalKind() === 'bulk' ? dW >= 0 : dW <= 0, 'Log your first weigh-in')}
-    ${tile('Body fat', 'target', fmt(cur.bf, 1), '%' + (cur.est ? ' est.' : ''), hasW ? `${sign(dBF)} pts` : null, dBF <= 0, 'Goal ' + st.goalBF + '%')}
+    ${tile('Body fat', 'target', fmt(cur.bf, 1), '%' + (cur.est ? ' est.' : ''), hasW ? `${sign(dBF)} pts` : null, dBF <= 0, goalBFSet() ? 'Goal ' + st.goalBF + '%' : 'No goal set')}
     ${tile('Lean mass', 'dumbbell', fmt(toW(cur.lbm), 1), wU(), hasW ? `${sign(toW(dL))} ${wU()}` : null, dL >= -1, 'Weight × (1 − BF%)')}
     ${tile('Weekly trend', 'trend', trend && trend.rate != null ? fmt(toW(trend.rate), 2) : '—', wU() + '/wk', null, true, !trend ? 'Needs ~1 week of weigh-ins' : trend.stale ? `No weigh-in for ${trend.days} days` : goalKind() === 'maintain' ? 'Target: hold' : `Target ${rateTxt(Math.abs(planRate(cur.w)), 2)} ${goalKind() === 'bulk' ? 'gain' : 'loss'}`)}
     ${maint ? '' : tile('To goal', 'flame', fmt(toW(Math.abs(cur.w - st.goalWeight)), 1), wU(), null, true, `≈ ${fmt(pj.weeks, 0)} weeks at ${rateTxt(Math.abs(planRate(cur.w)), 2)} ${goalKind() === 'bulk' ? 'gain' : 'loss'}`)}
@@ -74,11 +75,14 @@ function viewDashboard() {
   const outlook = `<div class="card"><div class="card-h"><h2>Goal outlook</h2></div>
     <div class="grid g2" style="gap:12px">
       <div><div class="tiny muted">${pj.cyc === 1 ? 'End of 90 days' : 'End of cycle ' + pj.cyc} (${fmtDate(pj.endPlan, { month: 'short', day: 'numeric' })})</div><div style="font-size:22px;font-weight:700" class="num">~${wTxt(pj.endW, 0)}</div></div>
-      ${maint ? `<div><div class="tiny muted">Body-fat goal</div><div style="font-size:22px;font-weight:700">${st.goalBF}%</div></div>`
+      ${maint ? `<div><div class="tiny muted">Body-fat goal</div><div style="font-size:22px;font-weight:700">${pj.goalBF == null ? 'Not set' : pj.goalBF + '%'}</div></div>`
         : `<div><div class="tiny muted">Reach ${wTxt(st.goalWeight)}</div><div style="font-size:22px;font-weight:700">${pj.reached ? 'Reached 🎉' : fmtDate(pj.goalDate, { month: 'short', year: 'numeric' })}</div></div>`}</div>
     ${maint ? `<div class="note acc" style="margin-top:12px">${icon('target')}<span>Maintenance — calories are held level, no deficit and no surplus. Training continues in 13-week cycles. Change this in Settings.</span></div>`
       : pj.reached ? `<div class="note acc" style="margin-top:12px">${icon('target')}<span>Goal reached — calories are now at maintenance. Training continues in 13-week cycles. Change this in Settings.</span></div>` : ''}
-    <div class="note acc" style="margin-top:12px">${icon('info')}<span>If you hold your current <b>${wTxt(pj.lbm, 0)}</b> of lean mass, ${st.goalBF}% body fat lands at about <b>${wTxt(pj.wAtGoalBF, 0)}</b>.${maint ? '' : ` Hitting ${wTxt(st.goalWeight)} <i>and</i> ${st.goalBF}% means ending near ${wTxt(st.goalWeight * (1 - st.goalBF / 100), 0)} lean — so treat ${wTxt(pj.wAtGoalBF, 0)} as the milestone where you re-assess by body-fat % rather than scale weight.`}</span></div>
+    ${/* Without a body-fat goal there is no lean-mass milestone to state, and the old copy printed
+          "0% body fat lands at about 230 lb", which is nonsense dressed as arithmetic. */
+      pj.goalBF == null ? `<div class="note" style="margin-top:12px">${icon('info')}<span>No body-fat goal is set, so progress is tracked by scale weight alone. Add one in <a href="#/settings/body">Settings</a> and you also get the lean-mass milestone, which is the more honest finish line.</span></div>`
+      : `<div class="note acc" style="margin-top:12px">${icon('info')}<span>If you hold your current <b>${wTxt(pj.lbm, 0)}</b> of lean mass, ${pj.goalBF}% body fat lands at about <b>${wTxt(pj.wAtGoalBF, 0)}</b>.${maint ? '' : ` Hitting ${wTxt(st.goalWeight)} <i>and</i> ${pj.goalBF}% means ending near ${wTxt(st.goalWeight * (1 - pj.goalBF / 100), 0)} lean — so treat ${wTxt(pj.wAtGoalBF, 0)} as the milestone where you re-assess by body-fat % rather than scale weight.`}</span></div>`}
     ${trend ? `<div class="note ${trend.delta ? 'warn' : ''}" style="margin-top:8px">${icon('trend')}<span>${esc(trend.advice)} ${trend.delta ? `<button class="btn sm" data-act="apply-trend" data-delta="${trend.delta}" style="margin-left:6px">Apply ${trend.delta > 0 ? '+' : ''}${trend.delta} kcal</button>` : ''}</span></div>` : ''}
     <hr class="sep"><h3 style="margin-bottom:10px">Quick weigh-in</h3>${weighForm()}</div>`;
 

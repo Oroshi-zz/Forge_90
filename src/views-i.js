@@ -135,7 +135,9 @@ function sharedAdd(food) { SHARED_FOODS[food.id] = food; rebuildCatalog(); }
 /* ---------- the shared recipe book ---------- */
 let SREC_REV = 0, SREC_LOADED = false, SREC_TRY = 0, SREC_T = null, SREC_WARNED = false;
 const recipeMine = r => !!r && !!r.shared && !!AUTH.user && r.by === AUTH.user.id;
-const recipeMayEdit = r => !r ? false : r.shared ? (recipeMine(r) || isAdmin()) : true;
+/* A food meal has no recipe to edit — it is one food and an amount. Editing it means turning it
+   into a real recipe, which is its own action. */
+const recipeMayEdit = r => !r || r.virtual ? false : r.shared ? (recipeMine(r) || isAdmin()) : true;
 async function loadSharedRecipes() {
   if (AUTH.mode !== 'server') { SREC_LOADED = true; return; }
   try {
@@ -168,6 +170,9 @@ const pantryName = id => { const g = ING[id]; return !g ? 'Removed food' : g.dry
 const canScan = () => AUTH.mode === 'server';
 const scanBtnHTML = (mode = 'today', cls = '', date = '') => canScan() ? `<button class="btn ${cls}" data-act="scan" data-v="${mode}" ${date ? `data-d="${date}"` : ''} title="${mode === 'pantry' ? 'Scan groceries into the pantry' : `Scan a barcode to add it to ${date && date !== todayISO() ? fmtDate(date) : 'today'}`}">${icon('scan')}Scan</button>` : '';
 const addFoodBtnHTML = (date = '', cls = '') => `<button class="btn ${cls}" data-act="qa-pick" ${date ? `data-d="${date}"` : ''} title="Add a snack or any food to ${date && date !== todayISO() ? fmtDate(date) : 'today'}">${icon('plus')}Add food</button>`;
+/* The receipt scanner started on the Pantry page only, but a receipt is exactly what you have in
+   hand on the Grocery page after a shop, and the Foods page is where new products get added. */
+const receiptBtnHTML = (cls = '') => canReceipt() ? `<button class="btn ${cls}" data-act="rc-scan" title="Photograph a receipt and add everything on it to the pantry">${icon('list')}Scan a receipt <span class="pill" style="font-size:10px;margin-left:6px">Experimental</span></button>` : '';
 
 /* ---------- scanner ---------- */
 let SCN = null;
@@ -217,7 +222,7 @@ function scanCount(food, n) {
   if (!n && !(e.base > 0)) pantryDel(e.itemId);
   else pantrySet(e.itemId, { qty: q });
   e.n = n; if (!n) SCN.added = SCN.added.filter(x => x !== e);
-  if (/^#\/(pantry|grocery)/.test(location.hash)) render();
+  if (onPantryView()) render();
 }
 function scanMsg(t, cls) { const m = $('#scan-msg'); if (m) { m.textContent = t; m.className = 'scan-msg ' + (cls || ''); } }
 async function scanStart() {
@@ -282,7 +287,7 @@ function scanUse(id) {
       const base = before ? Math.max(0, Math.round((+before.qty) * 100) / 100) : 0;
       const it = pantryAdd(id, null, null, 'scan'); if (!it) { SCN.busy = false; return; }
       SCN.added.unshift({ food: id, itemId: it.id, n: 1, base });
-      if (/^#\/(pantry|grocery)/.test(location.hash)) render();
+      if (onPantryView()) render();
       scanMsg(`Added ${foodLabel(id)} — scan the next item`, 'ok');
     }
     scanPaint(); SCN.busy = false; return;
@@ -522,16 +527,31 @@ function fpUse(id, m, d, ii) {
 }
 const slotNow = () => { const h = new Date().getHours() + new Date().getMinutes() / 60; return h < 10.5 ? 'breakfast' : h < 14.5 ? 'lunch' : h < 17 ? 'snack1' : h < 20.5 ? 'dinner' : 'snack2'; };
 let QA = null;
-function quickAdd(id, date) {
-  const g = ING[id]; if (!g) return; const d = date || todayISO();
-  if (!inPlan(d)) { closeModal(); toast(`${d === todayISO() ? 'Today isn’t' : 'That day isn’t'} in your plan, so there’s nothing to add it to.`); return; }
-  ensurePlanThrough(d);
+/* The amount control is the same wherever a food is being portioned — logging it to a day, or
+   standing it up as a meal — so the unit list lives in one place. */
+function unitsFor(id) {
+  const g = ING[id]; if (!g) return [['g', 1, 'g']];
   const srv = +g.srv > 0 ? +g.srv : 0;
-  const units = g.u ? [['u', 1, g.u]] : [].concat(srv ? [['srv', srv, `serving (${fmt(srv)} ${g.ml ? 'ml' : 'g'})`]] : [], +g.pk > 1 ? [['pk', +g.pk, `package (${fmt(+g.pk)} ${g.ml ? 'ml' : 'g'})`]] : [], [['g', 1, g.ml ? 'ml' : 'g']]);
+  return g.u ? [['u', 1, g.u]] : [].concat(srv ? [['srv', srv, `serving (${fmt(srv)} ${g.ml ? 'ml' : 'g'})`]] : [], +g.pk > 1 ? [['pk', +g.pk, `package (${fmt(+g.pk)} ${g.ml ? 'ml' : 'g'})`]] : [], [['g', 1, g.ml ? 'ml' : 'g']]);
+}
+const unitAmount = (units, unit, n) => { const u = units.find(x => x[0] === unit) || units[0]; return Math.max(0, +n || 0) * u[1]; };
+/* The nearest day the plan actually covers. Logging used to refuse outright when today fell
+   outside the plan, which meant the Add food button vanished rather than letting you pick a day
+   that does exist. */
+function nearestPlanDay(d) {
+  if (inPlan(d)) return d;
+  const start = S.settings.startDate, end = planEnd();
+  return !d || d < start ? start : end;
+}
+function quickAdd(id, date) {
+  const g = ING[id]; if (!g) return; const d = nearestPlanDay(date || todayISO());
+  if (!inPlan(d)) { closeModal(); toast('There are no days in your plan yet.'); return; }
+  ensurePlanThrough(d);
+  const units = unitsFor(id);
   QA = { id, d, units, unit: units[0][0], n: units[0][0] === 'g' ? 100 : 1, slot: slotNow() };
   renderQuickAdd();
 }
-function qaAmount() { const u = QA.units.find(x => x[0] === QA.unit); return Math.max(0, +QA.n || 0) * u[1]; }
+function qaAmount() { return unitAmount(QA.units, QA.unit, QA.n); }
 function renderQuickAdd() {
   const g = ING[QA.id]; const amt = qaAmount(); const m = ingMacros(QA.id, amt);
   modal(`<div class="qa-m"><div class="row"><h2 style="flex:1">Add to ${QA.d === todayISO() ? 'today' : fmtDate(QA.d)}</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
@@ -539,6 +559,7 @@ function renderQuickAdd() {
     <div class="grid g2" style="gap:12px;margin-top:10px">
       <div class="field"><label>Amount</label><div class="row" style="gap:6px"><input class="inp" type="number" min="0" step="${QA.unit === 'g' ? 5 : 0.5}" value="${QA.n}" data-input="qa-n" style="width:90px"><select class="inp" data-input="qa-unit">${QA.units.map(([k, , l]) => `<option value="${k}" ${QA.unit === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div></div>
       <div class="field"><label>With</label><select class="inp" data-input="qa-slot">${DAY_SLOTS.map(s => `<option value="${s}" ${QA.slot === s ? 'selected' : ''}>${SLOT_LABEL[s]}</option>`).join('')}</select></div></div>
+    <div class="field" style="margin-top:10px"><label>Day</label><input class="inp" type="date" data-input="qa-day" value="${esc(QA.d)}" min="${esc(S.settings.startDate)}" max="${esc(planEnd())}" style="max-width:190px"></div>
     <div class="qa-mac" id="qa-mac"><b>${fmt(m.k)}</b> kcal · <span style="color:var(--prot)">${fmt(m.p)}P</span> · <span style="color:var(--carb)">${fmt(m.c)}C</span> · <span style="color:var(--fat)">${fmt(m.f)}F</span></div>
     <div class="tiny muted">It counts toward the day’s macros, and the rest of the day’s portions shrink to make room.</div>
     <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px"><button class="btn" data-act="close-modal">Cancel</button><button class="btn primary" data-act="qa-save">${icon('plus')}Add</button></div></div>`, 'sm qa-modal');
@@ -571,6 +592,10 @@ const PANTRY_SOON = 14;
 function pantryShared() { return typeof SY !== 'undefined' && SY && SY.data && SY.data.status === 'active' && SY.data.pantry && SY.data.pantry.on; }
 function pantryItems() { return pantryShared() ? (SY.data.pantry.items || []) : (S.pantry || []); }
 function pantryInUse() { return pantryShared() || (S.pantry || []).length > 0; }
+/* Pages whose content is built from the pantry, so a scan, an edit or a consumption catch-up has
+   to repaint them. Foods & recipes is one of them twice over now: it hosts the pantry tab, and
+   its recipe list can be filtered by what the pantry covers. */
+const onPantryView = () => /^#\/(foods|grocery)(\/|$)/.test(location.hash);
 /* `from` is the day the food was actually bought, which a receipt supplies and a barcode scan
    does not. Counting shelf life from the purchase date rather than from today is the whole
    point of reading the date off a receipt: a Saturday shop scanned on Tuesday should not give
@@ -585,8 +610,8 @@ function pantryQtyText(id, q) { const g = ING[id]; if (!g) return ''; return g.u
 async function pantryOps(ops, consume) {
   try { const r = await api('POST', '/api/sync/pantry', { ops, consume }); SY.data.pantry = Object.assign(SY.data.pantry || {}, r.pantry);
     S.pantrySharedCopy = r.pantry.items; S.pantrySharedRev = r.pantry.rev; if (r.used && (!S.pantryThrough || r.used > S.pantryThrough)) S.pantryThrough = r.used; saveState();
-    if (/^#\/(pantry|grocery)/.test(location.hash)) render(); return true; }
-  catch (e) { toast(e.message); if (/^#\/(pantry|grocery)/.test(location.hash)) { syncFetch(true); } return false; }
+    if (onPantryView()) render(); return true; }
+  catch (e) { toast(e.message); if (onPantryView()) { syncFetch(true); } return false; }
 }
 function pantryAdd(food, qty, exp, src) {
   const g = ING[food]; if (!g) return;
@@ -621,6 +646,21 @@ function pantryDel(itemId) {
   S.pantry = (S.pantry || []).filter(x => x.id !== itemId); saveState();
 }
 function pantryHave(food, items) { return (items || pantryItems()).filter(x => x.food === food).reduce((a, x) => a + (+x.qty || 0), 0); }
+/* One pass over the pantry instead of one scan per ingredient, because "what can I make" asks
+   the question for every recipe against every ingredient. */
+function pantryTotals(items) { const out = {}; (items || pantryItems()).forEach(x => { if (x && x.food) out[x.food] = (out[x.food] || 0) + (+x.qty || 0); }); return out; }
+/* Judged per standard serving rather than per batch: a recipe that makes four is still one you
+   can cook tonight if there is enough for one plate. Recipes only list substantive ingredients —
+   seasonings and oil live in the steps — so no staple needs excusing here. */
+function recipeShort(r, tot) {
+  if (typeof r === 'string') r = RECIPE[r];
+  if (!r || !r.ing.length) return null;
+  const y = r.yield || 1;
+  return r.ing.filter(([id, amt]) => { const g = ING[id]; if (!g) return true;
+    const need = amt / y; const step = g.u ? 0.05 : 1;     // the same slack the shopping list allows
+    return (tot[id] || 0) + step < need; });
+}
+function recipeMakeable(r, tot) { const s = recipeShort(r, tot); return !!s && s.length === 0; }
 function useFifo(items, use) {
   Object.entries(use).forEach(([food, amt]) => { let left = amt;
     items.filter(x => x.food === food && x.qty > 0).sort((a, b) => (a.exp || '9999') < (b.exp || '9999') ? -1 : 1).forEach(x => { const t = Math.min(left, x.qty); x.qty = Math.round((x.qty - t) * 100) / 100; left -= t; }); });
@@ -684,7 +724,8 @@ function expText(exp) { const n = daysLeft(exp); if (n == null) return 'no date'
 function pantrySoon() { return pantryItems().filter(x => x.exp && daysLeft(x.exp) <= PANTRY_SOON).sort((a, b) => a.exp < b.exp ? -1 : 1); }
 
 const PAN_SORTS = [['aisle', 'Aisle'], ['name', 'Name'], ['expiry', 'Use-by date'], ['added', 'Recently added']];
-function viewPantry() {
+/* Rendered as a tab of Foods & recipes, which passes its tab bar in. */
+function viewPantry(seg) {
   pantryCatchUp(); pantryMergeDupes();
   const items = pantryItems(); const soon = pantrySoon(); const shared = pantryShared();
   const byFood = {}; items.forEach(x => (byFood[x.food] = byFood[x.food] || []).push(x));
@@ -708,7 +749,8 @@ function viewPantry() {
       ${soon.map(x => `<div class="pan-srow ${daysLeft(x.exp) < 0 ? 'bad' : ''}"><b>${esc(pantryName(x.food))}</b><span class="num tiny">${esc(pantryQtyText(x.food, x.qty))}</span><span class="tiny">${esc(expText(x.exp))}</span><button type="button" class="btn sm ghost" data-act="pan-del" data-id="${x.id}">Used up</button></div>`).join('')}
       <div class="tiny muted" style="margin-top:6px">Anything within ${PANTRY_SOON} days of its use-by date shows here.</div></div>` : '';
   return `<div class="page-head"><div class="t"><h1>Pantry</h1><p>What you already have at home. The shopping list ticks off what’s here, and planned meals use the pantry up automatically as each day passes${shared ? ` — shared with ${esc(syncName())}` : ''}.</p></div>
-      <div class="row wrap">${scanBtnHTML('pantry', 'primary')}${canReceipt() ? `<button class="btn" data-act="rc-scan" title="Photograph a receipt and add everything on it">${icon('list')}Scan a receipt <span class="pill" style="font-size:10px;margin-left:6px">Experimental</span></button>` : ''}<button class="btn ${canScan() ? '' : 'primary'}" data-act="pan-add">${icon('plus')}Add item</button></div></div>
+      <div class="row wrap">${scanBtnHTML('pantry', 'primary')}${receiptBtnHTML()}<button class="btn ${canScan() ? '' : 'primary'}" data-act="pan-add">${icon('plus')}Add item</button></div></div>
+    ${seg || ''}
     ${soonCard}${soon.length ? '<div style="height:16px"></div>' : ''}
     <div class="card"><div class="card-h"><h2>In the pantry</h2><span class="pill">${foods.length < all.length ? `${foods.length} of ${all.length}` : all.length} food${all.length === 1 ? '' : 's'}</span>${shared ? `<span class="pill acc">${icon('users')}Shared</span>` : ''}</div>
       ${tools}${all.length && !foods.length ? `<div class="muted small" style="padding:10px 2px">Nothing in the pantry matches “${esc(String(UI.panQ || '').trim())}”.</div>` : ''}
@@ -741,7 +783,8 @@ function pantrySubmit(form) {
   if (qs !== '' && !(+qs > 0)) { toast('Enter an amount above 0, or leave it blank for one package'); return; }
   pantryAdd(g.id, qs === '' ? null : panFromShown(g.id, Math.round(+qs)), fd.get('exp') || null, 'manual'); closeModal(); render(); toast(`${g.n} added to the pantry`);
 }
-function pantryNavBadge() { const a = $('.nav a[data-nav="pantry"]'); if (!a) return; const n = S ? pantrySoon().length : 0; let b = a.querySelector('.nav-badge'); if (!n) { if (b) b.remove(); return; } if (!b) { b = document.createElement('span'); b.className = 'nav-badge'; a.appendChild(b); } b.textContent = n; b.title = `${n} pantry item${n === 1 ? '' : 's'} expiring soon`; }
+/* The badge followed the pantry onto the Foods & recipes entry when it became a tab there. */
+function pantryNavBadge() { const a = $('.nav a[data-nav="foods"]'); if (!a) return; const n = S ? pantrySoon().length : 0; let b = a.querySelector('.nav-badge'); if (!n) { if (b) b.remove(); return; } if (!b) { b = document.createElement('span'); b.className = 'nav-badge'; a.appendChild(b); } b.textContent = n; b.title = `${n} pantry item${n === 1 ? '' : 's'} expiring soon`; }
 
 /* ---------- shopping list: pantry-aware rows, check all, add checked to the pantry ---------- */
 let GRO_ROWS = null;
@@ -753,7 +796,7 @@ function groceryRows(A, wd, totals) {
   const proj = pantryProjected(days[0]);
   const rows = Object.entries(tot).filter(([id]) => ING[id]).map(([id, a]) => { const have = pantryHave(id, proj); let need = Math.max(0, a - have); if (need < (ING[id].u ? 0.05 : 1)) need = 0; return { id, total: a, have, need }; });
   const part = days.length < wd.length;
-  const note = `<div class="note gro-pan-note">${icon('box')}<span>${part ? `This week’s list covers <b>${fmtDate(days[0], { weekday: 'long' })}</b> on — earlier days are already eaten. ` : ''}Items your <a href="#/pantry">pantry</a> already covers${days[0] > t ? ' (after the meals planned before then)' : ''} are ticked with a pantry icon — untick any you still need to buy. Partly covered items show the full amount and what’s at home.</span></div>`;
+  const note = `<div class="note gro-pan-note">${icon('box')}<span>${part ? `This week’s list covers <b>${fmtDate(days[0], { weekday: 'long' })}</b> on — earlier days are already eaten. ` : ''}Items your <a href="#/foods/pantry">pantry</a> already covers${days[0] > t ? ' (after the meals planned before then)' : ''} are ticked with a pantry icon — untick any you still need to buy. Partly covered items show the full amount and what’s at home.</span></div>`;
   return { rows, note };
 }
 function groRowState(r, got) { const covered = !(r.need > 0) && r.have > 0; return { covered, checked: covered ? got[r.id] !== 0 : !!got[r.id] }; }
@@ -863,9 +906,15 @@ document.addEventListener('input', e => {
 document.addEventListener('change', async e => {
   const t = e.target; if (!t || !t.dataset) return;
   if (t.dataset.input === 'pan-sort') { UI.panSort = t.value; saveUI(); render(); }
-  if (t.dataset.input === 'sr-exp' && SCN) { const e2 = SCN.added.find(x => x.food === t.dataset.f); if (e2) { pantrySet(e2.itemId, { exp: t.value || null }); if (/^#\/(pantry|grocery)/.test(location.hash)) render(); } }
+  if (t.dataset.input === 'sr-exp' && SCN) { const e2 = SCN.added.find(x => x.food === t.dataset.f); if (e2) { pantrySet(e2.itemId, { exp: t.value || null }); if (onPantryView()) render(); } }
   if (t.dataset.input === 'qa-unit' && QA) { QA.unit = t.value; QA.n = t.value === 'g' ? 100 : 1; renderQuickAdd(); }
   if (t.dataset.input === 'qa-slot' && QA) QA.slot = t.value;
+  if (t.dataset.input === 'qa-day' && QA && t.value) {
+    const d = nearestPlanDay(t.value);
+    if (d !== t.value) toast('That day is outside your plan');
+    QA.d = d; ensurePlanThrough(d); renderQuickAdd();
+  }
+  if (t.dataset.input === 'ms-unit' && typeof MS !== 'undefined' && MS && MS.pick) { MS.pick.unit = t.value; MS.pick.n = t.value === 'g' ? 100 : 1; renderMealSwap(); }
   if (t.dataset.input === 'pf-basis') { const u = $('#modal .pf-unit'); if (u) u.classList.toggle('hidden', t.value !== 'u'); const s = $('#modal [name="srv"]'); if (s) s.disabled = t.value === 'u'; const pu = $('#modal .pf-pku'); if (pu) pu.textContent = `(${t.value === 'u' ? 'items' : t.value})`; }
   if (t.dataset.input === 'scan-photo') {
     const f = t.files && t.files[0]; t.value = ''; if (!f) return; scanMsg('Reading the photo…');

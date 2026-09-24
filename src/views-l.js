@@ -4,12 +4,20 @@ Object.assign(IC, { today: '<path d="M3 10h18M8 2v4M16 2v4"/><rect x="3" y="4" w
 if (PHONE_MQ && PHONE_MQ.addEventListener) PHONE_MQ.addEventListener('change', () => { if (!$('#view')) return; closeModal(); render(); });
 
 /* ---------------- bottom tabs and the Plan / Kitchen tabs ---------------- */
-const HUBS = { plan: [['calendar', 'Calendar'], ['workouts', 'Training'], ['diet', 'Nutrition']], kitchen: [['grocery', 'List'], ['pantry', 'Pantry'], ['foods', 'Recipes'], ['prep', 'Prep']] };
-function hubOf(page) { if (['calendar', 'workouts', 'diet'].includes(page)) return 'plan'; if (['grocery', 'pantry', 'foods', 'recipe', 'recipe-edit', 'prep'].includes(page)) return 'kitchen'; return null; }
+/* The pantry is a tab of Foods & recipes rather than a page, but on the phone it stays one tap
+   away in the kitchen hub, so entries carry an explicit address. */
+const HUBS = { plan: [['calendar', 'Calendar'], ['workouts', 'Training'], ['diet', 'Nutrition']],
+  kitchen: [['grocery', 'List'], ['pantry', 'Pantry', '#/foods/pantry'], ['foods', 'Recipes', '#/foods'], ['prep', 'Prep']] };
+function hubOf(page) { if (['calendar', 'workouts', 'diet'].includes(page)) return 'plan'; if (['grocery', 'foods', 'recipe', 'recipe-edit', 'prep'].includes(page)) return 'kitchen'; return null; }
 function phoneTab(page) { if (!page || page === 'day') return 'today'; return hubOf(page) || 'you'; }
 function hubSegHTML(page) {
-  const hub = hubOf(page); const cur = page === 'recipe' ? 'foods' : page;
-  return `<div class="hub-top"><h1>${hub === 'plan' ? 'Plan' : 'Kitchen'}</h1></div><nav class="hub-seg" aria-label="${hub === 'plan' ? 'Plan' : 'Kitchen'}">${HUBS[hub].map(([k, l]) => `<a href="#/${k}" class="${cur === k ? 'on' : ''}" ${cur === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}</nav>`;
+  const hub = hubOf(page);
+  /* Which entry is current now depends on the tab slug as well as the page, since Recipes and
+     Pantry are both the Foods page. */
+  const slug = location.hash.replace(/^#\/?/, '').split('/')[1] || '';
+  const cur = page === 'recipe' || page === 'recipe-edit' ? 'foods'
+    : page === 'foods' ? (slug === 'pantry' ? 'pantry' : 'foods') : page;
+  return `<div class="hub-top"><h1>${hub === 'plan' ? 'Plan' : 'Kitchen'}</h1></div><nav class="hub-seg" aria-label="${hub === 'plan' ? 'Plan' : 'Kitchen'}">${HUBS[hub].map(([k, l, href]) => `<a href="${href || '#/' + k}" class="${cur === k ? 'on' : ''}" ${cur === k ? 'aria-current="page"' : ''}>${l}</a>`).join('')}</nav>`;
 }
 function tabbarRender(page) {
   const el = $('#tabbar'); if (!el) return; const cur = phoneTab(page); const soon = S ? pantrySoon().length : 0;
@@ -65,15 +73,41 @@ function wsSave() {
 /* ---------------- meal swap sheet: searchable, favorites first, macros shown ---------------- */
 let MS = null;
 const slotCat = s => /^snack/.test(s) ? 'snack' : s;
-function mealSwap(d, slot) { if (!S.plan[d]) return; MS = { d, slot, q: '', all: false }; renderMealSwap(); }
+function mealSwap(d, slot) { if (!S.plan[d]) return; MS = { d, slot, q: '', all: false, tab: 'recipes', pick: null }; renderMealSwap(); }
 function renderMealSwap() {
-  const cur = (S.plan[MS.d].m || {})[MS.slot]; const r = cur && RECIPE[cur]; const cat = r ? r.cat : slotCat(MS.slot);
-  modal(`<div class="ms-m"><div class="row"><h2 style="flex:1">${r ? 'Swap' : 'Pick'} ${esc(SLOT_LABEL[MS.slot].toLowerCase())}</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
+  const cur = (S.plan[MS.d].m || {})[MS.slot]; const r = cur && RECIPE[cur]; const cat = r && !r.virtual ? r.cat : slotCat(MS.slot);
+  const head = `<div class="row"><h2 style="flex:1">${r ? 'Swap' : 'Pick'} ${esc(SLOT_LABEL[MS.slot].toLowerCase())}</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>`;
+  /* Choosing a plain food still needs a portion, so the picker turns into an amount step rather
+     than guessing a package and leaving no way to say "half a tray". */
+  if (MS.pick) { modal(`<div class="ms-m">${head}${msAmountHTML()}</div>`, 'ms-modal', true); return; }
+  modal(`<div class="ms-m">${head}
     <div class="tiny muted">${r ? `Now: ${esc(r.emoji)} ${esc(r.name)} · ` : ''}${esc(fmtDate(MS.d, { weekday: 'long', month: 'short', day: 'numeric' }))} · portions resize to your targets either way</div>
-    <div class="rec-search">${icon('search')}<input class="inp" type="search" id="ms-q" data-input="ms-q" value="${esc(MS.q)}" placeholder="Search recipes or ingredients…" aria-label="Search recipes" autocomplete="off"></div>
-    <div class="row" style="gap:6px"><button type="button" class="btn sm ${MS.all ? '' : 'primary'}" data-act="ms-all" data-v="0">${esc(cat[0].toUpperCase() + cat.slice(1))}</button><button type="button" class="btn sm ${MS.all ? 'primary' : ''}" data-act="ms-all" data-v="1">Everything</button></div>
-    <div class="ms-list" id="ms-list">${msListHTML()}</div>
+    <div class="seg sm" style="margin:8px 0">${[['recipes', 'Recipes'], ['foods', 'A single food']].map(([k, l]) => `<button type="button" class="${MS.tab === k ? 'on' : ''}" data-act="ms-tab" data-v="${k}">${l}</button>`).join('')}</div>
+    <div class="rec-search">${icon('search')}<input class="inp" type="search" id="ms-q" data-input="ms-q" value="${esc(MS.q)}" placeholder="${MS.tab === 'foods' ? 'Search foods, brands or scanned products…' : 'Search recipes or ingredients…'}" aria-label="Search" autocomplete="off"></div>
+    ${MS.tab === 'foods' ? `<div class="tiny muted" style="margin:2px 0 6px">For anything ready to eat — a rotisserie chicken, a frozen meal, a tub of yogurt. It fills the slot and joins the shopping list, with no recipe to write.</div>`
+      : `<div class="row" style="gap:6px"><button type="button" class="btn sm ${MS.all ? '' : 'primary'}" data-act="ms-all" data-v="0">${esc(cat[0].toUpperCase() + cat.slice(1))}</button><button type="button" class="btn sm ${MS.all ? 'primary' : ''}" data-act="ms-all" data-v="1">Everything</button></div>`}
+    <div class="ms-list" id="ms-list">${MS.tab === 'foods' ? msFoodListHTML() : msListHTML()}</div>
     ${r ? `<button type="button" class="btn sm ghost danger" data-act="ms-none">${icon('x')}Remove this meal</button>` : ''}</div>`, 'ms-modal', true);
+}
+function msFoodListHTML() {
+  const words = String(MS.q || '').toLowerCase().split(/\s+/).filter(Boolean);
+  const hay = g => (g.n + ' ' + (g.brand || '') + ' ' + (SUB_LABEL[g.sub] || '')).toLowerCase();
+  const list = Object.values(ING).filter(g => foodAllowed(g.id) && words.every(w => hay(g).includes(w)))
+    .sort((a, b) => (isFavFood(b.id) ? 1 : 0) - (isFavFood(a.id) ? 1 : 0) || a.n.localeCompare(b.n)).slice(0, 60);
+  /* Foods have no emoji of their own, so a plate icon on every row was fifty identical glyphs.
+     The food group's icon at least distinguishes meat from dairy at a glance. */
+  const catIcon = {}; FOOD_CATS.forEach(c => { catIcon[c.id] = c.icon; });
+  return list.map(g => `<button type="button" class="ms-opt" data-act="ms-food" data-id="${esc(g.id)}"><span class="em">${esc(g.emoji || catIcon[SUB_CAT[g.sub]] || '🍽️')}</span><span class="t"><b>${esc(g.n)}</b><small class="num">${g.brand ? esc(g.brand) + ' · ' : ''}${fmt(g.k)} kcal · ${fmt(g.p)}P ${g.u ? 'per ' + esc(g.u) : g.ml ? 'per 100 ml' : 'per 100 g'}</small></span>${isFavFood(g.id) ? `<span class="ms-star" title="Favorite">${icon('star')}</span>` : ''}</button>`).join('')
+    || `<div class="muted small" style="padding:12px 4px">No foods match.</div>`;
+}
+function msAmountHTML() {
+  const p = MS.pick; const g = ING[p.fid]; const amt = unitAmount(p.units, p.unit, p.n); const m = ingMacros(p.fid, amt);
+  return `<div class="qa-food"><b>${esc(g.n)}</b>${g.brand ? `<span class="tiny muted">${esc(g.brand)}</span>` : ''}${favFoodBtnHTML(p.fid)}</div>
+    <div class="field" style="margin-top:10px"><label>How much is one ${esc(SLOT_LABEL[MS.slot].toLowerCase())}?</label>
+      <div class="row" style="gap:6px"><input class="inp" type="number" min="0" step="${p.unit === 'g' ? 5 : 0.5}" value="${p.n}" data-input="ms-n" style="width:90px"><select class="inp" data-input="ms-unit">${p.units.map(([k, , l]) => `<option value="${k}" ${p.unit === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></div></div>
+    <div class="qa-mac"><b>${fmt(m.k)}</b> kcal · <span style="color:var(--prot)">${fmt(m.p)}P</span> · <span style="color:var(--carb)">${fmt(m.c)}C</span> · <span style="color:var(--fat)">${fmt(m.f)}F</span></div>
+    <div class="tiny muted">This portion is fixed, so the rest of the day resizes around it rather than stretching it.</div>
+    <div class="row" style="justify-content:flex-end;gap:8px;margin-top:14px"><button class="btn" data-act="ms-back">Back</button><button class="btn primary" data-act="ms-food-set">${icon('check')}Use this</button></div>`;
 }
 function msListHTML() {
   const cur = (S.plan[MS.d].m || {})[MS.slot]; const r = cur && RECIPE[cur]; const cat = r ? r.cat : slotCat(MS.slot);
@@ -203,7 +237,7 @@ function groceryPhoneHTML(G) {
     return `<div class="pg-row ${st}"><button type="button" class="pg-it" data-act="gro-tap" data-id="${id}" aria-pressed="${st !== 'buy'}"><span class="ck">${icon('check')}</span><span class="t"><b>${esc(g.name)}</b>${note}</span><span class="q num">${esc(g.qty)}${g.sub ? `<small>${esc(g.sub)}</small>` : ''}</span></button>${st === 'home' ? `<button type="button" class="btn sm pg-need" data-act="gro-need" data-id="${id}">Need it</button>` : ''}</div>`; };
   const list = order.filter(a => aisles[a]).map(a => `<section class="pg-aisle"><h3>${esc(a)}</h3><div class="card pad0">${aisles[a].sort((x, y) => ING[x.id].n.localeCompare(ING[y.id].n)).map(row).join('')}</div></section>`).join('');
   const empty = { buy: all ? 'Everything’s in the cart or at home.' : 'Nothing planned this week.', cart: 'Tap items on To buy as you shop — they land here.', home: 'Nothing your pantry covers this week.' }[tab];
-  return `<div class="row pg-tools"><select class="inp" data-input="gro-week" aria-label="Week">${opts}</select><button type="button" class="btn icon" data-act="copy-list-ph" aria-label="Copy the list" title="Copy the list">${icon('list')}</button><button type="button" class="btn icon" data-act="print-gro" aria-label="Print the list" title="Print the list">${icon('print')}</button></div>
+  return `<div class="row pg-tools"><select class="inp" data-input="gro-week" aria-label="Week">${opts}</select>${canReceipt() ? `<button type="button" class="btn icon" data-act="rc-scan" aria-label="Scan a receipt" title="Scan a receipt into the pantry">${icon('scan')}</button>` : ''}<button type="button" class="btn icon" data-act="copy-list-ph" aria-label="Copy the list" title="Copy the list">${icon('list')}</button><button type="button" class="btn icon" data-act="print-gro" aria-label="Print the list" title="Print the list">${icon('print')}</button></div>
     ${syncGroceryNote(G.wd, G.A)}
     <div class="pg-chips" role="group" aria-label="Show">${[['buy', 'To buy'], ['cart', 'In the cart'], ['home', 'At home']].map(([k, l]) => `<button type="button" class="chipb ${tab === k ? 'on' : ''}" data-act="gro-tab" data-v="${k}" aria-pressed="${tab === k}">${l}<span class="n num">${n[k]}</span></button>`).join('')}</div>
     ${all ? `<div class="ph-prog"><div class="track"><i style="width:${(n.cart + n.home) / all * 100}%"></i></div><span class="num small muted">${n.cart + n.home} of ${all} sorted</span></div>
@@ -273,17 +307,39 @@ Object.assign(ACT, {
   'ms-all': el => { MS.all = el.dataset.v === '1'; renderMealSwap(); },
   'ms-pick': el => msSet(el.dataset.rid),
   'ms-none': () => msSet(null),
+  'ms-tab': el => { if (!MS) return; MS.tab = el.dataset.v; MS.q = ''; renderMealSwap(); },
+  'ms-food': el => { if (!MS) return; const fid = el.dataset.id; const g = ING[fid]; if (!g) return;
+    const units = unitsFor(fid);
+    MS.pick = { fid, units, unit: units[0][0], n: units[0][0] === 'g' ? 100 : 1 }; renderMealSwap(); },
+  'ms-back': () => { if (!MS) return; MS.pick = null; renderMealSwap(); },
+  'ms-food-set': () => {
+    if (!MS || !MS.pick) return;
+    const amt = unitAmount(MS.pick.units, MS.pick.unit, MS.pick.n);
+    if (!(amt > 0)) { toast('Enter an amount'); return; }
+    const id = foodMealId(MS.pick.fid, amt);
+    /* Register it before the plan is written, so the very first render can resolve the slot. */
+    if (!ensureFoodMeal(id)) { toast('That food could not be used as a meal'); return; }
+    MS.pick = null; msSet(id);
+  },
   'gro-tab': el => { UI.groTab = el.dataset.v; saveUI(); render(); },
   'gro-tap': el => { const G = GRO_ROWS; if (!G) return; const r = G.rows.find(x => x.id === el.dataset.id); if (!r) return; const st = groRowState(r, groGot());
     groSetMany([[r.id, st.covered ? (st.checked ? 0 : null) : (st.checked ? null : 1)]]); },
   'gro-need': el => { groSetMany([[el.dataset.id, 0]]); toast('Moved to To buy'); },
   'copy-list-ph': () => copyListPhone(),
-  'go-foods': el => { UI.foodsTab = el.dataset.v; saveUI(); location.hash = '#/foods'; render(); },
+  'go-foods': el => { const h = foodsTabHash(el.dataset.v); if (location.hash === h) render(); else location.hash = h; },
   'go-acc-sync': () => { UI._scrollTo = 'acc-sync'; location.hash = '#/account'; }
 });
 document.addEventListener('input', e => { const t = e.target; if (!t || !t.dataset) return;
   if (t.dataset.input === 'ws-v' && WS) { WS.v = +t.value || 0; const b = $('#ws-save'); if (b) b.innerHTML = `${icon('check')}Save ${fmt(WS.v, 1)} ${wU()}`; }
   if (t.dataset.input === 'ws-bf' && WS) WS.bf = t.value;
   if (t.dataset.input === 'ws-d' && WS && t.value) { WS.d = t.value > todayISO() ? todayISO() : t.value; }
-  if (t.dataset.input === 'ms-q' && MS) { MS.q = t.value; const l = $('#ms-list'); if (l) l.innerHTML = msListHTML(); }
+  if (t.dataset.input === 'ms-q' && MS) { MS.q = t.value; const l = $('#ms-list'); if (l) l.innerHTML = MS.tab === 'foods' ? msFoodListHTML() : msListHTML(); }
+  if (t.dataset.input === 'ms-n' && MS && MS.pick) { MS.pick.n = t.value; msAmountPaint(); }
 });
+/* Repaint only the macro line while the number is being typed, so the input keeps focus. */
+function msAmountPaint() {
+  const p = MS && MS.pick; if (!p) return;
+  const el = $('#modal .qa-mac'); if (!el) return;
+  const m = ingMacros(p.fid, unitAmount(p.units, p.unit, p.n));
+  el.innerHTML = `<b>${fmt(m.k)}</b> kcal · <span style="color:var(--prot)">${fmt(m.p)}P</span> · <span style="color:var(--carb)">${fmt(m.c)}C</span> · <span style="color:var(--fat)">${fmt(m.f)}F</span>`;
+}

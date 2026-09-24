@@ -191,9 +191,50 @@ function rebuildCatalog() {
   Object.values(S.customRecipes || {}).forEach(r => { if (r && !SHARED_RECIPES[r.id]) RECIPES.push(Object.assign({ tags: [], steps: [], links: [], storage: 'fridge', time: 0 }, r, { custom: true })); });
   Object.keys(RECIPE).forEach(k => delete RECIPE[k]);
   RECIPES.forEach(r => { r.ing = (r.ing || []).filter(([id]) => ING[id]); RECIPE[r.id] = r; });
+  rebuildFoodMeals();
   Object.keys(_rps).forEach(k => delete _rps[k]);
   invalidate();
 }
+
+/* ---------- a plain food standing in for a meal ----------
+   A slot used to hold a recipe id and nothing else, so eating a rotisserie chicken or a frozen
+   lasagna meant either inventing a one-line recipe or logging it as an extra and leaving the slot
+   reading "Nothing planned". A slot can now hold `food:<foodId>:<amount>`, which resolves to a
+   recipe-shaped object built on the fly. Everything downstream — portions, macros, the shopping
+   list, the day views, printing — reads it through RECIPE and needs no special case.
+   The amount lives in the id rather than beside it so that two different portions of the same
+   food are two different meals, and so RPS's per-id memo stays correct.
+   These are deliberately NOT in RECIPES: they are not recipes and have no business in the recipe
+   list, the planner's rotation or a search for something to cook. */
+const foodMealId = (fid, amt) => 'food:' + fid + ':' + (Math.round(+amt * 100) / 100);
+function parseFoodMeal(id) {
+  if (typeof id !== 'string' || id.slice(0, 5) !== 'food:') return null;
+  const rest = id.slice(5), cut = rest.lastIndexOf(':');
+  if (cut < 1) return null;
+  const fid = rest.slice(0, cut), amt = +rest.slice(cut + 1);
+  return fid && amt > 0 ? { fid, amt } : null;
+}
+/* Frozen meals and soups read as dinner, cereal and yogurt as breakfast, and everything else is a
+   snack. It only labels the card: a food meal never sits in a category-filtered recipe list. */
+const FOOD_MEAL_CAT = { frozen_meals: 'dinner', soups: 'dinner', pasta: 'dinner', rice: 'dinner',
+  cereal: 'breakfast', yogurt: 'breakfast', bread: 'breakfast', eggs: 'breakfast', sweets: 'dessert' };
+function buildFoodMeal(id) {
+  const p = parseFoodMeal(id); if (!p) return null;
+  const g = ING[p.fid]; if (!g) return null;
+  return { id, fromFood: p.fid, virtual: true, name: g.n, emoji: g.emoji || '🍽️',
+    cat: FOOD_MEAL_CAT[g.sub] || 'snack', yield: 1, fixed: true, rotate: false, time: 0,
+    storage: g.a === 'Frozen' ? 'freezer' : 'fridge', tags: [], steps: [], links: [],
+    ing: [[p.fid, p.amt]] };
+}
+/* Only the food meals the plan actually references are materialised, so this stays a handful of
+   objects rather than one per food on the list. */
+function rebuildFoodMeals() {
+  const seen = {};
+  Object.values(S.plan || {}).forEach(e => { if (e && e.m) Object.values(e.m).forEach(id => { if (id && !seen[id] && !RECIPE[id]) seen[id] = 1; }); });
+  Object.keys(seen).forEach(id => { const r = buildFoodMeal(id); if (r) RECIPE[id] = r; });
+}
+/* Assigning one has to register it before anything reads the plan back. */
+function ensureFoodMeal(id) { if (!RECIPE[id]) { const r = buildFoodMeal(id); if (r) RECIPE[id] = r; } return RECIPE[id] || null; }
 function subOn(sub) { const p = S.foodPrefs || {}; return p[sub] !== false && p['cat:' + SUB_CAT[sub]] !== false; }
 function foodAllowed(id) { const g = ING[id]; return !g || (subOn(g.sub) && (S.foodPrefs || {})['f:' + id] !== false); }
 function recipeAllowed(r) { if (typeof r === 'string') r = RECIPE[r]; return !!r && !(S.recipeOff || {})[r.id] && r.ing.length > 0 && r.ing.every(([id]) => foodAllowed(id)); }
@@ -552,11 +593,62 @@ function substitutePlan(fromDate) {
 }
 
 /* ---------- workouts ---------- */
+/* ---------- ordering a session so you are not crossing the gym between every set ----------
+   Equipment is free text on each exercise, so it is matched to a station family. Order matters
+   here: the primary implement wins, which is why "Barbell + bench or hip thrust machine" is
+   barbell and "Cable pulldown station" is cable rather than machine. */
+const EQUIP_FAMILY = [
+  ['cable', /\bcable|pulldown|crossover|lat pull/i],
+  ['barbell', /\bbarbell|ez[- ]?(curl )?bar|\bsmith|bar in a rack/i],
+  ['dumbbell', /\bdumbbell/i],
+  ['kettlebell', /kettlebell/i],
+  ['band', /\bbands?\b/i],
+  ['machine', /machine|selectorized|pec deck|leg press|hack squat|assisted/i],
+  ['bodyweight', /body ?weight|pull-?up bar|captain|\bdip|\bmat\b|ab wheel|\bstep\b|\bball\b|bench|\bfloor\b|rings|suspension|push-?up handles|sliders|towel/i]
+];
+const equipFamily = ex => { const s = (ex && ex.equip) || ''; const hit = EQUIP_FAMILY.find(([, re]) => re.test(s)); return hit ? hit[0] : 'other'; };
+/* Grouping never crosses these, so a PR test stays first and no isolation work gets hoisted in
+   front of the heavy compound it would pre-fatigue. Only the order within a tier changes. */
+const woTier = r => r.type === 'T' ? 0 : r.type === 'S' ? 1 : (r.ex && r.ex.compound ? 2 : 3);
+const supersetKey = r => { const m = /superset\s+([a-z0-9]+)/i.exec(r.note || ''); return m ? m[1].toUpperCase() : null; };
+function orderByEquipment(rows) {
+  /* A superset is one unit: its members alternate with each other and have to stay together. */
+  const units = []; const byKey = {};
+  rows.forEach(r => {
+    const k = supersetKey(r);
+    if (k && byKey[k]) { byKey[k].rows.push(r); return; }
+    const u = { rows: [r], tier: woTier(r), fam: equipFamily(r.ex) };
+    if (k) byKey[k] = u;
+    units.push(u);
+  });
+  const tiers = [0, 1, 2, 3].map(t => units.filter(u => u.tier === t)).filter(a => a.length);
+  const out = []; let prev = null;
+  tiers.forEach((inTier, ti) => {
+    /* A PR test is a measurement, so its rows hold still: the same lift in the same place every
+       cycle. Grouping them would have let the lookahead below reorder them whenever the rotating
+       exercises underneath changed equipment, which is exactly the drift the test guards against. */
+    if (inTier[0].tier === 0) { inTier.forEach(u => out.push(...u.rows)); prev = equipFamily(out[out.length - 1].ex); return; }
+    const fams = []; inTier.forEach(u => { if (!fams.includes(u.fam)) fams.push(u.fam); });
+    /* Chain the tiers at both ends: start on whatever station the last tier finished at, and
+       finish on one the next tier also uses. Without the lookahead a tier could end on a station
+       nobody visits again and the next tier would start the walk over. */
+    const at = fams.indexOf(prev); if (at > 0) { fams.splice(at, 1); fams.unshift(prev); }
+    const carried = fams[0] === prev;      // the front is spoken for only if something chained into it
+    const next = tiers[ti + 1];
+    if (next && fams.length > 1) {
+      const shared = fams.slice(carried ? 1 : 0).find(f => next.some(u => u.fam === f));
+      if (shared) { fams.splice(fams.indexOf(shared), 1); fams.push(shared); }
+    }
+    fams.forEach(f => inTier.forEach(u => { if (u.fam === f) out.push(...u.rows); }));
+    prev = equipFamily(out[out.length - 1].ex);
+  });
+  return out;
+}
 function sessionRows(inst) {
   if (!inst) return [];
   const t = TEMPLATES[inst.t]; const wk = inst.wk || 1; const wip = weekInPhase(wk);
   const used = new Set(); const daySw = inst.sw || {}; const wStart = planWeekStart(wk);
-  return t.rows.map(([slot, type, sets, reps, rest, off, note, pin], i) => {
+  return orderByEquipment(t.rows.map(([slot, type, sets, reps, rest, off, note, pin], i) => {
     const vars = slotVars(slot, wk);
     /* A PR test only means something if it measures the same lift every cycle. Rotating by week
        number did not do that: test week lands on a different week each cycle, so the number you
@@ -573,21 +665,40 @@ function sessionRows(inst) {
     const rir = sr.type === 'T' ? 'Top set @ 1 RIR' : (t.phase === 4 ? '3–4' : RIR[sr.type][wip - 1]);
     return { i, slot, ex, planned, daySwap: ex !== planned, progSwap: prog ? prog[0] : null, type: sr.type, styled: sr.type !== type,
       sets: sr.sets, reps: sr.reps, rest: sr.rest, note: note || '', rir, vi, nv: vars.length };
-  });
+  }));
 }
 function sessionSetCount(inst) { return sessionRows(inst).reduce((a, r) => a + r.sets, 0); }
 function repRange(reps) { const m = String(reps).match(/(\d+)\D+(\d+)/); if (m) return [+m[1], +m[2]]; const n = String(reps).match(/\d+/); return n ? [+n[0], +n[0]] : [8, 12]; }
 
 /* ---------- bodyweight stats ---------- */
 function sortedWeights() { return S.weights.slice().sort((a, b) => a.d < b.d ? -1 : 1); }
+/* Zero in a body-fat field means "I have not measured it", never "I have none" — nobody is at 0%
+   and below about 3% is not survivable. Read as a real figure it did real damage: lean mass came
+   out equal to body weight, the goal test `bf <= goalBF` passed at 0 <= 0, so the app announced
+   the goal reached and quietly moved calories to maintenance while the person was 35 lb away.
+   Everything reads body fat through these, so a state already saved with 0 is corrected on load
+   rather than needing the field re-entered. */
+const bfSet = v => +v > 0;
+function startBF() {
+  const st = S.settings, pr = S.profile || {};
+  if (bfSet(st.startBF)) return +st.startBF;
+  const est = typeof deurenbergBF === 'function' ? deurenbergBF(+st.startWeight, +pr.heightIn, +pr.age, pr.sex === 'm') : null;
+  return est == null ? 25 : est;          // a mid-range default beats pretending someone is lean
+}
+/* True only when a body-fat goal was actually chosen, so an unset one cannot satisfy the goal. */
+const goalBFSet = () => bfSet(S.settings.goalBF);
+/* Whether the numbers behind the targets are estimated rather than measured. */
+const bfIsEstimated = () => !bfSet(S.settings.startBF) || (!!S.settings.bfEstimated && !S.weights.some(x => x.bf != null && x.bf !== ''));
 function statsOn(date) {
   const ws = sortedWeights();
-  let w = S.settings.startWeight, bf = S.settings.startBF, est = false, src = 'start';
+  let w = S.settings.startWeight, bf = startBF(), est = !bfSet(S.settings.startBF), src = 'start';
   let lbm = w * (1 - bf / 100);
   for (const x of ws) {
     if (date && x.d > date) break;
     w = x.w; src = x.d;
-    if (x.bf != null && x.bf !== '') { bf = +x.bf; lbm = w * (1 - bf / 100); est = false; }
+    /* A weigh-in logged with 0% is the same "not measured" as a blank one, so it must not reset
+       lean mass to the whole body weight either. */
+    if (bfSet(x.bf)) { bf = +x.bf; lbm = w * (1 - bf / 100); est = false; }
     else { bf = Math.max(3, (1 - lbm / w) * 100); est = true; }
   }
   return { w, bf, lbm: w * (1 - bf / 100), est, src };
@@ -613,7 +724,9 @@ function goalReached(w, bf) {
   const st = S.settings; const k = goalKind();
   if (k === 'maintain') return true;
   if (k === 'bulk') return bf >= (+st.bulkMaxBF || 20) || (st.atGoal === 'maintain' && w >= st.goalWeight);
-  return st.atGoal === 'maintain' && (w <= st.goalWeight || bf <= st.goalBF);
+  /* An unset body-fat goal is not a goal of zero. Without this guard a blank field made the
+     condition `0 <= 0` true from day one. */
+  return st.atGoal === 'maintain' && (w <= st.goalWeight || (goalBFSet() && bf <= +st.goalBF));
 }
 function targetsFor(w, bf, isTrain) {
   const st = S.settings;
@@ -905,8 +1018,11 @@ function projection() {
   const daysLeft = Math.max(0, dayDiff(refDate, endPlan));
   const endW = kind === 'maintain' ? st.w : kind === 'bulk' ? Math.min(S.settings.goalWeight, st.w + rate * daysLeft / 7) : Math.max(S.settings.goalWeight, st.w - rate * daysLeft / 7);
   const goalDate = addDays(refDate, Math.round(weeks * 7));
-  const wAtGoalBF = st.lbm / (1 - S.settings.goalBF / 100);
-  return { weeks, goalDate, endW, endPlan, cyc, wAtGoalBF, lbm: st.lbm, kind, rate: signed, staleBy, stale: staleBy != null && staleBy > TREND_STALE_DAYS, reached: goalReached(st.w, st.bf) };
+  /* Only meaningful once a body-fat goal exists; at goalBF 0 it divides by 1 and reports that
+     reaching 0% lands you at exactly your current weight. */
+  const goalBF = goalBFSet() ? +S.settings.goalBF : null;
+  const wAtGoalBF = goalBF == null ? null : st.lbm / (1 - goalBF / 100);
+  return { weeks, goalDate, endW, endPlan, cyc, goalBF, wAtGoalBF, lbm: st.lbm, bfEst: st.est || bfIsEstimated(), kind, rate: signed, staleBy, stale: staleBy != null && staleBy > TREND_STALE_DAYS, reached: goalReached(st.w, st.bf) };
 }
 
 /* ---------- export for node tests ---------- */
