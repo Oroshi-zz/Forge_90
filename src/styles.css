@@ -562,6 +562,9 @@ details ol li { margin: 3px 0; }
   border: 2px solid #fff; background: rgba(0, 0, 0, .42); display: flex; align-items: center; justify-content: center; }
 .pp-img.sel .pp-tick { background: var(--accent); border-color: var(--accent); }
 .pp-tick svg { width: 12px; height: 12px; color: var(--accent-ink); }
+.wrp-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--surface-2); }
+.wrp-row + .wrp-row { margin-top: 6px; }
 .pp-editbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
   margin: 0 0 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-sm);
   background: var(--surface-2); }

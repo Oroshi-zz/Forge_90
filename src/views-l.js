@@ -349,11 +349,41 @@ function ppGridHTML() {
     <div class="coll-body">${bar}${body}${edit ? '' : ask}</div></section>`;
 }
 
+/* ---------------- overwriting an existing weigh-in ---------------- */
+/* Saving a weigh-in replaces any entry on that date. That is what you want when you are
+   editing the day you opened, and a trap when you have picked a date that is already taken,
+   so the second case asks first and says exactly what it would replace. */
+let WRP = null;
+function weighGuard(d, w, bf, yes, no) {
+  const ex = S.weights.find(x => x.d === d);
+  if (!ex) { yes(); return; }
+  WRP = { yes, no };
+  const was = `${wTxt(ex.w, 1)}${ex.bf != null && ex.bf !== '' ? ' · ' + fmt(ex.bf, 1) + '%' : ''}`;
+  const now = `${wTxt(w, 1)}${bf != null && bf !== '' ? ' · ' + fmt(bf, 1) + '%' : ''}`;
+  const pics = ppCount(d);
+  modal(`<div class="wrp"><div class="row"><h2 style="flex:1">Already logged that day</h2>
+      <button class="btn icon ghost" data-act="weigh-keep" aria-label="Cancel">${icon('x')}</button></div>
+    <div class="tiny muted" style="margin:2px 0 12px">${esc(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }))}</div>
+    <div class="wrp-row"><span class="tiny muted">Logged</span><b>${was}</b></div>
+    <div class="wrp-row"><span class="tiny muted">Replace with</span><b>${now}</b></div>
+    <div class="tiny muted" style="margin-top:10px">${pics
+      ? `The ${pics} progress picture${pics === 1 ? '' : 's'} on this day ${pics === 1 ? 'is' : 'are'} kept.`
+      : 'Only the weight and body fat change.'}</div>
+    <div class="row" style="gap:8px;margin-top:14px">
+      <button type="button" class="btn ghost" style="flex:1" data-act="weigh-keep">Keep what’s there</button>
+      <button type="button" class="btn primary" style="flex:1" data-act="weigh-replace">Replace</button></div></div>`, 'sm wrp-modal', true);
+}
+function weighGuardAnswer(ok) {
+  const h = WRP; WRP = null; closeModal();
+  if (!h) return;
+  if (ok) h.yes(); else if (h.no) h.no();
+}
+
 /* ---------------- weigh-in sheet ---------------- */
 let WS = null;
 function weighSheet(date) {
   const d = date || todayISO(); const ex = S.weights.find(x => x.d === d); const last = sortedWeights().filter(x => x.d <= d).slice(-1)[0];
-  WS = { d, v: wNum(ex ? +ex.w : last ? +last.w : +S.settings.startWeight, 1), bf: ex && ex.bf != null && ex.bf !== '' ? ex.bf : '' }; renderWeigh();
+  WS = { d, d0: d, v: wNum(ex ? +ex.w : last ? +last.w : +S.settings.startWeight, 1), bf: ex && ex.bf != null && ex.bf !== '' ? ex.bf : '' }; renderWeigh();
 }
 function renderWeigh() {
   const t = todayISO(); const last = sortedWeights().filter(x => x.d < WS.d).slice(-1)[0];
@@ -370,11 +400,16 @@ function wsSync() { const i = $('#ws-v'), b = $('#ws-save'); if (i && document.a
 function wsSave() {
   const w = Math.round(frW(WS.v) * 100) / 100; if (!(w >= 80 && w <= 500)) { toast(`Enter a weight between ${wNum(80)} and ${wNum(500)} ${wU()}`); return; }
   const bf = WS.bf === '' || WS.bf == null ? null : +WS.bf; if (bf != null && !(bf >= 3 && bf <= 60)) { toast('Body fat should be between 3 and 60 %'); return; }
-  const prev = S.weights.find(x => x.d === WS.d);
-  const rec = { d: WS.d, w, bf }; if (prev && prev.pics) rec.pics = prev.pics;   /* keep any pictures already attached */
-  S.weights = S.weights.filter(x => x.d !== WS.d); S.weights.push(rec); saveState(); closeModal(); render();
-  const t = latestStats(); toast(`Logged ${wTxt(w, 1)}${bf != null ? ' · ' + bf + '%' : ''} — targets now ${targetsFor(t.w, t.bf, true).kcal}/${targetsFor(t.w, t.bf, false).kcal} kcal`);
-  const d = WS.d; WS = null; ppAsk(d);
+  const d = WS.d;
+  const save = () => {
+    const prev = S.weights.find(x => x.d === d);
+    const rec = { d, w, bf }; if (prev && prev.pics) rec.pics = prev.pics;   /* keep any pictures already attached */
+    S.weights = S.weights.filter(x => x.d !== d); S.weights.push(rec); saveState(); closeModal(); render();
+    const t = latestStats(); toast(`Logged ${wTxt(w, 1)}${bf != null ? ' · ' + bf + '%' : ''} — targets now ${targetsFor(t.w, t.bf, true).kcal}/${targetsFor(t.w, t.bf, false).kcal} kcal`);
+    WS = null; ppAsk(d);
+  };
+  /* Editing the day the sheet opened on is not an overwrite — only a date moved onto a taken one is. */
+  if (d !== WS.d0) weighGuard(d, w, bf, save, () => renderWeigh()); else save();
 }
 
 /* ---------------- meal swap sheet: searchable, favorites first, macros shown ---------------- */

@@ -756,6 +756,8 @@ const ACT = {
   'pp-open': el => ppOpen(el.dataset.d, el.dataset.pose || null),
   'pp-del': el => ppRemove(el.dataset.d, el.dataset.pose),
   'pp-pick': el => ppPick(el.dataset.d, el.dataset.pose || null),
+  'weigh-replace': () => weighGuardAnswer(true),
+  'weigh-keep': () => weighGuardAnswer(false),
   'pp-view-del': () => ppViewDelete(),
   'pp-edit': () => ppEditToggle(),
   'pp-sel': el => ppSelToggle(el.dataset.d, el.dataset.pose),
@@ -867,8 +869,15 @@ document.addEventListener('submit', e => {
   const f = e.target; const kind = f.dataset.form; if (!kind) return; e.preventDefault(); const fd = new FormData(f);
   if (kind === 'weigh') {
     const d = fd.get('d'), typed = +fd.get('w'), w = Math.round(frW(typed) * 100) / 100, bf = fd.get('bf'); if (!d || !w) return;
-    S.weights = S.weights.filter(x => x.d !== d); S.weights.push({ d, w, bf: bf === '' ? null : +bf }); saveState(); render();
-    const t = latestStats(); toast(`Logged ${wTxt(w, 1)}${bf ? ' · ' + bf + '%' : ''} — targets now ${targetsFor(t.w, t.bf, true).kcal}/${targetsFor(t.w, t.bf, false).kcal} kcal`);
+    const save = () => {
+      const prev = S.weights.find(x => x.d === d);
+      const rec = { d, w, bf: bf === '' ? null : +bf }; if (prev && prev.pics) rec.pics = prev.pics;   /* keep any pictures attached to that day */
+      S.weights = S.weights.filter(x => x.d !== d); S.weights.push(rec); saveState(); render();
+      const t = latestStats(); toast(`Logged ${wTxt(w, 1)}${bf ? ' · ' + bf + '%' : ''} — targets now ${targetsFor(t.w, t.bf, true).kcal}/${targetsFor(t.w, t.bf, false).kcal} kcal`);
+      ppAsk(d);
+    };
+    /* This form carries no sign that the date is already taken, so every clash asks. */
+    weighGuard(d, w, bf === '' ? null : +bf, save);
   } else if (kind === 'quicklog') {
     const ex = fd.get('ex'), d = fd.get('d'), w = sLoad(fd.get('w')), r = +fd.get('r');
     S.logs[d] = S.logs[d] || {}; const arr = S.logs[d][ex] = (S.logs[d][ex] || []).filter(s => s && +s.r > 0); arr.push({ w, r }); UI.prEx = ex; saveUI(); saveState(); render(); toast(`Logged ${EX[ex].name}: ${loadTxt(w)} ${wU()} × ${r}`);
