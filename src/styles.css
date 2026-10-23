@@ -12,7 +12,7 @@
   --prot: #2a78d6; --carb: #1baf7a; --fat: #eda100; --kcal: #eb6834;
   --k-upper: #2a78d6; --k-lower: #1baf7a; --k-full: #4a3aa7; --k-mixed: #e87ba4; --k-deload: #6b7483; --k-test: #d99400; --k-push: #2a78d6; --k-pull: #11996a; --k-legs: #6a5bd6;
   --good: #0ca30c; --warn: #d99a0b; --bad: #d03b3b;
-  --body: #d5dae1; --mm-primary: #eb6834; --mm-secondary: rgba(235, 104, 52, .42);
+  --body: #d5dae1; --mm-primary: #eb6834; --mm-secondary: rgba(235, 104, 52, .42); --mm-hi: #d6dce4; --mm-lo: #b2bbc9; --mm-seam: #8f9aab; --mm-p-hi: #f4844f; --mm-p-lo: #d3561f; --mm-s-hi: #e8ab8c; --mm-s-lo: #cf8666;
   --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 4px 16px rgba(16, 24, 40, .06);
   --shadow-lg: 0 12px 40px rgba(16, 24, 40, .18);
   --r: 14px; --r-sm: 9px;
@@ -25,7 +25,7 @@
   --accent: #b5f23d; --accent-2: #84cc16; --accent-ink: #0f1a02; --accent-text: #c4f55f; --accent-soft: rgba(181, 242, 61, .12);
   --prot: #3987e5; --carb: #199e70; --fat: #c98500; --kcal: #d95926;
   --k-upper: #3987e5; --k-lower: #199e70; --k-full: #9085e9; --k-mixed: #d55181; --k-deload: #6f7a8c; --k-test: #c98500; --k-push: #3987e5; --k-pull: #199e70; --k-legs: #8577e6;
-  --body: #2a3140; --mm-primary: #ff7a45; --mm-secondary: rgba(255, 122, 69, .38);
+  --body: #2a3140; --mm-primary: #ff7a45; --mm-secondary: rgba(255, 122, 69, .38); --mm-hi: #4b5667; --mm-lo: #272e3a; --mm-seam: #191e26; --mm-p-hi: #ff9a6d; --mm-p-lo: #e85f2a; --mm-s-hi: #9a6a55; --mm-s-lo: #6d4a3c;
   --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px rgba(0, 0, 0, .25);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, .55);
   color-scheme: dark;
@@ -110,7 +110,7 @@
     --accent: #b5f23d; --accent-2: #84cc16; --accent-ink: #0f1a02; --accent-text: #c4f55f; --accent-soft: rgba(181, 242, 61, .12);
     --prot: #3987e5; --carb: #199e70; --fat: #c98500; --kcal: #d95926;
     --k-upper: #3987e5; --k-lower: #199e70; --k-full: #9085e9; --k-mixed: #d55181; --k-deload: #6f7a8c; --k-test: #c98500; --k-push: #3987e5; --k-pull: #199e70; --k-legs: #8577e6; --k-push: #3987e5; --k-pull: #199e70; --k-legs: #8577e6;
-    --body: #2a3140; --mm-primary: #ff7a45; --mm-secondary: rgba(255, 122, 69, .38);
+    --body: #2a3140; --mm-primary: #ff7a45; --mm-secondary: rgba(255, 122, 69, .38); --mm-hi: #4b5667; --mm-lo: #272e3a; --mm-seam: #191e26; --mm-p-hi: #ff9a6d; --mm-p-lo: #e85f2a; --mm-s-hi: #9a6a55; --mm-s-lo: #6d4a3c;
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 6px 20px rgba(0, 0, 0, .25);
     --shadow-lg: 0 16px 48px rgba(0, 0, 0, .55);
     color-scheme: dark;
@@ -505,8 +505,12 @@ details ol li { margin: 3px 0; }
 #tip .tmm svg { width: 92px; height: 88px; flex: none; }
 #tip .tl { list-style: none; padding: 0; margin: 8px 0 0; } #tip .tl li { display: flex; gap: 8px; padding: 3px 0; border-top: 1px solid var(--line); }
 #tip .tl li span { color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
-.mm .b { fill: var(--body); } .mm .p1 { fill: var(--mm-primary); } .mm .p2 { fill: var(--mm-secondary); }
-.mm .six { stroke: var(--solid); stroke-width: 1; opacity: .5; }
+/* The body sits under a clipped layer of muscle bellies; each belly is a soft top-to-bottom
+   gradient with a hairline seam, so the forms read as rounded without any heavy outline. */
+.mm .mm-sil { fill: var(--body); }
+.mm .mm-m .b { fill: url(#mmgb); stroke: var(--mm-seam); stroke-width: .25; }
+.mm .mm-m .p1 { fill: url(#mmgp); }
+.mm .mm-m .p2 { fill: url(#mmgs); }
 
 /* ---------- toast & modal ---------- */
 #toast { width: max-content; max-width: calc(100vw - 32px); position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(140px); z-index: 120; background: var(--text); color: var(--solid); padding: 11px 14px 11px 16px; border-radius: 12px; box-shadow: var(--shadow-lg); display: flex; align-items: center; gap: 14px; font-weight: 600; font-size: 13px; transition: transform .22s; }
