@@ -385,7 +385,7 @@ function viewProgress() {
   const board = logged.map(ex => { const h = exerciseHistory(ex); const best = h.reduce((a, x) => x.best > a.best ? x : a, h[0]); const first = h[0];
     return { ex, h, best, first, gain: best.best - first.best }; }).sort((a, b) => EX[a.ex].group.localeCompare(EX[b.ex].group) || EX[a.ex].name.localeCompare(EX[b.ex].name));
   const hist = ws.slice().reverse().map(x => { const lbm = x.bf != null && x.bf !== '' ? x.w * (1 - x.bf / 100) : null;
-    return `<tr><td>${fmtDate(x.d, { weekday: 'short', month: 'short', day: 'numeric', year: phone ? undefined : 'numeric' })}</td><td class="num"><b>${fmt(toW(x.w), 1)}</b> ${wU()}</td><td class="num">${x.bf != null && x.bf !== '' ? fmt(x.bf, 1) + '%' : '<span class="muted">—</span>'}</td><td class="num">${lbm ? wTxt(lbm, 1) : '<span class="muted">—</span>'}</td><td class="pp-cell">${ppThumb(x.d)}</td><td style="text-align:right"><button class="btn sm ghost danger" data-act="del-weight" data-d="${x.d}" aria-label="Delete the ${esc(fmtDate(x.d))} weigh-in">${icon('trash')}</button></td></tr>`; }).join('');
+    return `<tr><td>${fmtDate(x.d, { weekday: 'short', month: 'short', day: 'numeric', year: phone ? undefined : 'numeric' })}</td><td class="num"><b>${fmt(toW(x.w), 1)}</b> ${wU()}</td><td class="num">${x.bf != null && x.bf !== '' ? fmt(x.bf, 1) + '%' : '<span class="muted">—</span>'}</td><td class="num">${lbm ? wTxt(lbm, 1) : '<span class="muted">—</span>'}</td><td class="pp-cell">${ppThumb(x.d)}${ppAddBtn(x.d)}</td><td style="text-align:right"><button class="btn sm ghost danger" data-act="del-weight" data-d="${x.d}" aria-label="Delete the ${esc(fmtDate(x.d))} weigh-in">${icon('trash')}</button></td></tr>`; }).join('');
   const sel = logged.length ? `<select class="inp" data-input="pr-ex" aria-label="Exercise">${['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'].map(g => { const xs = logged.filter(e => EX[e].group === g); return xs.length ? `<optgroup label="${g}">${xs.map(e => `<option value="${e}" ${UI.prEx === e ? 'selected' : ''}>${esc(EX[e].name)}</option>`).join('')}</optgroup>` : ''; }).join('')}</select>` : '';
   const sessRows = UI.prEx ? exerciseHistory(UI.prEx).slice().reverse().map(h => `<tr><td>${fmtDate(h.d)}</td><td>${h.sets.map(s => `${loadTxt(s.w)}×${s.r}`).join(', ')}</td><td class="num">${isBW(UI.prEx) ? h.best + ' reps' : fmt(toW(h.best))}</td><td class="num">${fmt(toW(h.vol))}</td><td>${h.pr ? `<span class="prb">${icon('trophy')}PR</span>` : ''}</td></tr>`).join('') : '';
   const exOpts = Object.values(EX).sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name)).map(e => `<option value="${e.id}">${e.group} — ${esc(e.name)}</option>`).join('');
@@ -754,6 +754,10 @@ const ACT = {
   'del-weight': el => { const d = el.dataset.d; ppDropDate(d); S.weights = S.weights.filter(x => x.d !== d); saveState(); render(); toast('Weigh-in deleted'); },
   'pp-open': el => ppOpen(el.dataset.d, el.dataset.pose || null),
   'pp-del': el => ppRemove(el.dataset.d, el.dataset.pose),
+  'pp-pick': el => ppPick(el.dataset.d, el.dataset.pose || null),
+  'pp-shoot': () => ppShoot(),
+  'pp-flip': () => ppFlip(),
+  'pp-pose': el => { if (PPC) ppPick(PPC.d, el.dataset.v); },
   'pp-prev': () => ppStep(-1),
   'pp-next': () => ppStep(1),
   'pp-go': el => { if (PPV) { PPV.i = +el.dataset.v; ppRender(); } },
@@ -827,7 +831,10 @@ document.addEventListener('change', e => {
     S.settings.cardio = Object.assign(c, { types: CARDIO_IDS.filter(id => set.has(id)) });
     styleApply('Cardio kinds updated');
   }
-  else if (inp === 'pp-file') { const f = el.files && el.files[0]; el.value = ''; if (f) ppUpload(el.dataset.d, el.dataset.pose, f); }
+  else if (inp === 'pp-file') { const f = el.files && el.files[0]; el.value = '';
+    const d = el.dataset.d, pose = el.dataset.pose;
+    if (PPC) { ppCamStop(); PPC = null; closeModal(); }
+    if (f) ppUpload(d, pose, f); }
   else if (inp === 'bg-photos') { S.settings.bgPhotos = el.checked; saveState(); bgCurrent = null; applyBackground(document.body.dataset.sec || 'settings'); render(); toast(el.checked ? 'Background photos on' : 'Background photos off'); }
   else if (inp === 'bg-dim') { S.settings.bgDim = +(1 - el.value).toFixed(2); saveState(); document.documentElement.style.setProperty('--dim', S.settings.bgDim); }
 

@@ -84,17 +84,100 @@ async function ppUpload(d, pose, file) {
     ppRecord(d).pics[pose] = r.token; saveState();
     toast(`${PP_POSES.find(x => x[0] === pose)[1]} picture saved`);
   } catch (e) { toast(e.message || 'That picture could not be saved.'); }
-  if (WS) renderWeigh(); else render();
+  ppAfter();
 }
 async function ppRemove(d, pose) {
   try { await api('DELETE', `/api/progress-pic/${encodeURIComponent(d)}/${pose}`); } catch (e) { }
   const x = S.weights.find(w => w.d === d);
   if (x && x.pics) { delete x.pics[pose]; if (!Object.keys(x.pics).length) delete x.pics; saveState(); }
   toast('Picture removed');
-  if (WS) renderWeigh(); else render();
+  ppAfter();
 }
 /* Called when a weigh-in is deleted so the files do not outlive the row that pointed at them. */
 function ppDropDate(d) { if (ppServer()) api('DELETE', `/api/progress-pic/${encodeURIComponent(d)}`).catch(() => {}); }
+
+/* WS survives a closed sheet, so the sheet is only re-rendered when it is actually on screen;
+   otherwise an upload started from the history table would pop the sheet open. */
+const ppAfter = () => { if (WS && $('#modal .ws-m')) renderWeigh(); else render(); };
+
+/* ---- take a picture, or choose a file ---- */
+/* One sheet offers both. The live camera needs a secure context, which a plain-HTTP LAN
+   address is not, so when it cannot run the sheet says why and leans on the file input —
+   which on a phone still opens the camera through the OS picker. */
+let PPC = null;
+const ppCanLive = () => !!(window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+const ppFree = d => { const p = ppOf(d); const hit = PP_POSES.find(([k]) => !p[k]); return hit ? hit[0] : null; };
+const ppPoseLabel = k => (PP_POSES.find(x => x[0] === k) || ['', ''])[1];
+
+function ppPick(d, pose) {
+  if (!ppUploadsOn()) { toast('Progress pictures are turned off for this server.'); return; }
+  pose = pose || ppFree(d);
+  if (!pose) { toast('All three poses already have a picture for that day.'); return; }
+  PPC = { d, pose, facing: 'user', stream: null, cams: 1 };
+  ppCamRender();
+  if (ppCanLive()) ppCamStart();
+}
+function ppCamRender(msg) {
+  if (!PPC) return;
+  const { d, pose, facing, cams } = PPC;
+  const live = ppCanLive();
+  const why = !window.isSecureContext
+    ? 'The live camera needs HTTPS, so it can’t run on this address. On a phone, Choose a picture still opens your camera.'
+    : 'This browser can’t open a camera here. Choose a picture instead.';
+  modal(`<div class="pp-cam"><div class="row"><h2 style="flex:1">${esc(ppPoseLabel(pose))} picture</h2>
+      <button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
+    <div class="tiny muted" style="margin:2px 0 10px">${esc(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' }))}${wOn(d)}</div>
+    ${live ? `<div class="pp-cam-view"><video id="pp-video" playsinline muted${facing === 'user' ? ' class="mir"' : ''}></video>
+        <div class="pp-cam-msg" id="pp-cam-msg">${esc(msg || 'Starting the camera…')}</div>
+        ${cams > 1 ? `<button type="button" class="btn sm pp-flip" data-act="pp-flip">${icon('loop')}Flip</button>` : ''}</div>
+      <button type="button" class="btn primary block big" style="margin-top:10px" data-act="pp-shoot">${icon('scan')}Take the picture</button>`
+      : `<div class="note warn">${icon('info')}<span>${why}</span></div>`}
+    <label class="btn ${live ? 'sm ghost' : 'primary block big'}" style="margin-top:10px;display:flex;justify-content:center">
+      ${icon('upload')}<span>Choose a picture</span>
+      <input type="file" accept="image/*" capture="environment" data-input="pp-file" data-d="${d}" data-pose="${pose}" hidden></label>
+    <div class="row wrap" style="gap:6px;margin-top:10px;justify-content:center">${PP_POSES.map(([k, lbl]) =>
+      `<button type="button" class="chipb ${k === pose ? 'on' : ''}" data-act="pp-pose" data-v="${k}">${lbl}${ppOf(d)[k] ? ' · replace' : ''}</button>`).join('')}</div>
+    </div>`, 'sm pp-cam-modal', true);
+}
+async function ppCamStart() {
+  const me = PPC; const v = $('#pp-video'); if (!me || !v) return;
+  const gone = () => PPC !== me || !document.body.contains(v);
+  try { me.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: me.facing }, width: { ideal: 1280 }, height: { ideal: 1280 } }, audio: false }); }
+  catch (e) {
+    if (gone()) return;
+    const m = $('#pp-cam-msg');
+    if (m) m.textContent = e && e.name === 'NotAllowedError'
+      ? 'Camera access was blocked. Allow it in the browser’s site settings, or choose a picture.'
+      : 'No camera found. Choose a picture instead.';
+    return;
+  }
+  if (gone()) { ppCamStop(me); return; }
+  v.srcObject = me.stream; try { await v.play(); } catch (e) { }
+  const m = $('#pp-cam-msg'); if (m) m.remove();
+  try { const ds = await navigator.mediaDevices.enumerateDevices();
+    const n = ds.filter(x => x.kind === 'videoinput').length;
+    if (n > 1 && me.cams === 1 && !gone()) { me.cams = n; ppCamRender(); ppCamStart(); } } catch (e) { }
+}
+function ppCamStop(sess) { const x = sess || PPC; if (!x) return; if (x.stream) x.stream.getTracks().forEach(t => t.stop()); x.stream = null; }
+function ppFlip() { if (!PPC) return; ppCamStop(); PPC.facing = PPC.facing === 'user' ? 'environment' : 'user'; ppCamRender(); ppCamStart(); }
+/* The frame is captured at the stored ceiling directly, so a camera shot and a chosen
+   file both arrive at ppUpload as the same kind of thing. */
+function ppShoot() {
+  const me = PPC; const v = $('#pp-video');
+  if (!me || !v || !v.videoWidth) { toast('The camera isn’t ready yet.'); return; }
+  const sc = Math.min(1, 1280 / Math.max(v.videoWidth, v.videoHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.round(v.videoWidth * sc); c.height = Math.round(v.videoHeight * sc);
+  const x = c.getContext('2d');
+  if (me.facing === 'user') { x.translate(c.width, 0); x.scale(-1, 1); }   /* un-mirror the preview */
+  x.drawImage(v, 0, 0, c.width, c.height);
+  const { d, pose } = me;
+  c.toBlob(b => {
+    if (!b) { toast('That picture could not be captured.'); return; }
+    ppCamStop(me); PPC = null; closeModal();
+    ppUpload(d, pose, new File([b], 'progress.jpg', { type: 'image/jpeg' }));
+  }, 'image/jpeg', 0.82);
+}
 
 /* ---- lightbox ---- */
 let PPV = null;
@@ -128,6 +211,15 @@ function ppThumb(d) {
   return `<button type="button" class="pp-thumb" data-act="pp-open" data-d="${d}" title="${n} progress picture${n === 1 ? '' : 's'} from ${esc(fmtDate(d))}" aria-label="Open the ${esc(fmtDate(d))} progress picture${n === 1 ? '' : 's'}">
     <img src="${ppUrl(d, pose, t)}" alt="" loading="lazy" onerror="this.remove()">${n > 1 ? `<span class="pp-n">${n}</span>` : ''}</button>`;
 }
+/* ---- add-picture button, shown on every weigh-in row ---- */
+function ppAddBtn(d) {
+  if (!ppUploadsOn() || !ppFree(d)) return '';
+  const n = ppCount(d);
+  return `<button type="button" class="pp-add" data-act="pp-pick" data-d="${d}"
+    title="${n ? 'Add another pose' : 'Add a progress picture'} for ${esc(fmtDate(d))}"
+    aria-label="${n ? 'Add another pose' : 'Add a progress picture'} for ${esc(fmtDate(d))}">${icon('plus')}</button>`;
+}
+
 /* ---- the three slots inside the weigh-in sheet ---- */
 function ppSlotsHTML(d) {
   if (!ppServer()) return '';
@@ -139,7 +231,7 @@ function ppSlotsHTML(d) {
     ${PP_POSES.filter(([k]) => on || p[k]).map(([k, lbl]) => p[k]
       ? `<div class="pp-slot has"><button type="button" class="pp-img" data-act="pp-open" data-d="${d}" data-pose="${k}" aria-label="View the ${lbl.toLowerCase()} picture"><img src="${ppUrl(d, k, p[k])}" alt="" onerror="this.remove()"></button>
          <span class="pp-lbl">${lbl}</span><button type="button" class="btn sm ghost danger pp-del" data-act="pp-del" data-d="${d}" data-pose="${k}" aria-label="Remove the ${lbl.toLowerCase()} picture">${icon('trash')}</button></div>`
-      : `<label class="pp-slot add"><input type="file" accept="image/*" data-input="pp-file" data-d="${d}" data-pose="${k}" hidden>${icon('plus')}<span class="pp-lbl">${lbl}</span></label>`).join('')}</div>`;
+      : `<button type="button" class="pp-slot add" data-act="pp-pick" data-d="${d}" data-pose="${k}" aria-label="Add the ${lbl.toLowerCase()} picture">${icon('plus')}<span class="pp-lbl">${lbl}</span></button>`).join('')}</div>`;
 }
 
 /* ---- the grid on the progress page ---- */

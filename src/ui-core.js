@@ -377,6 +377,7 @@ let RC_PICK = null;
 function closeModal() {
   RE_ADDFOOD = false; const m = $('#modal');
   if (m && m.querySelector('.scan-m')) scanStop();
+  if (m && m.querySelector('.pp-cam')) { ppCamStop(); PPC = null; }
   if (m) m.remove(); backDrop('modal');
 }
 

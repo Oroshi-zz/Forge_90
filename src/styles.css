@@ -506,6 +506,24 @@ details ol li { margin: 3px 0; }
 #tip .tl { list-style: none; padding: 0; margin: 8px 0 0; } #tip .tl li { display: flex; gap: 8px; padding: 3px 0; border-top: 1px solid var(--line); }
 #tip .tl li span { color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
 /* ---------- progress pictures ---------- */
+.pp-cell { white-space: nowrap; }
+.pp-cell .pp-thumb, .pp-cell .pp-add { display: inline-block; vertical-align: middle; }
+.pp-cell .pp-thumb + .pp-add { margin-left: 6px; }
+.pp-add { width: 26px; height: 26px; padding: 0; border-radius: 7px; border: 1px dashed var(--line-2);
+  background: var(--surface-2); color: var(--muted); cursor: pointer; }
+.pp-add:hover { border-color: var(--accent); color: var(--text); border-style: solid; }
+.pp-add:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pp-add svg { width: 13px; height: 13px; }
+
+.pp-cam-view { position: relative; border-radius: var(--r-sm); overflow: hidden; background: #000;
+  aspect-ratio: 3 / 4; max-height: 56vh; display: flex; align-items: center; justify-content: center; }
+.pp-cam-view video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pp-cam-view video.mir { transform: scaleX(-1); }
+.pp-cam-msg { position: absolute; left: 10px; right: 10px; bottom: 10px; padding: 7px 10px; border-radius: 8px;
+  background: rgba(0, 0, 0, .66); color: #fff; font-size: 12px; text-align: center; }
+.pp-flip { position: absolute; top: 8px; right: 8px; background: rgba(0, 0, 0, .55); color: #fff; }
+
+
 .pp-cell { width: 1%; white-space: nowrap; }
 .pp-thumb { position: relative; display: block; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line-2);
   border-radius: 7px; overflow: hidden; background: var(--surface-2); cursor: pointer; }
