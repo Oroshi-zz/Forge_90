@@ -199,10 +199,66 @@ function ppRender() {
   modal(`<div class="pp-view"><div class="row"><h2 style="flex:1">${esc(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }))}</h2>
       <button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
     <div class="tiny muted" style="margin:-6px 0 10px">${label}${wOn(d)}</div>
-    <div class="pp-stage"><img src="${ppUrl(d, pose, t)}" alt="${esc(label)} progress picture from ${esc(fmtDate(d))}"></div>${nav}</div>`, 'pp-modal', true);
+    <div class="pp-stage"><img src="${ppUrl(d, pose, t)}" alt="${esc(label)} progress picture from ${esc(fmtDate(d))}"></div>${nav}
+    <div class="row" style="justify-content:flex-end;margin-top:10px">
+      <button type="button" class="btn sm ghost danger" data-act="pp-view-del" aria-label="Delete the ${esc(label.toLowerCase())} picture from ${esc(fmtDate(d))}">${icon('trash')}Delete this picture</button></div></div>`, 'pp-modal', true);
 }
 const wOn = d => { const x = S.weights.find(w => w.d === d); return x && x.w ? ` · ${wTxt(x.w, 1)}${x.bf != null && x.bf !== '' ? ' · ' + fmt(x.bf, 1) + '%' : ''}` : ''; };
 function ppStep(n) { if (!PPV) return; PPV.i = (PPV.i + n + PPV.have.length) % PPV.have.length; ppRender(); }
+
+/* Removing several at once: the files go in parallel, then state is written once and the
+   page re-rendered once, rather than a save and a repaint per picture. */
+async function ppRemoveMany(pairs) {
+  if (!pairs.length) return;
+  await Promise.all(pairs.map(([d, pose]) =>
+    api('DELETE', `/api/progress-pic/${encodeURIComponent(d)}/${pose}`).catch(() => {})));
+  pairs.forEach(([d, pose]) => {
+    const x = S.weights.find(w => w.d === d);
+    if (x && x.pics) { delete x.pics[pose]; if (!Object.keys(x.pics).length) delete x.pics; }
+  });
+  saveState();
+  toast(`${pairs.length} picture${pairs.length === 1 ? '' : 's'} deleted`);
+  render();
+}
+/* Delete the picture being viewed, then stay on the next one of that day if there is one. */
+async function ppViewDelete() {
+  if (!PPV) return;
+  const { d, i, have } = PPV; const pose = have[i];
+  const rest = have.filter(k => k !== pose);
+  PPV = rest.length ? { d, i: Math.min(i, rest.length - 1), have: rest } : null;
+  if (PPV) ppRender(); else closeModal();
+  await ppRemoveMany([[d, pose]]);
+  if (PPV) ppRender();
+}
+
+/* ---- multi-select ---- */
+/* Module-level rather than on UI: the selection is a mode you are in, not a preference to
+   keep, and it is cleared the moment you leave the progress page. */
+let PPE = null;
+const ppSelKey = (d, pose) => d + '|' + pose;
+const ppEditOn = () => !!PPE;
+const ppSelected = (d, pose) => !!PPE && PPE.sel.has(ppSelKey(d, pose));
+function ppEditToggle() { PPE = PPE ? null : { sel: new Set() }; render(); }
+function ppEditExit() { if (PPE) { PPE = null; return true; } return false; }
+function ppSelToggle(d, pose) {
+  if (!PPE) return;
+  const k = ppSelKey(d, pose);
+  if (PPE.sel.has(k)) PPE.sel.delete(k); else PPE.sel.add(k);
+  render();
+}
+function ppSelAll() {
+  if (!PPE) return;
+  const all = [];
+  sortedWeights().forEach(x => PP_POSES.forEach(([k]) => { if (ppOf(x.d)[k]) all.push(ppSelKey(x.d, k)); }));
+  PPE.sel = PPE.sel.size === all.length ? new Set() : new Set(all);
+  render();
+}
+async function ppSelDelete() {
+  if (!PPE || !PPE.sel.size) return;
+  const pairs = [...PPE.sel].map(k => k.split('|'));
+  PPE = null;
+  await ppRemoveMany(pairs);
+}
 
 /* ---- thumbnail shown on a weigh-in row ---- */
 function ppThumb(d) {
@@ -211,6 +267,23 @@ function ppThumb(d) {
   return `<button type="button" class="pp-thumb" data-act="pp-open" data-d="${d}" title="${n} progress picture${n === 1 ? '' : 's'} from ${esc(fmtDate(d))}" aria-label="Open the ${esc(fmtDate(d))} progress picture${n === 1 ? '' : 's'}">
     <img src="${ppUrl(d, pose, t)}" alt="" loading="lazy" onerror="this.remove()">${n > 1 ? `<span class="pp-n">${n}</span>` : ''}</button>`;
 }
+/* ---- offer pictures right after a weigh-in is logged ---- */
+/* Only for a weigh-in that has none, only when uploads are on, and only while the person
+   still wants to be asked — a prompt that fires on every weigh-in needs its own off switch. */
+const ppAskOn = () => S.settings.ppPrompt !== false;
+function ppAsk(d) {
+  if (!ppUploadsOn() || !ppAskOn() || ppCount(d)) return;
+  modal(`<div class="pp-ask"><div class="row"><h2 style="flex:1">Add progress pictures?</h2>
+      <button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
+    <div class="tiny muted" style="margin:2px 0 12px">${esc(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric' }))}${wOn(d)}</div>
+    <p class="small sub" style="margin:0 0 14px">The scale moves slowly and in both directions. A photo every few
+      weeks, in the same light and the same spot, shows what the number can’t.</p>
+    <button type="button" class="btn primary block big" data-act="pp-ask-yes" data-d="${d}">${icon('scan')}Take a picture</button>
+    <div class="row" style="gap:8px;margin-top:10px">
+      <button type="button" class="btn ghost" style="flex:1" data-act="close-modal">Not now</button>
+      <button type="button" class="btn ghost" style="flex:1" data-act="pp-ask-never">Don’t ask again</button></div></div>`, 'sm pp-ask-modal', true);
+}
+
 /* ---- add-picture button, shown on every weigh-in row ---- */
 function ppAddBtn(d) {
   if (!ppUploadsOn() || !ppFree(d)) return '';
@@ -241,21 +314,39 @@ function ppGridHTML() {
   if (!ppServer()) return '';
   const days = sortedWeights().filter(x => ppCount(x.d)).reverse();
   const shots = days.reduce((a, x) => a + ppCount(x.d), 0);
+  const edit = ppEditOn() && days.length > 0;
   const body = days.length
-    ? `<div class="pp-grid">${days.map(x => {
+    ? `<div class="pp-grid${edit ? ' editing' : ''}">${days.map(x => {
         const p = ppOf(x.d);
         return `<figure class="pp-day">
-          <div class="pp-day-shots">${PP_POSES.filter(([k]) => p[k]).map(([k, lbl]) =>
-            `<button type="button" class="pp-img" data-act="pp-open" data-d="${x.d}" data-pose="${k}" aria-label="${lbl} picture from ${esc(fmtDate(x.d))}">
-              <img src="${ppUrl(x.d, k, p[k])}" alt="" loading="lazy" onerror="this.remove()"><span class="pp-pose">${lbl}</span></button>`).join('')}</div>
+          <div class="pp-day-shots">${PP_POSES.filter(([k]) => p[k]).map(([k, lbl]) => {
+            const on = ppSelected(x.d, k);
+            return `<button type="button" class="pp-img${on ? ' sel' : ''}" data-act="${edit ? 'pp-sel' : 'pp-open'}" data-d="${x.d}" data-pose="${k}"
+              ${edit ? `role="checkbox" aria-checked="${on}"` : ''} aria-label="${edit ? (on ? 'Deselect' : 'Select') : 'View'} the ${lbl.toLowerCase()} picture from ${esc(fmtDate(x.d))}">
+              <img src="${ppUrl(x.d, k, p[k])}" alt="" loading="lazy" onerror="this.remove()"><span class="pp-pose">${lbl}</span>
+              ${edit ? `<span class="pp-tick">${on ? icon('check') : ''}</span>` : ''}</button>`; }).join('')}</div>
           <figcaption><b>${esc(fmtDate(x.d, { month: 'short', day: 'numeric', year: 'numeric' }))}</b>
             <span class="tiny muted">${wTxt(x.w, 1)}${x.bf != null && x.bf !== '' ? ' · ' + fmt(x.bf, 1) + '%' : ''}</span></figcaption>
         </figure>`; }).join('')}</div>`
     : `<div class="empty-state">${icon('scale')}<div>No progress pictures yet.</div>
        <div class="tiny muted">Add one when you log a weigh-in — up to three poses a day.</div></div>`;
-  return `<section class="card ${collCls('ppics')}" data-coll="ppics"><div class="card-h">${collHead('ppics', 'Progress pictures',
-    `<span class="muted small">${shots} picture${shots === 1 ? '' : 's'} over ${days.length} day${days.length === 1 ? '' : 's'}</span>`)}</div>
-    <div class="coll-body">${body}</div></section>`;
+  const ask = ppUploadsOn()
+    ? `<label class="set-tog" style="margin-top:14px"><span><b class="small">Ask when I log a weight</b>
+        <span class="tiny muted">${ppAskOn() ? 'A weigh-in with no pictures offers to take one.' : 'Off — log a weight without being asked. The + on any weigh-in still adds one.'}</span></span>
+        ${sw(ppAskOn(), 'pp-ask-tog')}</label>`
+    : '';
+  const n = edit ? PPE.sel.size : 0;
+  const bar = edit
+    ? `<div class="pp-editbar"><b class="small">${n ? `${n} selected` : 'Tap pictures to select them'}</b>
+        <div class="row" style="gap:8px">
+          <button type="button" class="btn sm ghost" data-act="pp-sel-all">${n === shots ? 'Select none' : 'Select all'}</button>
+          <button type="button" class="btn sm danger" data-act="pp-sel-del" ${n ? '' : 'disabled'}>${icon('trash')}Delete${n ? ` ${n}` : ''}</button>
+          <button type="button" class="btn sm" data-act="pp-edit">Done</button></div></div>`
+    : '';
+  const head = `<span class="muted small">${shots} picture${shots === 1 ? '' : 's'} over ${days.length} day${days.length === 1 ? '' : 's'}</span>`
+    + (days.length && !edit ? `<button type="button" class="btn sm ghost" data-act="pp-edit">${icon('edit')}Edit</button>` : '');
+  return `<section class="card ${collCls('ppics')}" data-coll="ppics"><div class="card-h">${collHead('ppics', 'Progress pictures', head)}</div>
+    <div class="coll-body">${bar}${body}${edit ? '' : ask}</div></section>`;
 }
 
 /* ---------------- weigh-in sheet ---------------- */
@@ -282,7 +373,8 @@ function wsSave() {
   const prev = S.weights.find(x => x.d === WS.d);
   const rec = { d: WS.d, w, bf }; if (prev && prev.pics) rec.pics = prev.pics;   /* keep any pictures already attached */
   S.weights = S.weights.filter(x => x.d !== WS.d); S.weights.push(rec); saveState(); closeModal(); render();
-  const t = latestStats(); toast(`Logged ${wTxt(w, 1)}${bf != null ? ' · ' + bf + '%' : ''} — targets now ${targetsFor(t.w, t.bf, true).kcal}/${targetsFor(t.w, t.bf, false).kcal} kcal`); WS = null;
+  const t = latestStats(); toast(`Logged ${wTxt(w, 1)}${bf != null ? ' · ' + bf + '%' : ''} — targets now ${targetsFor(t.w, t.bf, true).kcal}/${targetsFor(t.w, t.bf, false).kcal} kcal`);
+  const d = WS.d; WS = null; ppAsk(d);
 }
 
 /* ---------------- meal swap sheet: searchable, favorites first, macros shown ---------------- */

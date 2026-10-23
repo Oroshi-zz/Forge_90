@@ -692,6 +692,7 @@ function render() {
     case 'admin': html = viewAdmin(); break;
     default: html = phone ? viewToday(todayISO()) : viewDashboard();
   }
+  if (page !== 'progress') ppEditExit();   /* the selection is a mode, not a setting */
   if (phone && hubOf(page)) html = hubSegHTML(page) + html;
   $('#view').innerHTML = html; sideFoot(); hideTip(); fpAfter(); pantryNavBadge(); tabbarRender(page);
   if (page === 'progress') progressCharts();
@@ -755,6 +756,14 @@ const ACT = {
   'pp-open': el => ppOpen(el.dataset.d, el.dataset.pose || null),
   'pp-del': el => ppRemove(el.dataset.d, el.dataset.pose),
   'pp-pick': el => ppPick(el.dataset.d, el.dataset.pose || null),
+  'pp-view-del': () => ppViewDelete(),
+  'pp-edit': () => ppEditToggle(),
+  'pp-sel': el => ppSelToggle(el.dataset.d, el.dataset.pose),
+  'pp-sel-all': () => ppSelAll(),
+  'pp-sel-del': () => ppSelDelete(),
+  'pp-ask-yes': el => { const d = el.dataset.d; closeModal(); ppPick(d); },
+  'pp-ask-never': () => { S.settings.ppPrompt = false; saveState(); closeModal(); toast('I won\u2019t ask again \u2014 turn it back on under Progress pictures'); },
+  'pp-ask-tog': () => { S.settings.ppPrompt = !ppAskOn(); saveState(); render(); toast(ppAskOn() ? 'You\u2019ll be asked after each weigh-in' : 'You won\u2019t be asked again'); },
   'pp-shoot': () => ppShoot(),
   'pp-flip': () => ppFlip(),
   'pp-pose': el => { if (PPC) ppPick(PPC.d, el.dataset.v); },

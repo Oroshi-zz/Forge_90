@@ -556,6 +556,16 @@ details ol li { margin: 3px 0; }
 .pp-day-shots .pp-img:hover { border-color: var(--accent); }
 .pp-pose { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 0; font-size: 9px; font-weight: 700;
   letter-spacing: .05em; text-transform: uppercase; color: #fff; background: linear-gradient(transparent, rgba(0, 0, 0, .7)); }
+.pp-grid.editing .pp-img { cursor: pointer; }
+.pp-day-shots .pp-img.sel { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+.pp-tick { position: absolute; top: 5px; right: 5px; width: 19px; height: 19px; border-radius: 50%;
+  border: 2px solid #fff; background: rgba(0, 0, 0, .42); display: flex; align-items: center; justify-content: center; }
+.pp-img.sel .pp-tick { background: var(--accent); border-color: var(--accent); }
+.pp-tick svg { width: 12px; height: 12px; color: var(--accent-ink); }
+.pp-editbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
+  margin: 0 0 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-sm);
+  background: var(--surface-2); }
+.pp-view .btn.danger svg { width: 14px; height: 14px; }
 .pp-day figcaption { display: flex; flex-direction: column; gap: 1px; padding: 7px 2px 0; font-size: 12px; }
 
 .pp-modal { max-width: min(92vw, 560px); }
