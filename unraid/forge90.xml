@@ -9,8 +9,25 @@
   <Privileged>false</Privileged>
   <Support>https://github.com/Oroshi-zz/Forge_90/issues</Support>
   <Project>https://github.com/Oroshi-zz/Forge_90</Project>
-  <Overview>FORGE 90 is a self-hosted training and meal planner. It builds a 90-day training program, and plans every meal. Workout mode walks you through a session one exercise at a time with a rest timer. It ships with 144 exercises, 141 recipes and 675 foods. Add your own, scan a barcode, search Open Food Facts by name, or import straight from a web link or your Mealie server. The week's shopping list builds itself by aisle, and the pantry keeps you from buying what is already in the cupboard. Recipes and scanned foods are shared by everyone with an account on your server, so the library grows for the whole house. Plans, weigh-ins and training logs stay private to each person. The whole app works on a phone browser or desktop. Default login: admin@forge90.local / forge90-admin (or your ADMIN_EMAIL / ADMIN_PASSWORD).</Overview>
+  <Overview>FORGE 90 is a self-hosted training and meal planner. It builds a 90-day training program, and plans every meal. Workout mode walks you through a session one exercise at a time with a rest timer. It ships with 187 exercises, 141 recipes and 675 foods. Add your own, scan a barcode, search Open Food Facts by name, or import straight from a web link or your Mealie server. The week's shopping list builds itself by aisle, and the pantry keeps you from buying what is already in the cupboard. Recipes and scanned foods are shared by everyone with an account on your server, so the library grows for the whole house. Plans, weigh-ins and training logs stay private to each person. The whole app works on a phone browser or desktop. Default login: admin@forge90.local / forge90-admin (or your ADMIN_EMAIL / ADMIN_PASSWORD).</Overview>
   <Date>2026-10-23</Date>
+  <Changes>
+### 1.3.0
+- Receipt scanning
+- User Progress pictures
+- Any food can be turned into a recipe, and individual foods can be added straight to the calendar.
+- The recipe list can filter to what's in your pantry.
+- The pantry was moved to a tab inside Foods and recipes.
+- Exercises within a session are ordered so movements sharing equipment sit together.
+- The exercise library, foods table and sessions are were restructured to browse by tab instead of one long page.
+- The muscle map figures were redrawn.
+
+### 1.2.1
+- Added Metric units.
+- Added custom cardio.
+- Added 18 bodyweight and kettlebell exercises.
+- Added reduced visual effects toggle for browsers without hardware acceleration.
+</Changes>
   <Category>Productivity: Tools:Utilities</Category>
   <WebUI>http://[IP]:[PORT:8090]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/Oroshi-zz/Forge_90/main/unraid/forge90.xml</TemplateURL>
