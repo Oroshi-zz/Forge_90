@@ -82,7 +82,7 @@ function swapPick(id) {
 /* ---------- collapsible sections (Workout plan) ---------- */
 /* Read-once sections start shut. The stored value is explicit (1 shut, 0 open) so opening one is
    remembered rather than falling back to the default. */
-const COLL_SHUT = { how: 1, cycle2: 1 };
+const COLL_SHUT = { cycle2: 1 };
 const collOpen = k => { const v = (UI.coll || {})[k]; return v === undefined ? !COLL_SHUT[k] : !v; };
 function collHead(k, title, extra = '') {
   const open = collOpen(k);

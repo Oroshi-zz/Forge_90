@@ -79,8 +79,8 @@ function viewWorkouts() {
     <section class="${collCls('cycle2')}" data-coll="cycle2"><div class="coll-row">${collHead('cycle2', 'Cycle 2 onward · repeats every 13 weeks', `<span class="pill">Next: ${fmtDate(cycleStartDate(2), { month: 'short', day: 'numeric', year: 'numeric' })}</span>`)}</div><div class="coll-body">
     <div class="grid g4">${contCards}</div>
     <div class="note" style="margin-top:12px">${icon('loop')}<span>Legs stay at full frequency from here on. The exercise rotation keeps counting week by week, so each new cycle pairs the variations differently. The calendar adds the next cycle automatically; the diet keeps adjusting from your weigh-ins and switches to maintenance when you hit your goal (changeable in Settings).</span></div></div></section><div style="height:16px"></div>
-    <div class="g-half">
-      <div class="card ${collCls('how')}" data-coll="how"><div class="card-h">${collHead('how', 'How the program works')}</div><div class="coll-body">
+    <section class="${collCls('how')}" data-coll="how"><div class="coll-row">${collHead('how', 'How the program works')}</div><div class="coll-body"><div class="g-half">
+      <div class="card">
         <div class="small" style="display:grid;gap:10px">
           <div class="note">${icon('pull')}<span><b>Push / Pull / Legs.</b> Push days train chest, shoulders and triceps; pull days train back, rear delts and biceps; legs get their own day. Sessions are handed out in a rolling order across your training days, so it works with any number of days.</span></div>
           <div class="note">${icon('dumbbell')}<span><b>Isolation-first.</b> Machines, cables and dumbbells carry most of the volume. Compound lifts appear only in the “strength” slot of a session (stable machine/DB versions), which keeps joint stress and fatigue low while you’re in a calorie deficit.</span></div>
@@ -89,8 +89,8 @@ function viewWorkouts() {
           <div class="note">${icon('flame')}<span><b>Effort waves.</b> RIR drops across each 4-week phase, then resets as the next phase changes the split. Every 13th week is a deload plus PR tests on the strength slots.</span></div>
         </div>
         <table class="tbl" style="margin-top:12px"><thead><tr><th>Week of phase</th><th>1</th><th>2</th><th>3</th><th>4</th></tr></thead><tbody>
-          <tr><td>Hypertrophy sets (H)</td>${RIR.H.map(v => `<td>RIR ${v}</td>`).join('')}</tr><tr><td>Strength sets (S)</td>${RIR.S.map(v => `<td>RIR ${v}</td>`).join('')}</tr></tbody></table></div></div>
-      <div class="card ${collCls('sets')}" data-coll="sets"><div class="card-h">${collHead('sets', 'Direct weekly sets by muscle', `<span class="pill">${S.settings.trainDays.length} days / week</span>`)}</div><div class="coll-body"><div class="small sub" style="margin:-6px 0 10px">Average sets per week with your current training days. Legs stay low in month 1, then rise to their full share.</div><div class="scroll-x">${heat}</div></div></div></div>
+          <tr><td>Hypertrophy sets (H)</td>${RIR.H.map(v => `<td>RIR ${v}</td>`).join('')}</tr><tr><td>Strength sets (S)</td>${RIR.S.map(v => `<td>RIR ${v}</td>`).join('')}</tr></tbody></table></div>
+      <div class="card"><div class="card-h"><h2>Direct weekly sets by muscle</h2><span class="pill">${S.settings.trainDays.length} days / week</span></div><div class="small sub" style="margin:-6px 0 10px">Average sets per week with your current training days. Legs stay low in month 1, then rise to their full share.</div><div class="scroll-x">${heat}</div></div></div></div></section>
     <div style="height:16px"></div>
     ${libCard}
     <div style="height:16px"></div>
