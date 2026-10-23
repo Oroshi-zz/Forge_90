@@ -385,7 +385,7 @@ function viewProgress() {
   const board = logged.map(ex => { const h = exerciseHistory(ex); const best = h.reduce((a, x) => x.best > a.best ? x : a, h[0]); const first = h[0];
     return { ex, h, best, first, gain: best.best - first.best }; }).sort((a, b) => EX[a.ex].group.localeCompare(EX[b.ex].group) || EX[a.ex].name.localeCompare(EX[b.ex].name));
   const hist = ws.slice().reverse().map(x => { const lbm = x.bf != null && x.bf !== '' ? x.w * (1 - x.bf / 100) : null;
-    return `<tr><td>${fmtDate(x.d, { weekday: 'short', month: 'short', day: 'numeric', year: phone ? undefined : 'numeric' })}</td><td class="num"><b>${fmt(toW(x.w), 1)}</b> ${wU()}</td><td class="num">${x.bf != null && x.bf !== '' ? fmt(x.bf, 1) + '%' : '<span class="muted">—</span>'}</td><td class="num">${lbm ? wTxt(lbm, 1) : '<span class="muted">—</span>'}</td><td style="text-align:right"><button class="btn sm ghost danger" data-act="del-weight" data-d="${x.d}" aria-label="Delete the ${esc(fmtDate(x.d))} weigh-in">${icon('trash')}</button></td></tr>`; }).join('');
+    return `<tr><td>${fmtDate(x.d, { weekday: 'short', month: 'short', day: 'numeric', year: phone ? undefined : 'numeric' })}</td><td class="num"><b>${fmt(toW(x.w), 1)}</b> ${wU()}</td><td class="num">${x.bf != null && x.bf !== '' ? fmt(x.bf, 1) + '%' : '<span class="muted">—</span>'}</td><td class="num">${lbm ? wTxt(lbm, 1) : '<span class="muted">—</span>'}</td><td class="pp-cell">${ppThumb(x.d)}</td><td style="text-align:right"><button class="btn sm ghost danger" data-act="del-weight" data-d="${x.d}" aria-label="Delete the ${esc(fmtDate(x.d))} weigh-in">${icon('trash')}</button></td></tr>`; }).join('');
   const sel = logged.length ? `<select class="inp" data-input="pr-ex" aria-label="Exercise">${['Chest', 'Back', 'Shoulders', 'Biceps', 'Triceps', 'Quads', 'Hamstrings', 'Glutes', 'Calves', 'Core'].map(g => { const xs = logged.filter(e => EX[e].group === g); return xs.length ? `<optgroup label="${g}">${xs.map(e => `<option value="${e}" ${UI.prEx === e ? 'selected' : ''}>${esc(EX[e].name)}</option>`).join('')}</optgroup>` : ''; }).join('')}</select>` : '';
   const sessRows = UI.prEx ? exerciseHistory(UI.prEx).slice().reverse().map(h => `<tr><td>${fmtDate(h.d)}</td><td>${h.sets.map(s => `${loadTxt(s.w)}×${s.r}`).join(', ')}</td><td class="num">${isBW(UI.prEx) ? h.best + ' reps' : fmt(toW(h.best))}</td><td class="num">${fmt(toW(h.vol))}</td><td>${h.pr ? `<span class="prb">${icon('trophy')}PR</span>` : ''}</td></tr>`).join('') : '';
   const exOpts = Object.values(EX).sort((a, b) => a.group.localeCompare(b.group) || a.name.localeCompare(b.name)).map(e => `<option value="${e.id}">${e.group} — ${esc(e.name)}</option>`).join('');
@@ -425,7 +425,8 @@ function viewProgress() {
           <div class="field"><label>Date</label><input class="inp" type="date" name="d" value="${todayISO()}"></div><div class="field"><label>Weight (${wU()})</label><input class="inp" type="number" step="${isMetric() ? 0.5 : 1}" name="w" required></div>
           <div class="field"><label>Reps</label><input class="inp" type="number" name="r" min="1" required></div><div class="field" style="justify-content:flex-end"><button class="btn primary" type="submit">${icon('plus')}Add set</button></div></form></div></div>
     <div style="height:16px"></div>
-    <div class="card"><div class="card-h"><h2>Weigh-in history</h2><span class="muted small">${ws.length} entries</span></div>${ws.length ? `<div class="scroll-x" style="max-height:340px;overflow-y:auto"><table class="tbl"><thead><tr><th>Date</th><th>Weight</th><th>Body fat</th><th>Lean mass</th><th></th></tr></thead><tbody>${hist}</tbody></table></div>` : `<div class="empty-state">${icon('scale')}<div>No weigh-ins yet.</div></div>`}</div>`;
+    ${ppGridHTML()}
+    <div class="card"><div class="card-h"><h2>Weigh-in history</h2><span class="muted small">${ws.length} entries</span></div>${ws.length ? `<div class="scroll-x" style="max-height:340px;overflow-y:auto"><table class="tbl"><thead><tr><th>Date</th><th>Weight</th><th>Body fat</th><th>Lean mass</th><th>Pictures</th><th></th></tr></thead><tbody>${hist}</tbody></table></div>` : `<div class="empty-state">${icon('scale')}<div>No weigh-ins yet.</div></div>`}</div>`;
 }
 function progressCharts() {
   const ws = sortedWeights(); const st = S.settings; const R = progRange(); const phone = isPhone();
@@ -750,7 +751,12 @@ const ACT = {
     toast(v === 'bulk' ? 'Building muscle — calories, macros and portions updated' : v === 'maintain' ? 'Maintenance — calories held level' : 'Losing fat — deficit back on'); },
   'apply-trend': el => { S.settings.kcalAdjust = (+S.settings.kcalAdjust || 0) + (+el.dataset.delta); saveState(); render(); toast(`Calories adjusted ${+el.dataset.delta > 0 ? '+' : ''}${el.dataset.delta} kcal/day`); },
   'pr-range': el => { UI.prRange = el.dataset.v === '14' ? '14' : 'all'; saveUI(); render(); },
-  'del-weight': el => { S.weights = S.weights.filter(x => x.d !== el.dataset.d); saveState(); render(); toast('Weigh-in deleted'); },
+  'del-weight': el => { const d = el.dataset.d; ppDropDate(d); S.weights = S.weights.filter(x => x.d !== d); saveState(); render(); toast('Weigh-in deleted'); },
+  'pp-open': el => ppOpen(el.dataset.d, el.dataset.pose || null),
+  'pp-del': el => ppRemove(el.dataset.d, el.dataset.pose),
+  'pp-prev': () => ppStep(-1),
+  'pp-next': () => ppStep(1),
+  'pp-go': el => { if (PPV) { PPV.i = +el.dataset.v; ppRender(); } },
   theme: el => { S.settings.theme = el.dataset.v; saveState(); applyTheme(); render(); },
   accent: el => { S.settings.accent = el.dataset.v; saveState(); applyTheme(); bgCurrent = null; render(); },
   'theme-toggle': () => { S.settings.theme = effTheme() === 'light' ? 'dark' : 'light'; saveState(); applyTheme(); render(); },
@@ -821,6 +827,7 @@ document.addEventListener('change', e => {
     S.settings.cardio = Object.assign(c, { types: CARDIO_IDS.filter(id => set.has(id)) });
     styleApply('Cardio kinds updated');
   }
+  else if (inp === 'pp-file') { const f = el.files && el.files[0]; el.value = ''; if (f) ppUpload(el.dataset.d, el.dataset.pose, f); }
   else if (inp === 'bg-photos') { S.settings.bgPhotos = el.checked; saveState(); bgCurrent = null; applyBackground(document.body.dataset.sec || 'settings'); render(); toast(el.checked ? 'Background photos on' : 'Background photos off'); }
   else if (inp === 'bg-dim') { S.settings.bgDim = +(1 - el.value).toFixed(2); saveState(); document.documentElement.style.setProperty('--dim', S.settings.bgDim); }
 

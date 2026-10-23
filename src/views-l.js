@@ -44,6 +44,128 @@ function plusSheet() {
       ${b('dumbbell', woL, `data-act="wo-open" data-d="${t}"`)}${c ? b('scan', 'Gym card', `data-act="gym-full" data-id="${c.id}"`) : b('scan', 'Add gym card', 'data-act="gym-add"')}${canScan() ? b('box', 'Scan into pantry', 'data-act="scan" data-v="pantry"') : b('box', 'Add to pantry', 'data-act="pan-add"')}</div></div>`, 'sm plus-modal', true);
 }
 
+/* ---------------- progress pictures ---------------- */
+/* Up to three poses per weigh-in. The bytes live on the server under the signed-in account;
+   all that is kept in state is the filename token, on the weigh-in itself, so a picture
+   travels with the weigh-in it belongs to and is deleted with it. */
+const PP_POSES = [['front', 'Front'], ['side', 'Side'], ['back', 'Back']];
+const PP_MAX_BYTES = 500 * 1024;
+const ppServer = () => AUTH.mode === 'server';
+/* The administrator can turn uploads off for the whole server. Pictures already taken stay
+   visible and removable — switching the feature off stops new ones, it does not hide the old. */
+const ppUploadsOn = () => ppServer() && !(AUTH.config && AUTH.config.progressPics === false);
+const ppOf = d => { const x = S.weights.find(w => w.d === d); return (x && x.pics) || {}; };
+const ppCount = d => PP_POSES.filter(([k]) => ppOf(d)[k]).length;
+const ppUrl = (d, pose, t) => `/api/progress-pic/${encodeURIComponent(d)}/${pose}?t=${encodeURIComponent(t)}`;
+const ppAny = d => { const p = ppOf(d); const hit = PP_POSES.find(([k]) => p[k]); return hit ? hit[0] : null; };
+
+function ppResize(file) {
+  return resizeImageFile(file, 1280, 0.78).then(url => {
+    const bytes = Math.round((url.length - (url.indexOf(',') + 1)) * 3 / 4);
+    if (bytes > PP_MAX_BYTES) throw new Error(`That picture is still ${fmt(bytes / 1024)} KB after resizing (500 KB max). Try a smaller photo.`);
+    return url;
+  });
+}
+/* The weigh-in may not exist yet when a picture is added from the sheet, so it is created
+   from whatever the sheet currently holds rather than silently dropping the upload. */
+function ppRecord(d) {
+  let x = S.weights.find(w => w.d === d);
+  if (!x) { x = { d, w: Math.round(frW(WS ? WS.v : +S.settings.startWeight) * 100) / 100, bf: null }; S.weights.push(x); }
+  if (!x.pics) x.pics = {};
+  return x;
+}
+async function ppUpload(d, pose, file) {
+  if (!ppServer()) { toast('Progress pictures need the FORGE 90 server.'); return; }
+  if (!ppUploadsOn()) { toast('Progress pictures are turned off for this server.'); return; }
+  if (!file) return;
+  try {
+    const data = await ppResize(file);
+    const r = await api('PUT', `/api/progress-pic/${encodeURIComponent(d)}/${pose}`, { data });
+    ppRecord(d).pics[pose] = r.token; saveState();
+    toast(`${PP_POSES.find(x => x[0] === pose)[1]} picture saved`);
+  } catch (e) { toast(e.message || 'That picture could not be saved.'); }
+  if (WS) renderWeigh(); else render();
+}
+async function ppRemove(d, pose) {
+  try { await api('DELETE', `/api/progress-pic/${encodeURIComponent(d)}/${pose}`); } catch (e) { }
+  const x = S.weights.find(w => w.d === d);
+  if (x && x.pics) { delete x.pics[pose]; if (!Object.keys(x.pics).length) delete x.pics; saveState(); }
+  toast('Picture removed');
+  if (WS) renderWeigh(); else render();
+}
+/* Called when a weigh-in is deleted so the files do not outlive the row that pointed at them. */
+function ppDropDate(d) { if (ppServer()) api('DELETE', `/api/progress-pic/${encodeURIComponent(d)}`).catch(() => {}); }
+
+/* ---- lightbox ---- */
+let PPV = null;
+function ppOpen(d, pose) {
+  const have = PP_POSES.filter(([k]) => ppOf(d)[k]).map(([k]) => k);
+  if (!have.length) return;
+  PPV = { d, i: Math.max(0, have.indexOf(pose || have[0])), have };
+  ppRender();
+}
+function ppRender() {
+  if (!PPV) return;
+  const { d, i, have } = PPV; const pose = have[i]; const t = ppOf(d)[pose];
+  const label = PP_POSES.find(x => x[0] === pose)[1];
+  const nav = have.length > 1
+    ? `<div class="pp-nav"><button class="btn icon ghost" data-act="pp-prev" aria-label="Previous pose">${icon('left')}</button>
+       <div class="row" style="gap:6px">${have.map((k, n) => `<button type="button" class="chipb ${n === i ? 'on' : ''}" data-act="pp-go" data-v="${n}">${PP_POSES.find(x => x[0] === k)[1]}</button>`).join('')}</div>
+       <button class="btn icon ghost" data-act="pp-next" aria-label="Next pose">${icon('right')}</button></div>`
+    : '';
+  modal(`<div class="pp-view"><div class="row"><h2 style="flex:1">${esc(fmtDate(d, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }))}</h2>
+      <button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>
+    <div class="tiny muted" style="margin:-6px 0 10px">${label}${wOn(d)}</div>
+    <div class="pp-stage"><img src="${ppUrl(d, pose, t)}" alt="${esc(label)} progress picture from ${esc(fmtDate(d))}"></div>${nav}</div>`, 'pp-modal', true);
+}
+const wOn = d => { const x = S.weights.find(w => w.d === d); return x && x.w ? ` · ${wTxt(x.w, 1)}${x.bf != null && x.bf !== '' ? ' · ' + fmt(x.bf, 1) + '%' : ''}` : ''; };
+function ppStep(n) { if (!PPV) return; PPV.i = (PPV.i + n + PPV.have.length) % PPV.have.length; ppRender(); }
+
+/* ---- thumbnail shown on a weigh-in row ---- */
+function ppThumb(d) {
+  const n = ppCount(d); if (!n) return '';
+  const pose = ppAny(d); const t = ppOf(d)[pose];
+  return `<button type="button" class="pp-thumb" data-act="pp-open" data-d="${d}" title="${n} progress picture${n === 1 ? '' : 's'} from ${esc(fmtDate(d))}" aria-label="Open the ${esc(fmtDate(d))} progress picture${n === 1 ? '' : 's'}">
+    <img src="${ppUrl(d, pose, t)}" alt="" loading="lazy" onerror="this.remove()">${n > 1 ? `<span class="pp-n">${n}</span>` : ''}</button>`;
+}
+/* ---- the three slots inside the weigh-in sheet ---- */
+function ppSlotsHTML(d) {
+  if (!ppServer()) return '';
+  const p = ppOf(d); const on = ppUploadsOn();
+  if (!on && !Object.keys(p).length) return '';
+  return `<div class="pp-slots"><div class="tiny muted" style="grid-column:1/-1">${on
+      ? 'Progress pictures (optional) — stored on your server, visible only to you.'
+      : 'Progress pictures are turned off for this server. The ones you already have are kept.'}</div>
+    ${PP_POSES.filter(([k]) => on || p[k]).map(([k, lbl]) => p[k]
+      ? `<div class="pp-slot has"><button type="button" class="pp-img" data-act="pp-open" data-d="${d}" data-pose="${k}" aria-label="View the ${lbl.toLowerCase()} picture"><img src="${ppUrl(d, k, p[k])}" alt="" onerror="this.remove()"></button>
+         <span class="pp-lbl">${lbl}</span><button type="button" class="btn sm ghost danger pp-del" data-act="pp-del" data-d="${d}" data-pose="${k}" aria-label="Remove the ${lbl.toLowerCase()} picture">${icon('trash')}</button></div>`
+      : `<label class="pp-slot add"><input type="file" accept="image/*" data-input="pp-file" data-d="${d}" data-pose="${k}" hidden>${icon('plus')}<span class="pp-lbl">${lbl}</span></label>`).join('')}</div>`;
+}
+
+/* ---- the grid on the progress page ---- */
+/* Newest first, grouped by weigh-in date so the three poses of one day stay together.
+   The strip scrolls on its own rather than stretching the page as the months add up. */
+function ppGridHTML() {
+  if (!ppServer()) return '';
+  const days = sortedWeights().filter(x => ppCount(x.d)).reverse();
+  const shots = days.reduce((a, x) => a + ppCount(x.d), 0);
+  const body = days.length
+    ? `<div class="pp-grid">${days.map(x => {
+        const p = ppOf(x.d);
+        return `<figure class="pp-day">
+          <div class="pp-day-shots">${PP_POSES.filter(([k]) => p[k]).map(([k, lbl]) =>
+            `<button type="button" class="pp-img" data-act="pp-open" data-d="${x.d}" data-pose="${k}" aria-label="${lbl} picture from ${esc(fmtDate(x.d))}">
+              <img src="${ppUrl(x.d, k, p[k])}" alt="" loading="lazy" onerror="this.remove()"><span class="pp-pose">${lbl}</span></button>`).join('')}</div>
+          <figcaption><b>${esc(fmtDate(x.d, { month: 'short', day: 'numeric', year: 'numeric' }))}</b>
+            <span class="tiny muted">${wTxt(x.w, 1)}${x.bf != null && x.bf !== '' ? ' · ' + fmt(x.bf, 1) + '%' : ''}</span></figcaption>
+        </figure>`; }).join('')}</div>`
+    : `<div class="empty-state">${icon('scale')}<div>No progress pictures yet.</div>
+       <div class="tiny muted">Add one when you log a weigh-in — up to three poses a day.</div></div>`;
+  return `<section class="card ${collCls('ppics')}" data-coll="ppics"><div class="card-h">${collHead('ppics', 'Progress pictures',
+    `<span class="muted small">${shots} picture${shots === 1 ? '' : 's'} over ${days.length} day${days.length === 1 ? '' : 's'}</span>`)}</div>
+    <div class="coll-body">${body}</div></section>`;
+}
+
 /* ---------------- weigh-in sheet ---------------- */
 let WS = null;
 function weighSheet(date) {
@@ -58,13 +180,16 @@ function renderWeigh() {
     <div class="row wrap ws-chips">${(isMetric() ? [-0.5, -0.2, 0.2, 0.5] : [-1, -0.5, 0.5, 1]).map(v => `<button type="button" class="btn sm" data-act="ws-step" data-v="${v}">${v > 0 ? '+' : '−'}${Math.abs(v)} ${wU()}</button>`).join('')}</div>
     <div class="grid g2" style="gap:10px"><div class="field"><label for="ws-bf">Body fat % (optional)</label><input id="ws-bf" class="inp" type="number" inputmode="decimal" step="0.1" min="3" max="60" value="${esc(WS.bf)}" placeholder="Estimated if blank" data-input="ws-bf"></div>
       <div class="field"><label for="ws-d">Date</label><input id="ws-d" class="inp" type="date" value="${WS.d}" max="${t}" data-input="ws-d"></div></div>
+    ${ppSlotsHTML(WS.d)}
     <button type="button" class="btn primary block big" id="ws-save" data-act="ws-save">${icon('check')}Save ${fmt(WS.v, 1)} ${wU()}</button></div>`, 'sm ws-modal');
 }
 function wsSync() { const i = $('#ws-v'), b = $('#ws-save'); if (i && document.activeElement !== i) i.value = fmt(WS.v, 1).replace(/,/g, ''); if (b) b.innerHTML = `${icon('check')}Save ${fmt(WS.v, 1)} ${wU()}`; }
 function wsSave() {
   const w = Math.round(frW(WS.v) * 100) / 100; if (!(w >= 80 && w <= 500)) { toast(`Enter a weight between ${wNum(80)} and ${wNum(500)} ${wU()}`); return; }
   const bf = WS.bf === '' || WS.bf == null ? null : +WS.bf; if (bf != null && !(bf >= 3 && bf <= 60)) { toast('Body fat should be between 3 and 60 %'); return; }
-  S.weights = S.weights.filter(x => x.d !== WS.d); S.weights.push({ d: WS.d, w, bf }); saveState(); closeModal(); render();
+  const prev = S.weights.find(x => x.d === WS.d);
+  const rec = { d: WS.d, w, bf }; if (prev && prev.pics) rec.pics = prev.pics;   /* keep any pictures already attached */
+  S.weights = S.weights.filter(x => x.d !== WS.d); S.weights.push(rec); saveState(); closeModal(); render();
   const t = latestStats(); toast(`Logged ${wTxt(w, 1)}${bf != null ? ' · ' + bf + '%' : ''} — targets now ${targetsFor(t.w, t.bf, true).kcal}/${targetsFor(t.w, t.bf, false).kcal} kcal`); WS = null;
 }
 

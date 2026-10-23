@@ -505,6 +505,51 @@ details ol li { margin: 3px 0; }
 #tip .tmm svg { width: 92px; height: 88px; flex: none; }
 #tip .tl { list-style: none; padding: 0; margin: 8px 0 0; } #tip .tl li { display: flex; gap: 8px; padding: 3px 0; border-top: 1px solid var(--line); }
 #tip .tl li span { color: var(--muted); margin-left: auto; font-variant-numeric: tabular-nums; }
+/* ---------- progress pictures ---------- */
+.pp-cell { width: 1%; white-space: nowrap; }
+.pp-thumb { position: relative; display: block; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line-2);
+  border-radius: 7px; overflow: hidden; background: var(--surface-2); cursor: pointer; }
+.pp-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pp-thumb:hover { border-color: var(--accent); }
+.pp-thumb:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pp-thumb .pp-n { position: absolute; right: 1px; bottom: 1px; min-width: 14px; height: 14px; padding: 0 3px;
+  border-radius: 7px; background: rgba(0, 0, 0, .72); color: #fff; font-size: 9.5px; font-weight: 700;
+  line-height: 14px; text-align: center; }
+
+.pp-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 2px; }
+.pp-slot { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; aspect-ratio: 3 / 4; border-radius: var(--r-sm); border: 1px dashed var(--line-2);
+  background: var(--surface-2); color: var(--muted); cursor: pointer; overflow: hidden; }
+.pp-slot.add:hover { border-color: var(--accent); color: var(--text); }
+.pp-slot.add svg { width: 18px; height: 18px; }
+.pp-slot.has { border-style: solid; padding: 0; }
+.pp-lbl { font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.pp-slot.has .pp-lbl { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 0;
+  background: linear-gradient(transparent, rgba(0, 0, 0, .66)); color: #fff; text-align: center; }
+.pp-img { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: pointer; }
+.pp-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pp-del { position: absolute; top: 3px; right: 3px; background: rgba(0, 0, 0, .55); }
+
+.pp-grid { display: flex; gap: 12px; overflow-x: auto; padding: 2px 2px 10px; scroll-snap-type: x proximity; }
+.pp-day { margin: 0; flex: none; scroll-snap-align: start; }
+.pp-day-shots { display: flex; gap: 4px; }
+.pp-day-shots .pp-img { position: relative; width: 92px; aspect-ratio: 3 / 4; border-radius: var(--r-sm);
+  overflow: hidden; border: 1px solid var(--line); }
+.pp-day-shots .pp-img:hover { border-color: var(--accent); }
+.pp-pose { position: absolute; left: 0; right: 0; bottom: 0; padding: 2px 0; font-size: 9px; font-weight: 700;
+  letter-spacing: .05em; text-transform: uppercase; color: #fff; background: linear-gradient(transparent, rgba(0, 0, 0, .7)); }
+.pp-day figcaption { display: flex; flex-direction: column; gap: 1px; padding: 7px 2px 0; font-size: 12px; }
+
+.pp-modal { max-width: min(92vw, 560px); }
+.pp-stage { display: flex; align-items: center; justify-content: center; background: var(--surface-2);
+  border-radius: var(--r-sm); overflow: hidden; }
+.pp-stage img { max-width: 100%; max-height: 68vh; display: block; object-fit: contain; }
+.pp-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+@media (max-width: 560px) {
+  .pp-day-shots .pp-img { width: 76px; }
+  .pp-slots { gap: 6px; }
+}
+
 /* The body sits under a clipped layer of muscle bellies; each belly is a soft top-to-bottom
    gradient with a hairline seam, so the forms read as rounded without any heavy outline. */
 .mm .mm-sil { fill: var(--body); }

@@ -50,7 +50,8 @@ const DEFAULT_SETTINGS = () => ({
   appUrl: ENV.APP_URL || '',
   security: { pwMinLength: 10, pwRequireMix: true, lockThreshold: 5, lockMinutes: 15, autoResetOnLock: true, sessionHours: 12, rememberDays: 30, notifyPasswordChange: true, requireHttps: true },
   email: {},
-  defaults: { theme: 'dark' }
+  defaults: { theme: 'dark' },
+  features: { progressPics: true }
 });
 function deepMerge(base, over) { if (!over || typeof over !== 'object' || Array.isArray(over)) return over === undefined ? base : over; const out = Object.assign({}, base); for (const k of Object.keys(over)) out[k] = (base && typeof base[k] === 'object' && !Array.isArray(base[k])) ? deepMerge(base[k], over[k]) : over[k]; return out; }
 let db = { version: 1, users: [], sessions: [], resets: [], invites: [], syncs: [], audit: [], settings: {} };
@@ -255,7 +256,8 @@ function serveStatic(req, res, pathname) {
 /* ---------- routes ---------- */
 const routes = [];
 const route = (method, pattern, opts, fn) => { if (typeof opts === 'function') { fn = opts; opts = {}; } routes.push({ method, re: new RegExp('^' + pattern.replace(/:(\w+)/g, '(?<$1>[^/]+)') + '$'), opts, fn }); };
-function publicConfig() { const s = db.settings; return { appName: s.appName, defaults: s.defaults, inviteDays: INVITE_DAYS, version: VERSION, pwMinLength: s.security.pwMinLength, pwRequireMix: !!s.security.pwRequireMix, emailReady: emailReady(), resetMinutes: RESET_MINUTES, rememberDays: s.security.rememberDays, bg: bgMap() }; }
+function publicConfig() { const s = db.settings; return { appName: s.appName, defaults: s.defaults, inviteDays: INVITE_DAYS, version: VERSION, pwMinLength: s.security.pwMinLength, pwRequireMix: !!s.security.pwRequireMix, emailReady: emailReady(), resetMinutes: RESET_MINUTES, rememberDays: s.security.rememberDays, bg: bgMap(), progressPics: progressPicsOn() }; }
+const progressPicsOn = () => (db.settings.features || {}).progressPics !== false;
 
 route('GET', '/api/health', async (req, res) => send(res, 200, { ok: true, version: VERSION, uptime: Math.round(process.uptime()) }));
 route('GET', '/api/session', async (req, res, ctx) => send(res, 200, { user: ctx.me ? pubUser(ctx.me.u) : null, config: publicConfig() }));
@@ -385,6 +387,57 @@ route('PUT', '/api/account/avatar', { auth: true, maxBody: 1024 * 1024 }, async 
 route('DELETE', '/api/account/avatar', { auth: true }, async (req, res, ctx) => {
   const u = ctx.me.u; if (u.avatar) { removeAvatar(u); saveDb(); audit('avatar_changed', { userId: u.id, ip: clientIp(req), detail: 'removed' }); }
   send(res, 200, { user: pubUser(u) });
+});
+/* Progress pictures: up to three poses per weigh-in date, private to the account that
+   uploaded them. The index lives in the user's own state blob as weights[].pics, so the
+   only thing stored here is the image; the token in the filename is what the client holds. */
+const PROG_DIR = path.join(DATA, 'progress'); fs.mkdirSync(PROG_DIR, { recursive: true });
+const PROG_MAX = 500 * 1024;
+const PROG_POSES = ['front', 'side', 'back'];
+const safeId = id => String(id).replace(/[^A-Za-z0-9_-]/g, '');
+const progDir = uid => path.join(PROG_DIR, safeId(uid));
+const okDate = d => /^\d{4}-\d{2}-\d{2}$/.test(String(d));
+const okPose = p => PROG_POSES.includes(String(p));
+const okToken = t => /^[a-z0-9]+\.(jpg|png|webp)$/.test(String(t));
+function progSweep(uid, prefix) {
+  let names = []; try { names = fs.readdirSync(progDir(uid)); } catch (e) { return 0; }
+  let n = 0;
+  names.forEach(f => { if (f.startsWith(prefix)) { try { fs.unlinkSync(path.join(progDir(uid), f)); n++; } catch (e) { } } });
+  return n;
+}
+route('PUT', '/api/progress-pic/:date/:pose', { auth: true, maxBody: 1024 * 1024 }, async (req, res, ctx) => {
+  const u = ctx.me.u; const d = ctx.params.date, pose = ctx.params.pose;
+  if (!progressPicsOn()) err(403, 'Progress pictures are turned off for this server.');
+  if (!okDate(d) || !okPose(pose)) err(400, 'Unknown picture slot.');
+  if (limited('ppic:' + u.id, 120, 60 * 60000)) err(429, 'Too many picture uploads. Try again later.');
+  const m = String(ctx.body.data || '').match(/^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/);
+  if (!m) err(400, 'Upload a JPEG, PNG or WebP image.');
+  const buf = Buffer.from(m[2], 'base64'); if (!buf.length) err(400, 'That image is empty.');
+  if (buf.length > PROG_MAX) err(413, 'That picture is too large (500 KB max).');
+  const ext = imageExt(buf); if (!ext) err(400, 'That file isn’t a JPEG, PNG or WebP image.');
+  fs.mkdirSync(progDir(u.id), { recursive: true });
+  progSweep(u.id, `${d}-${pose}-`);
+  const token = `${Date.now().toString(36)}.${ext}`;
+  writeAtomic(path.join(progDir(u.id), `${d}-${pose}-${token}`), buf);
+  send(res, 200, { token });
+});
+route('DELETE', '/api/progress-pic/:date/:pose', { auth: true }, async (req, res, ctx) => {
+  const d = ctx.params.date, pose = ctx.params.pose;
+  if (!okDate(d) || !okPose(pose)) err(400, 'Unknown picture slot.');
+  send(res, 200, { removed: progSweep(ctx.me.u.id, `${d}-${pose}-`) });
+});
+route('DELETE', '/api/progress-pic/:date', { auth: true }, async (req, res, ctx) => {
+  const d = ctx.params.date; if (!okDate(d)) err(400, 'Unknown date.');
+  send(res, 200, { removed: progSweep(ctx.me.u.id, `${d}-`) });
+});
+route('GET', '/api/progress-pic/:date/:pose', { auth: true }, async (req, res, ctx) => {
+  const d = ctx.params.date, pose = ctx.params.pose, t = String(ctx.query.t || '');
+  if (!okDate(d) || !okPose(pose) || !okToken(t)) err(404, 'No picture.');
+  const f = path.join(progDir(ctx.me.u.id), `${d}-${pose}-${t}`);
+  let buf; try { buf = fs.readFileSync(f); } catch (e) { err(404, 'No picture.'); }
+  const type = AVATAR_TYPES[path.extname(f).slice(1)] || 'application/octet-stream';
+  res.writeHead(200, Object.assign({}, SEC_HEADERS, { 'Content-Type': type, 'Content-Length': buf.length, 'Cache-Control': 'private, max-age=31536000, immutable', 'Content-Security-Policy': "default-src 'none'" }));
+  res.end(buf);
 });
 route('PUT', '/api/backgrounds/:sec', { auth: true, maxBody: 1024 * 1024 }, async (req, res, ctx) => {
   if (!isOwner(ctx.me.u)) err(403, 'Only the owner can change the backgrounds.');
@@ -903,6 +956,7 @@ route('PATCH', '/api/admin/settings', { admin: true }, async (req, res, ctx) => 
   const int = (v, lo, hi, label) => { v = Math.round(+v); if (!Number.isFinite(v) || v < lo || v > hi) err(400, `${label} must be between ${lo} and ${hi}.`); return v; };
   if (b.appName != null) { s.appName = String(b.appName).trim().slice(0, 40) || 'FORGE 90'; changed.push('app name'); }
   if (b.appUrl != null) { const u = String(b.appUrl).trim().replace(/\/+$/, ''); if (u && !/^https?:\/\/[^\s/]+/i.test(u)) err(400, 'App address must start with http:// or https://'); s.appUrl = u; changed.push('app address'); }
+  if (b.features && b.features.progressPics != null) { s.features = s.features || {}; s.features.progressPics = !!b.features.progressPics; changed.push('progress pictures'); }
   if (b.security) { const x = b.security, q = s.security;
     if (x.pwMinLength != null) q.pwMinLength = int(x.pwMinLength, 8, 64, 'Minimum password length');
     if (x.pwRequireMix != null) q.pwRequireMix = !!x.pwRequireMix;
