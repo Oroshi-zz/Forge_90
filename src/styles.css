@@ -1569,7 +1569,11 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
      instead of being squeezed to one word per line */
   .recipe-row { flex-wrap: wrap; align-items: flex-start; row-gap: 8px; }
   .recipe-row > .rr-t { flex: 1 1 0; min-width: 0; }
-  .recipe-row > .rr-acts { flex: 1 0 100%; justify-content: flex-start; }
+  /* 141 cards at 146px was 26 screens. The star and the on/off switch stay, because those are
+     what you flick while browsing; Edit, Duplicate and Delete live in the card's own popup,
+     which a tap already opens. Source links go with them. */
+  .recipe-row > .rr-acts { flex: none; align-self: center; }
+  .recipe-row .rr-more, .recipe-row .rec-links { display: none; }
   .recipe-row .mac { flex-wrap: wrap; row-gap: 2px; }
   .recipe-row .art.sm { flex: none; }
 }
@@ -1685,6 +1689,22 @@ body.wo-on #toast.on { transform: translateX(-50%) translateY(0); }
 .chipb { flex: none; border: 1px solid var(--line-2); background: var(--surface); border-radius: 99px; padding: 8px 14px; font-size: 13px; font-weight: 600; min-height: 38px; color: var(--text-2); cursor: pointer; }
 .chipb.on { background: var(--text); color: var(--solid); border-color: var(--text); }
 .chipb .n { margin-left: 5px; opacity: .7; font-weight: 500; }
+
+/* Exercise library: one muscle group at a time, with a search across all of them. The tab row
+   scrolls sideways rather than wrapping to three lines of chips on a phone. */
+.lib-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; }
+.lib-search { flex: 1 1 260px; max-width: 420px; }
+.lib-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.lib-tabs::-webkit-scrollbar { height: 6px; }
+.lib-tabs::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 99px; }
+.lib-tabs .chipb { min-height: 34px; padding: 6px 12px; font-size: 12.5px; }
+@media (max-width: 560px) {
+  /* Twelve chips wrap to four rows at phone width, which costs more than it saves — one
+     sideways-scrolling row keeps the list a single gesture away. */
+  .lib-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -14px 14px; padding: 0 14px 2px; }
+  .lib-tabs::-webkit-scrollbar { display: none; }
+  .lib-bar { margin-bottom: 8px; }
+}
 .pg-aisle { margin-bottom: 14px; }
 .pg-aisle h3 { font-size: 11px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0 2px 6px; }
 .pg-aisle .card { overflow: hidden; }

@@ -4,16 +4,14 @@ Object.assign(IC, { today: '<path d="M3 10h18M8 2v4M16 2v4"/><rect x="3" y="4" w
 if (PHONE_MQ && PHONE_MQ.addEventListener) PHONE_MQ.addEventListener('change', () => { if (!$('#view')) return; closeModal(); render(); });
 
 /* ---------------- bottom tabs and the Plan / Kitchen tabs ---------------- */
-/* The pantry is a tab of Foods & recipes rather than a page, but on the phone it stays one tap
-   away in the kitchen hub, so entries carry an explicit address. */
+/* A tab rather than a page, but still one tap away on the phone, so entries carry an address. */
 const HUBS = { plan: [['calendar', 'Calendar'], ['workouts', 'Training'], ['diet', 'Nutrition']],
   kitchen: [['grocery', 'List'], ['pantry', 'Pantry', '#/foods/pantry'], ['foods', 'Recipes', '#/foods'], ['prep', 'Prep']] };
 function hubOf(page) { if (['calendar', 'workouts', 'diet'].includes(page)) return 'plan'; if (['grocery', 'foods', 'recipe', 'recipe-edit', 'prep'].includes(page)) return 'kitchen'; return null; }
 function phoneTab(page) { if (!page || page === 'day') return 'today'; return hubOf(page) || 'you'; }
 function hubSegHTML(page) {
   const hub = hubOf(page);
-  /* Which entry is current now depends on the tab slug as well as the page, since Recipes and
-     Pantry are both the Foods page. */
+  /* Current depends on the tab slug too: Recipes and Pantry are both the Foods page. */
   const slug = location.hash.replace(/^#\/?/, '').split('/')[1] || '';
   const cur = page === 'recipe' || page === 'recipe-edit' ? 'foods'
     : page === 'foods' ? (slug === 'pantry' ? 'pantry' : 'foods') : page;
@@ -77,8 +75,7 @@ function mealSwap(d, slot) { if (!S.plan[d]) return; MS = { d, slot, q: '', all:
 function renderMealSwap() {
   const cur = (S.plan[MS.d].m || {})[MS.slot]; const r = cur && RECIPE[cur]; const cat = r && !r.virtual ? r.cat : slotCat(MS.slot);
   const head = `<div class="row"><h2 style="flex:1">${r ? 'Swap' : 'Pick'} ${esc(SLOT_LABEL[MS.slot].toLowerCase())}</h2><button class="btn icon ghost" data-act="close-modal" aria-label="Close">${icon('x')}</button></div>`;
-  /* Choosing a plain food still needs a portion, so the picker turns into an amount step rather
-     than guessing a package and leaving no way to say "half a tray". */
+  /* A plain food still needs a portion, rather than guessing a package with no way to say "half a tray". */
   if (MS.pick) { modal(`<div class="ms-m">${head}${msAmountHTML()}</div>`, 'ms-modal', true); return; }
   modal(`<div class="ms-m">${head}
     <div class="tiny muted">${r ? `Now: ${esc(r.emoji)} ${esc(r.name)} · ` : ''}${esc(fmtDate(MS.d, { weekday: 'long', month: 'short', day: 'numeric' }))} · portions resize to your targets either way</div>
@@ -94,8 +91,7 @@ function msFoodListHTML() {
   const hay = g => (g.n + ' ' + (g.brand || '') + ' ' + (SUB_LABEL[g.sub] || '')).toLowerCase();
   const list = Object.values(ING).filter(g => foodAllowed(g.id) && words.every(w => hay(g).includes(w)))
     .sort((a, b) => (isFavFood(b.id) ? 1 : 0) - (isFavFood(a.id) ? 1 : 0) || a.n.localeCompare(b.n)).slice(0, 60);
-  /* Foods have no emoji of their own, so a plate icon on every row was fifty identical glyphs.
-     The food group's icon at least distinguishes meat from dairy at a glance. */
+  /* Foods have no emoji, so the food group’s icon stands in for fifty identical plates. */
   const catIcon = {}; FOOD_CATS.forEach(c => { catIcon[c.id] = c.icon; });
   return list.map(g => `<button type="button" class="ms-opt" data-act="ms-food" data-id="${esc(g.id)}"><span class="em">${esc(g.emoji || catIcon[SUB_CAT[g.sub]] || '🍽️')}</span><span class="t"><b>${esc(g.n)}</b><small class="num">${g.brand ? esc(g.brand) + ' · ' : ''}${fmt(g.k)} kcal · ${fmt(g.p)}P ${g.u ? 'per ' + esc(g.u) : g.ml ? 'per 100 ml' : 'per 100 g'}</small></span>${isFavFood(g.id) ? `<span class="ms-star" title="Favorite">${icon('star')}</span>` : ''}</button>`).join('')
     || `<div class="muted small" style="padding:12px 4px">No foods match.</div>`;

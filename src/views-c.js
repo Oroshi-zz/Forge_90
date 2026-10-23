@@ -201,8 +201,7 @@ function recipeSortHTML() {
 const recFilterLabel = c => c === 'fav' ? '★ Favorites' : c[0].toUpperCase() + c.slice(1);
 const linkHost = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
 function linksBlockHTML(r) {
-  /* A food standing in for a meal has no original recipe to link to, so the whole block, and
-     the note about scaling that follows it, would only be noise. */
+  /* A food standing in for a meal has no original to link to, so the whole block is noise. */
   if (r.virtual) return '';
   const ls = (r.links || []).filter(l => l && l.url);
   return `<h3 style="margin-top:16px">Recipe links</h3>${ls.length ? `<div class="link-list">${ls.map(l => `<a class="link-card" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer"><span class="lk-ic">${icon('link')}</span><span class="lk-t"><b>${esc(l.title || linkHost(l.url))}</b><small>${esc(l.site || linkHost(l.url))}</small></span>${icon('ext')}</a>`).join('')}</div>` : `<div class="tiny muted">No links yet — add some with Edit on the Foods & recipes page.</div>`}
@@ -212,21 +211,17 @@ function linkChipsHTML(r) { const ls = (r.links || []).filter(l => l && l.url); 
   return `<div class="rec-links">${icon('link')}${ls.map(l => `<a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" title="${esc(l.title || '')}">${esc(l.site || linkHost(l.url))}</a>`).join('<span>·</span>')}</div>`; }
 
 /* ---------------- Foods & recipes page ---------------- */
-/* Each tab has a URL of its own, so the back button works, a tab survives a reload and the
-   pantry keeps a linkable address now that it is no longer a page. The slug is separate from the
-   state key because "#/foods/foods" would be a silly address for the macros table. */
+/* Each tab has its own URL, so the back button works and the pantry keeps a linkable address.
+   The slug differs from the state key because "#/foods/foods" is a silly address. */
 const FOODS_TABS = [['recipes', 'Recipes', ''], ['pantry', 'Pantry', 'pantry'], ['foods', 'Foods & macros', 'macros'], ['prefs', 'Food preferences', 'prefs']];
 const foodsTabHash = k => '#/foods' + ((FOODS_TABS.find(t => t[0] === k) || [])[2] ? '/' + FOODS_TABS.find(t => t[0] === k)[2] : '');
 const foodsTabOfSlug = s => (FOODS_TABS.find(t => t[2] && t[2] === s) || [])[0] || null;
 function viewFoods(slug) {
-  /* The URL is the only thing that decides the tab. Remembering the last one looked friendly,
-     but every plain href="#/foods" in the app was written when Foods meant Recipes — the phone
-     hub's Recipes link, the tour step, the recipe editor's way back — so a remembered Pantry tab
-     would quietly send all of them to the wrong place. */
+  /* The URL alone decides the tab. Remembering the last one would send every plain href="#/foods"
+     in the app — the phone hub, the tour, the editor’s way back — to whatever you last opened. */
   const tab = foodsTabOfSlug(slug) || 'recipes';
   const seg = `<div class="seg" style="margin-bottom:16px">${FOODS_TABS.map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-act="foods-tab" data-v="${k}">${l}</button>`).join('')}</div>`;
-  /* The pantry keeps its own heading and its own buttons, which are nothing like the recipe
-     ones, and gains the tab bar above the content. */
+  /* The pantry keeps its own heading and buttons, and gains the tab bar above them. */
   if (tab === 'pantry') return viewPantry(seg);
   const head = `<div class="page-head"><div class="t"><h1>Foods & recipes</h1><p>Edit the macros of any food, add your own foods and recipes, and choose which food groups the plan can use.</p></div>
     <div class="row wrap">${scanBtnHTML('today')}${receiptBtnHTML()}${AUTH.mode === 'server' ? `<button class="btn" data-act="imp-open">${icon('download')}Import recipe</button>` : ''}<button class="btn primary" data-tour="foods" data-act="recipe-new">${icon('plus')}New recipe</button><button class="btn" data-act="food-new">${icon('plus')}Add food</button></div></div>
@@ -236,8 +231,7 @@ function viewFoods(slug) {
   const f = UI.recFilter || 'all';
   const words = String(UI.recQ || '').toLowerCase().split(/\s+/).filter(Boolean);
   const hay = r => [r.name, r.cat, (r.tags || []).join(' '), r.ing.map(([id]) => ING[id] ? ING[id].n : '').join(' ')].join(' ').toLowerCase();
-  /* The pantry filter is deliberately separate from the category buttons rather than another one
-     of them, because "dinners I can make tonight" is the question worth asking. */
+  /* Separate from the category buttons, so "dinners I can make tonight" works. */
   const tot = pantryTotals(); const panOn = !!UI.recPantry && pantryInUse();
   const base = RECIPES.filter(r => (f === 'all' || (f === 'fav' ? isFav(r.id) : r.cat === f)) && (!words.length || words.every(w => hay(r).includes(w))));
   const canMake = base.filter(r => recipeMakeable(r, tot));
@@ -251,14 +245,13 @@ function viewFoods(slug) {
         <div class="mac small"><span><b>${fmt(m.k)}</b> kcal</span> <span style="color:var(--prot)">${fmt(m.p)}P</span> <span style="color:var(--carb)">${fmt(m.c)}C</span> <span style="color:var(--fat)">${fmt(m.f)}F</span></div>
         ${linkChipsHTML(r)}<div class="row wrap" style="gap:4px;margin-top:4px">${badges}</div></div>
       <div class="row rr-acts" style="gap:4px;flex-wrap:wrap;justify-content:flex-end">
-        ${favBtnHTML(r.id)}<button class="btn sm" data-act="recipe-edit" data-rid="${r.id}">${mayEd ? 'Edit' : 'View'}</button><button class="btn sm ghost" data-act="recipe-dup" data-rid="${r.id}">Duplicate</button>
+        ${favBtnHTML(r.id)}<span class="rr-more">${''}<button class="btn sm" data-act="recipe-edit" data-rid="${r.id}">${mayEd ? 'Edit' : 'View'}</button><button class="btn sm ghost" data-act="recipe-dup" data-rid="${r.id}">Duplicate</button>
         ${r.custom && mayEd ? `<button class="btn sm ghost danger" data-act="recipe-del" data-rid="${r.id}">${icon('trash')}</button>` : ''}
-        ${r.edited ? `<button class="btn sm ghost" data-act="recipe-reset" data-rid="${r.id}">Reset</button>` : ''}
+        ${r.edited ? `<button class="btn sm ghost" data-act="recipe-reset" data-rid="${r.id}">Reset</button>` : ''}</span>
         ${sw(!S.recipeOff[r.id], 'recipe-off', r.id)}</div></div>`; }).join('');
   const dr = !RE && reDraft();
   const draftBar = dr ? `<div class="note warn" style="margin-bottom:12px">${icon('edit')}<span><b>You have an unsaved recipe</b>${dr.name ? ` — “${esc(dr.name)}”` : ''}. It was kept when you left the editor.</span><span class="row" style="gap:6px"><button class="btn sm primary" data-act="re-resume">Continue editing</button><button class="btn sm ghost" data-act="re-discard">Discard</button></span></div>` : '';
-  /* With the filter on and nothing covered, the count of near misses is far more use than an
-     empty grid: one missing ingredient is a shopping trip, five is a different recipe. */
+  /* The near-miss count beats an empty grid: one missing ingredient is a shopping trip, five is another recipe. */
   const near = panOn && !rs.length ? base.filter(r => (recipeShort(r, tot) || []).length === 1).length : 0;
   const panBtn = `<button type="button" class="btn sm pan-filter ${panOn ? 'primary' : 'ghost'}" data-act="rec-pantry" ${pantryInUse() ? '' : 'disabled title="Add something to the pantry first"'} aria-pressed="${panOn}">${icon('box')}Can make now${pantryInUse() ? ` · ${canMake.length}` : ''}</button>`;
   return head + draftBar + `<div class="row wrap rec-bar" style="margin-bottom:12px"><div class="rec-search">${icon('search')}<input class="inp" type="search" placeholder="Search recipes, ingredients or tags…" data-input="recq" value="${esc(UI.recQ || '')}" aria-label="Search recipes" autocomplete="off"></div><div class="filters">${['all', 'fav'].concat(RECIPE_CATS).map(c => `<button class="${f === c ? 'on' : ''}" data-act="rec-filter" data-v="${c}">${recFilterLabel(c)}</button>`).join('')}</div>${panBtn}${recipeSortHTML()}</div>
@@ -268,23 +261,27 @@ function viewFoods(slug) {
     <div class="grid g2" style="gap:10px">${cards || `<div class="muted small">${panOn ? `Nothing here is fully covered by the pantry.${near ? ` ${near} recipe${near === 1 ? ' is' : 's are'} short of just one ingredient.` : ''}` : f === 'fav' && !words.length ? 'No favorites yet — tap the ☆ on any recipe.' : 'No recipes match.'}</div>`}</div>`;
 }
 function foodsTableHTML() {
-  const q = (UI.foodQ || '').toLowerCase(); const cf = UI.foodCat || 'all';
+  const q = (UI.foodQ || '').toLowerCase();
   const words = q.split(/\s+/).filter(Boolean); const hay = g => (g.n + ' ' + (g.brand || '') + ' ' + (g.gtin || '')).toLowerCase();
-  const foods = Object.values(ING).filter(g => (cf === 'all' || (cf === 'fav' ? isFavFood(g.id) : cf === 'shared' ? g.shared : SUB_CAT[g.sub] === cf)) && words.every(w => hay(g).includes(w)));
-  /* The plan having any days at all is the real precondition now that a day can be chosen; it
-     used to be "today is in the plan", which hid the button entirely outside the 90 days. */
+  /* One category at a time; search cuts across all of them. A stored "all" falls back to the first. */
+  const tabs = [['fav', '★ Favorites']].concat(AUTH.mode === 'server' ? [['shared', 'Scanned']] : []).concat(FOOD_CATS.map(c => [c.id, c.name]));
+  const cf = tabs.some(t => t[0] === UI.foodCat) ? UI.foodCat : tabs[tabs.length - 1][0];
+  const inCat = (g, k) => k === 'fav' ? isFavFood(g.id) : k === 'shared' ? g.shared : SUB_CAT[g.sub] === k;
+  const all = Object.values(ING);
+  const foods = words.length ? all.filter(g => words.every(w => hay(g).includes(w))) : all.filter(g => inCat(g, cf));
   const addOk = inPlan(nearestPlanDay(todayISO()));
   const roleName = { P: 'Protein', C: 'Carb', F: 'Fat', V: 'Fixed' };
   const rows = FOOD_CATS.map(c => { const fs = foods.filter(g => SUB_CAT[g.sub] === c.id).sort((a, b) => a.n.localeCompare(b.n)); if (!fs.length) return '';
     return `<tr class="grp"><td colspan="9">${c.icon} ${esc(c.name)}</td></tr>` + fs.map(g => { const used = RECIPES.filter(r => r.ing.some(([id]) => id === g.id)).length;
       return `<tr class="${foodAllowed(g.id) ? '' : 'dim'}"><td><b>${esc(g.n)}</b> ${g.custom ? '<span class="pill acc">Custom</span>' : ''}${g.shared ? `<span class="pill acc" title="On the shared food list${g.byName ? ' — added by ' + esc(g.byName) : ''}">${icon('scan')}Scanned</span>` : ''}${g.edited ? '<span class="pill">Edited</span>' : ''}<div class="tiny muted">${g.brand ? esc(g.brand) + ' · ' : ''}${esc(SUB_LABEL[g.sub] || g.sub)} · in ${used} recipe${used === 1 ? '' : 's'}</div></td>
         <td class="muted small">${g.u ? `per ${esc(g.u)} (${g.g || '?'} g)` : g.ml ? 'per 100 ml' : 'per 100 g'}</td><td class="num"><b>${fmt(g.k)}</b></td><td class="num" style="color:var(--prot)">${fmt(g.p, 1)}</td><td class="num" style="color:var(--carb)">${fmt(g.c, 1)}</td><td class="num" style="color:var(--fat)">${fmt(g.f, 1)}</td>
-        <td><span class="pill">${roleName[g.r] || g.r}</span></td><td style="text-align:right"><div class="food-acts">${favFoodBtnHTML(g.id)}${/* Icon-only: this column repeats on every one of several hundred rows, and three text buttons
-      widened the table past the viewport. */''}${addOk ? `<button class="btn sm ghost icon" data-act="qa-food" data-id="${g.id}" title="Log this to a day" aria-label="Log this to a day">${icon('plus')}</button>` : ''}<button class="btn sm ghost icon" data-act="food-to-recipe" data-id="${g.id}" title="Make a recipe from this food" aria-label="Make a recipe from this food">${icon('book')}</button><button class="btn sm" data-act="food-edit" data-id="${g.id}">${g.shared && !(AUTH.user && (g.by === AUTH.user.id || isAdmin())) ? 'View' : 'Edit'}</button></div></td></tr>`; }).join(''); }).join('');
-  return `<div class="card"><div class="row wrap" style="margin-bottom:12px"><input class="inp" type="search" style="max-width:260px" placeholder="Search foods, brands or barcodes…" data-input="foodq" value="${esc(UI.foodQ || '')}">
-      <select class="inp" style="max-width:220px" data-input="foodcat"><option value="all">All categories</option><option value="fav" ${cf === 'fav' ? 'selected' : ''}>★ Favorite foods</option>${AUTH.mode === 'server' ? `<option value="shared" ${cf === 'shared' ? 'selected' : ''}>Scanned products</option>` : ''}${FOOD_CATS.map(c => `<option value="${c.id}" ${cf === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
-      <span class="tiny muted">${foods.length} foods · macros are per 100 g unless noted. “Scaling” is how portions flex each day.</span></div>
-    <div class="scroll-x"><table class="tbl foods"><thead><tr><th>Food</th><th>Basis</th><th>kcal</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Scaling</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="9" class="muted">No foods match.</td></tr>'}</tbody></table></div></div>`;
+        <td><span class="pill">${roleName[g.r] || g.r}</span></td><td style="text-align:right"><div class="food-acts">${favFoodBtnHTML(g.id)}${/* Icon-only: this column repeats on hundreds of rows and three text buttons widened the table past the viewport. */''}${addOk ? `<button class="btn sm ghost icon" data-act="qa-food" data-id="${g.id}" title="Log this to a day" aria-label="Log this to a day">${icon('plus')}</button>` : ''}<button class="btn sm ghost icon" data-act="food-to-recipe" data-id="${g.id}" title="Make a recipe from this food" aria-label="Make a recipe from this food">${icon('book')}</button><button class="btn sm" data-act="food-edit" data-id="${g.id}">${g.shared && !(AUTH.user && (g.by === AUTH.user.id || isAdmin())) ? 'View' : 'Edit'}</button></div></td></tr>`; }).join(''); }).join('');
+  return `<div class="card"><div class="lib-bar"><div class="rec-search lib-search">${icon('search')}<input class="inp" type="search" placeholder="Search all ${all.length} foods, brands or barcodes…" data-input="foodq" value="${esc(UI.foodQ || '')}"></div>
+      ${q ? `<button type="button" class="btn sm ghost" data-act="foodq-clear">${icon('x')}Clear</button>` : ''}</div>
+    ${q ? `<div class="small muted" style="margin:0 2px 10px">${foods.length} food${foods.length === 1 ? '' : 's'} match “${esc(UI.foodQ.trim())}”${foods.length ? '' : ' — try a different word.'}</div>`
+      : `<div class="lib-tabs" role="tablist" aria-label="Food category">${tabs.map(([k, l]) => `<button type="button" role="tab" aria-selected="${k === cf}" class="chipb ${k === cf ? 'on' : ''}" data-act="food-cat" data-v="${esc(k)}">${esc(l)}<span class="n num">${all.filter(g => inCat(g, k)).length}</span></button>`).join('')}</div>`}
+    <div class="tiny muted" style="margin:-4px 2px 10px">Macros are per 100 g unless noted. “Scaling” is how portions flex each day.</div>
+    <div class="scroll-x"><table class="tbl foods"><thead><tr><th>Food</th><th>Basis</th><th>kcal</th><th>Protein</th><th>Carbs</th><th>Fat</th><th>Scaling</th><th></th></tr></thead><tbody>${rows || `<tr><td colspan="9" class="muted">${q ? 'No foods match.' : 'Nothing in this category yet.'}</td></tr>`}</tbody></table></div></div>`;
 }
 
 /* ---------- food editor ---------- */
@@ -374,18 +371,13 @@ function recipeEditor(rid, dup) {
     links: r ? (r.links || []).map(l => ({ title: l.title || '', url: l.url || '', site: l.site || '' })) : [] };
   reOpen();
 }
-/* A food is not a recipe, but a ready-made meal — a frozen lasagna, a rotisserie chicken, a tub
-   of soup — behaves like one: you plan it, you shop for it, you eat a portion of it. Rather than
-   making people retype it as a one-line recipe, this opens the editor with that line already
-   filled in and the sensible defaults for something you do not cook.
-   Rotation is off, so converting a food never lets the planner start scheduling it on its own;
-   the checkbox is right there if that is wanted. Nothing is saved until Save is pressed, so this
-   is a starting point rather than a commitment. */
+/* A ready-made meal behaves like a recipe: planned, shopped for, portioned. This fills the editor
+   in rather than making someone retype it. Rotation is off, so converting never lets the planner
+   schedule it unasked, and nothing saves until Save. */
 function foodToRecipe(fid) {
   const g = ING[fid]; if (!g) { toast('That food is no longer on the list'); return; }
   const units = unitsFor(fid);
-  /* One package if it has one, otherwise a serving, otherwise a sane weight. Whatever it is, it
-     is the yield of one serving, because a ready meal is not a batch. */
+  /* One package, else a serving, else a sane weight — as the yield of one serving, not a batch. */
   const pick = units.find(u => u[0] === 'pk') || units.find(u => u[0] === 'u') || units.find(u => u[0] === 'srv') || units[0];
   const amt = pick[0] === 'g' ? 100 : pick[1];
   RE = { id: null, base: false, name: g.n, emoji: g.emoji || '🍽️', cat: FOOD_MEAL_CAT[g.sub] || 'snack', yield: 1,
@@ -419,8 +411,7 @@ function reGoToSaved(rid) {
     const words = String(UI.recQ || '').toLowerCase().split(/\s+/).filter(Boolean);
     const hay = [r.name, r.cat, (r.tags || []).join(' '), r.ing.map(([id]) => ING[id] ? ING[id].n : '').join(' ')].join(' ').toLowerCase();
     if (words.length && !words.every(w => hay.includes(w))) UI.recQ = '';
-    /* The pantry filter hides anything it does not cover, which a recipe just saved usually is
-       not, so it joins the other filters that get cleared to keep the new card in view. */
+    /* A recipe just saved usually is not covered, so this filter clears with the others. */
     if (UI.recPantry && !recipeMakeable(r, pantryTotals())) UI.recPantry = false;
     UI.recJust = rid; UI._scrollTo = 'rec-' + rid;
   }

@@ -176,10 +176,8 @@ const receiptBtnHTML = (cls = '') => canReceipt() ? `<button class="btn ${cls}" 
 
 /* ---------- scanner ---------- */
 let SCN = null;
-/* `back` turns the scanner into a lookup that hands the food it resolves back to whoever opened
-   it, instead of doing something with it. Without this every picker that offered a Scan button
-   fell through to the day-logging scanner, so scanning a receipt line dropped the line index and
-   logged the product to today instead of binding it to the line. */
+/* With `back` the scanner resolves a barcode and hands the food to its caller. Without it every
+   picker fell through to the day-logging scanner and lost the row it was filling. */
 function openScanner(mode, date, draft, back) {
   if (mode !== 'gym' && !canScan()) { toast('Scanning needs the FORGE 90 server.'); return; }
   scanStop(); SCN = { mode, date: date || todayISO(), added: [], last: '', lastAt: 0, draft: draft || null, back: back || null };
@@ -275,8 +273,7 @@ async function barcodeFood(code) {
 }
 function scanUse(id) {
   if (!SCN) return;
-  /* A lookup scan is finished the moment the barcode resolves: hand the food to the caller and
-     let it decide, which is how a receipt line gets bound rather than logged to today. */
+  /* A lookup is done once the barcode resolves: hand it back rather than acting on it. */
   if (SCN.mode === 'pick') { const b = SCN.back || {}; scanStop(); SCN = null; fpUse(id, b.mode || 'today', b.d || todayISO(), b.i); return; }
   if (SCN.mode === 'pantry') {
     const e = SCN.added.find(x => x.food === id);
@@ -366,8 +363,7 @@ async function productSave(form) {
   catch (e) { btn.disabled = false; toast(e.message); }
 }
 function openScannerKeep() { const added = (SCN && SCN.added) || []; openScanner('pantry'); if (SCN) { SCN.added = added; scanPaint(); } }
-/* Closing a lookup scan, or cancelling the new-product form it opened, has to land back on the
-   picker it came from. Closing the modal outright would strand a receipt review behind it. */
+/* Closing or cancelling a lookup lands back on the picker, not on an empty screen. */
 function scanBack(tab) {
   const b = (SCN && SCN.back) || null; scanStop(); SCN = null;
   if (!b) { closeModal(); return; }
@@ -527,17 +523,14 @@ function fpUse(id, m, d, ii) {
 }
 const slotNow = () => { const h = new Date().getHours() + new Date().getMinutes() / 60; return h < 10.5 ? 'breakfast' : h < 14.5 ? 'lunch' : h < 17 ? 'snack1' : h < 20.5 ? 'dinner' : 'snack2'; };
 let QA = null;
-/* The amount control is the same wherever a food is being portioned — logging it to a day, or
-   standing it up as a meal — so the unit list lives in one place. */
+/* The same unit list wherever a food is portioned: logged to a day, or stood up as a meal. */
 function unitsFor(id) {
   const g = ING[id]; if (!g) return [['g', 1, 'g']];
   const srv = +g.srv > 0 ? +g.srv : 0;
   return g.u ? [['u', 1, g.u]] : [].concat(srv ? [['srv', srv, `serving (${fmt(srv)} ${g.ml ? 'ml' : 'g'})`]] : [], +g.pk > 1 ? [['pk', +g.pk, `package (${fmt(+g.pk)} ${g.ml ? 'ml' : 'g'})`]] : [], [['g', 1, g.ml ? 'ml' : 'g']]);
 }
 const unitAmount = (units, unit, n) => { const u = units.find(x => x[0] === unit) || units[0]; return Math.max(0, +n || 0) * u[1]; };
-/* The nearest day the plan actually covers. Logging used to refuse outright when today fell
-   outside the plan, which meant the Add food button vanished rather than letting you pick a day
-   that does exist. */
+/* Logging used to refuse outright when today fell outside the plan, hiding the button entirely. */
 function nearestPlanDay(d) {
   if (inPlan(d)) return d;
   const start = S.settings.startDate, end = planEnd();
@@ -592,9 +585,7 @@ const PANTRY_SOON = 14;
 function pantryShared() { return typeof SY !== 'undefined' && SY && SY.data && SY.data.status === 'active' && SY.data.pantry && SY.data.pantry.on; }
 function pantryItems() { return pantryShared() ? (SY.data.pantry.items || []) : (S.pantry || []); }
 function pantryInUse() { return pantryShared() || (S.pantry || []).length > 0; }
-/* Pages whose content is built from the pantry, so a scan, an edit or a consumption catch-up has
-   to repaint them. Foods & recipes is one of them twice over now: it hosts the pantry tab, and
-   its recipe list can be filtered by what the pantry covers. */
+/* Pages built from the pantry, so a scan or a consumption catch-up has to repaint them. */
 const onPantryView = () => /^#\/(foods|grocery)(\/|$)/.test(location.hash);
 /* `from` is the day the food was actually bought, which a receipt supplies and a barcode scan
    does not. Counting shelf life from the purchase date rather than from today is the whole
@@ -646,12 +637,10 @@ function pantryDel(itemId) {
   S.pantry = (S.pantry || []).filter(x => x.id !== itemId); saveState();
 }
 function pantryHave(food, items) { return (items || pantryItems()).filter(x => x.food === food).reduce((a, x) => a + (+x.qty || 0), 0); }
-/* One pass over the pantry instead of one scan per ingredient, because "what can I make" asks
-   the question for every recipe against every ingredient. */
+/* One pass over the pantry: the question is asked for every recipe against every ingredient. */
 function pantryTotals(items) { const out = {}; (items || pantryItems()).forEach(x => { if (x && x.food) out[x.food] = (out[x.food] || 0) + (+x.qty || 0); }); return out; }
-/* Judged per standard serving rather than per batch: a recipe that makes four is still one you
-   can cook tonight if there is enough for one plate. Recipes only list substantive ingredients —
-   seasonings and oil live in the steps — so no staple needs excusing here. */
+/* Per standard serving, not per batch: a recipe that makes four is still cookable tonight.
+   Recipes list only substantive ingredients, so no staple needs excusing. */
 function recipeShort(r, tot) {
   if (typeof r === 'string') r = RECIPE[r];
   if (!r || !r.ing.length) return null;
@@ -783,7 +772,7 @@ function pantrySubmit(form) {
   if (qs !== '' && !(+qs > 0)) { toast('Enter an amount above 0, or leave it blank for one package'); return; }
   pantryAdd(g.id, qs === '' ? null : panFromShown(g.id, Math.round(+qs)), fd.get('exp') || null, 'manual'); closeModal(); render(); toast(`${g.n} added to the pantry`);
 }
-/* The badge followed the pantry onto the Foods & recipes entry when it became a tab there. */
+/* Follows the pantry onto the Foods & recipes entry. */
 function pantryNavBadge() { const a = $('.nav a[data-nav="foods"]'); if (!a) return; const n = S ? pantrySoon().length : 0; let b = a.querySelector('.nav-badge'); if (!n) { if (b) b.remove(); return; } if (!b) { b = document.createElement('span'); b.className = 'nav-badge'; a.appendChild(b); } b.textContent = n; b.title = `${n} pantry item${n === 1 ? '' : 's'} expiring soon`; }
 
 /* ---------- shopping list: pantry-aware rows, check all, add checked to the pantry ---------- */
@@ -855,8 +844,7 @@ Object.assign(ACT, {
   'fp-tab': el => { if (!FP) return; FP.tab = el.dataset.v; fpRepaint(); },
   'fo-pick': el => foPick(+el.dataset.i),
   'fp-pick': el => fpPick(el.dataset.id),
-  /* Every mode that expects the picked food back gets the lookup scanner. Anything else falls
-     through to the scanner that acts on the food itself. */
+  /* Modes that expect the food back get the lookup scanner; the rest act on it themselves. */
   'fp-scan': () => {
     const m = FP ? FP.mode : 'today', d = FP ? FP.d : todayISO(), i = FP ? FP.i : null;
     FP = null; FO = null;

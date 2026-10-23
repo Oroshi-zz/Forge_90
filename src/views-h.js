@@ -13,9 +13,7 @@ function swapStartWeek(exId) {
   return logged ? addDays(from, 7) : from;
 }
 function swapOpenDay(date, i, back) {
-  /* data-i carries the row's own index, not its position in the list — the two stopped matching
-     once sessions were reordered to group equipment, and looking up by position swapped the
-     wrong exercise. */
+  /* data-i is the row’s own index, not its list position; the two diverged once sessions were reordered. */
   const e = S.plan[date]; if (!e || !e.w) return; const r = sessionRows(e.w).find(x => x.i === i); if (!r) return;
   SWP = { mode: 'day', date, i, slot: r.slot, exId: r.ex.id, planned: r.planned.id, back: back || null, all: false }; renderSwap();
 }
@@ -82,7 +80,10 @@ function swapPick(id) {
 }
 
 /* ---------- collapsible sections (Workout plan) ---------- */
-const collOpen = k => !((UI.coll || {})[k]);
+/* Read-once sections start shut. The stored value is explicit (1 shut, 0 open) so opening one is
+   remembered rather than falling back to the default. */
+const COLL_SHUT = { how: 1, cycle2: 1 };
+const collOpen = k => { const v = (UI.coll || {})[k]; return v === undefined ? !COLL_SHUT[k] : !v; };
 function collHead(k, title, extra = '') {
   const open = collOpen(k);
   return `<button type="button" class="coll-btn" data-act="coll" data-k="${k}" aria-expanded="${open}" title="${open ? 'Collapse' : 'Expand'}">${icon('right')}<h2>${title}</h2></button>${extra}`;
@@ -117,7 +118,7 @@ Object.assign(ACT, {
   'swap-day': el => swapOpenDay(el.dataset.date, +el.dataset.i, el.dataset.back),
   'swap-prog': el => swapOpenProg(el.dataset.slot, el.dataset.ex),
   'swap-pick': el => swapPick(el.dataset.id),
-  coll: el => { const k = el.dataset.k; UI.coll = UI.coll || {}; if (UI.coll[k]) delete UI.coll[k]; else UI.coll[k] = 1; saveUI();
+  coll: el => { const k = el.dataset.k; UI.coll = UI.coll || {}; UI.coll[k] = collOpen(k) ? 1 : 0; saveUI();
     const sec = el.closest('.coll'); const open = collOpen(k); if (sec) sec.classList.toggle('shut', !open); el.setAttribute('aria-expanded', String(open)); el.title = open ? 'Collapse' : 'Expand'; },
   'avatar-rm': () => confirmBox('Remove your profile picture?', 'It’s deleted from the server and your initials show instead.', 'Remove', async () => { try { const r = await api('DELETE', '/api/account/avatar'); avatarApplied(r.user); toast('Profile picture removed'); } catch (e) { toast(e.message); } }, true)
 });

@@ -196,16 +196,10 @@ function rebuildCatalog() {
   invalidate();
 }
 
-/* ---------- a plain food standing in for a meal ----------
-   A slot used to hold a recipe id and nothing else, so eating a rotisserie chicken or a frozen
-   lasagna meant either inventing a one-line recipe or logging it as an extra and leaving the slot
-   reading "Nothing planned". A slot can now hold `food:<foodId>:<amount>`, which resolves to a
-   recipe-shaped object built on the fly. Everything downstream — portions, macros, the shopping
-   list, the day views, printing — reads it through RECIPE and needs no special case.
-   The amount lives in the id rather than beside it so that two different portions of the same
-   food are two different meals, and so RPS's per-id memo stays correct.
-   These are deliberately NOT in RECIPES: they are not recipes and have no business in the recipe
-   list, the planner's rotation or a search for something to cook. */
+/* A plain food standing in for a meal. A slot can hold `food:<foodId>:<amount>`, which resolves
+   to a recipe-shaped object, so portions, macros, the shopping list and the day views need no
+   special case. The amount is in the id so two portions are two meals and RPS memoises right.
+   These stay out of RECIPES: they are not recipes and have no place in the rotation. */
 const foodMealId = (fid, amt) => 'food:' + fid + ':' + (Math.round(+amt * 100) / 100);
 function parseFoodMeal(id) {
   if (typeof id !== 'string' || id.slice(0, 5) !== 'food:') return null;
@@ -593,10 +587,9 @@ function substitutePlan(fromDate) {
 }
 
 /* ---------- workouts ---------- */
-/* ---------- ordering a session so you are not crossing the gym between every set ----------
-   Equipment is free text on each exercise, so it is matched to a station family. Order matters
-   here: the primary implement wins, which is why "Barbell + bench or hip thrust machine" is
-   barbell and "Cable pulldown station" is cable rather than machine. */
+/* Session ordering, so you are not crossing the gym between sets. Equipment is free text, so it
+   is matched to a station family by primary implement: "Barbell + hip thrust machine" is barbell,
+   "Cable pulldown station" is cable. */
 const EQUIP_FAMILY = [
   ['cable', /\bcable|pulldown|crossover|lat pull/i],
   ['barbell', /\bbarbell|ez[- ]?(curl )?bar|\bsmith|bar in a rack/i],
@@ -624,14 +617,10 @@ function orderByEquipment(rows) {
   const tiers = [0, 1, 2, 3].map(t => units.filter(u => u.tier === t)).filter(a => a.length);
   const out = []; let prev = null;
   tiers.forEach((inTier, ti) => {
-    /* A PR test is a measurement, so its rows hold still: the same lift in the same place every
-       cycle. Grouping them would have let the lookahead below reorder them whenever the rotating
-       exercises underneath changed equipment, which is exactly the drift the test guards against. */
+    /* A PR test measures the same lift every cycle, so its rows never move. */
     if (inTier[0].tier === 0) { inTier.forEach(u => out.push(...u.rows)); prev = equipFamily(out[out.length - 1].ex); return; }
     const fams = []; inTier.forEach(u => { if (!fams.includes(u.fam)) fams.push(u.fam); });
-    /* Chain the tiers at both ends: start on whatever station the last tier finished at, and
-       finish on one the next tier also uses. Without the lookahead a tier could end on a station
-       nobody visits again and the next tier would start the walk over. */
+    /* Chain the tiers at both ends, or each one restarts the walk at a station nobody visits again. */
     const at = fams.indexOf(prev); if (at > 0) { fams.splice(at, 1); fams.unshift(prev); }
     const carried = fams[0] === prev;      // the front is spoken for only if something chained into it
     const next = tiers[ti + 1];
@@ -672,12 +661,9 @@ function repRange(reps) { const m = String(reps).match(/(\d+)\D+(\d+)/); if (m) 
 
 /* ---------- bodyweight stats ---------- */
 function sortedWeights() { return S.weights.slice().sort((a, b) => a.d < b.d ? -1 : 1); }
-/* Zero in a body-fat field means "I have not measured it", never "I have none" — nobody is at 0%
-   and below about 3% is not survivable. Read as a real figure it did real damage: lean mass came
-   out equal to body weight, the goal test `bf <= goalBF` passed at 0 <= 0, so the app announced
-   the goal reached and quietly moved calories to maintenance while the person was 35 lb away.
-   Everything reads body fat through these, so a state already saved with 0 is corrected on load
-   rather than needing the field re-entered. */
+/* Zero body fat means "not measured", never "none". Read as real it made lean mass equal body
+   weight and passed the goal test at 0 <= 0, moving calories to maintenance. Everything reads
+   body fat through these, so a state already saved with 0 is corrected on load. */
 const bfSet = v => +v > 0;
 function startBF() {
   const st = S.settings, pr = S.profile || {};

@@ -1,32 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 // Copyright (C) 2026 Oroshi-zz
 
-/* ============================================================
-   FORGE 90 — Receipt scanning (experimental)
-
-   Photograph a receipt, get its items into the pantry with a use-by date counted from the day
-   they were bought rather than the day they were scanned.
-
-   Measured against a real damaged Costco receipt before any of this was written. What that
-   measurement decided, so nobody re-litigates it from theory:
-
-   - The browser does the preprocessing. Three cheap canvas variants beat any single one,
-     because luminance finds the most lines, a channel maximum erases highlighter over the
-     descriptions, and doing it only where the ink is saturated finds the most item numbers.
-   - Global Otsu, never adaptive. Adaptive thresholding erased thin thermal print entirely:
-     zero to three lines against twenty-five.
-   - No cropping. A perspective warp resamples and loses strokes: seventeen lines against
-     twenty-five for leaving the frame alone.
-   - The server is a dumb OCR proxy. Parsing, merging and matching all happen here, where the
-     browser test suites can reach them.
-   ============================================================ */
+/* Receipt scanning. Photograph a receipt, get its items into the pantry with a use-by date
+   counted from the day they were bought.
+   Preprocessing is in the browser and the server is a dumb OCR proxy, so parsing, merging and
+   matching stay where the test suites can reach them. Three canvas variants beat any one of
+   them; Otsu not adaptive; no cropping. All three were measured, not assumed. */
 
 const RC_PROFILES = {};
 function ST(id, name, p) { RC_PROFILES[id] = Object.assign({ id, name }, p); }
 
-/* Most receipts are the same shape: a name on the left, a price on the right, and a subtotal
-   that ends the items. A named profile exists only where a store departs from that, which is
-   what lets an unrecognised store still parse. */
+/* A named profile exists only where a store departs from the usual shape, so an unknown one still parses. */
 const RC_GENERIC = {
   id: 'generic', name: 'Unknown store', header: null, marks: [],
   item: /^\s*(?<d>.*?[A-Za-z].*?)\s+(?<p>\d{1,4}[.,]\d{2})\s*(?<neg>-?)\s*(?<t>[A-Z]?)\s*$/,
@@ -37,15 +21,11 @@ const RC_GENERIC = {
 };
 
 ST('costco', 'Costco Wholesale', {
-  /* The wordmark is a stylised logo and OCR never returns it as text — the top of a real
-     receipt came out as ". oN / * » %". Detection leans on structural lines instead, which are
-     plain text and survive. Every retailer prints its name as a logo, so this generalises. */
+  /* The wordmark is a logo and OCR returns it as punctuation, so detection leans on structural lines. */
   header: /costco\s*wholesale/i,
   marks: [/Bottom of Basket/i, /BOB\s*Cou?n?t/i, /INSTANT SAVINGS/i,
           /TOTAL NUMBER OF ITEMS SOLD/i, /Costco\s+(Visa|Cash)/i, /Date of Birth\s*=/i],
-  /* A leading E marks the reduced-rate tax code and is missing on standard-rate lines, so it
-     mirrors the trailing code rather than being a field of its own. OCR mangles it constantly,
-     so it is optional and nothing depends on it. */
+  /* The leading E mirrors the trailing tax code. OCR mangles it, so nothing depends on it. */
   item: /^\s*(?<flag>[A-Z3]?)\s*(?<n>\d{4,10})[.,;:]?\s+(?<d>.+?)\s+(?<p>\d{1,4}[.,]\d{2})\s*(?<neg>-?)\s*(?<t>[A-Z£]?)\s*$/,
   disc: /^\//,
   /* Costco prints the date at the very bottom, past the tender block, so the scan has to keep
@@ -64,8 +44,54 @@ ST('costco', 'Costco Wholesale', {
   }
 });
 
-const rcMoney = (s, dec) => parseFloat(String(s).replace(dec === ',' ? /\./g : /,/g, '').replace(',', '.'));
+/* Every Kroger banner prints this receipt, so the profile is the format; `banners` names the
+   one whose wordmark reads. It differs from Costco in four ways: no item numbers, savings
+   already inside the listed price, a balance instead of a subtotal, and quantities on the line
+   above the item. */
+ST('kroger', 'Kroger family store', {
+  banners: [[/fry'?s/i, "Fry's Food Stores"], [/ralphs/i, 'Ralphs'], [/king\s*soopers/i, 'King Soopers'],
+            [/smith'?s/i, "Smith's"], [/dillons/i, 'Dillons'], [/\bQFC\b/, 'QFC'],
+            [/fred\s*meyer/i, 'Fred Meyer'], [/\bkroger\b/i, 'Kroger']],
+  header: /fry'?s|ralphs|king\s*soopers|fred\s*meyer|\bkroger\b|FRESH FOR EVERYONE/i,
+  marks: [/YOUR SAVINGS/i, /\beCpn\b/i, /VIP\s+(Customer|CARD SAVINGS)/i, /Annual Card Savings/i,
+          /Redeem Points in the App/i, /TOTAL SAVINGS\s*\(/i, /frysfood\.com|kroger\.com|ralphs\.com/i,
+          /FRESH FOR EVERYONE/i, /\bFUEL POINTS\b/i],
+  /* The trailing tax letter is what separates an item from a savings line. V marks the card price. */
+  item: /^\s*(?:(?<wt>W[TI1]?)\s+)?(?<d>.*?[A-Za-z].*?)\s+(?<v>[VY])?\s*(?<p>\d{1,4}[.,]\d{2})\s*(?<neg>-?)\s*(?<t>[A-Z])\s*$/,
+  /* Lines that qualify the NEXT item rather than being one. */
+  /* "lb" comes back as "Ib" or "1b" more often than as "lb" on thermal print, so the unit is
+     matched loosely and normalised. */
+  pre: [{ kind: 'weight', re: /^\s*\W*(?<q>\d+[.,]\d+)\s*(?:\(\s*[\d.,]+\s*\))?\s*(?<u>[li1]b|kg|oz)\s*@\s*(?<up>[\d.,]+)\s*\/\s*[li1]?\w/i },
+        { kind: 'multi',  re: /^\s*(?<q>\d+)\s*@\s*\d+\s*\/\s*[\d.,]+\s*$/ }],
+  /* Anchored, or it matches the multi-buy line "1 @ 2/3.00" as a date. The "Date:" line at the
+     foot is deliberately not skipped: it is the cleanest date on the receipt. */
+  date: /^\s*(?:Date:\s*)?(?<a>\d{2})\/(?<b>\d{2})\/(?<c>\d{2})\b/,
+  stop: /^\s*(?:\*{2,}\s*)?BALANCE\b|^\s*TAX\s+\d|^\s*VIP\s+Customer\b/i,
+  skip: [/^\s*S[C0O]\b/i, /YOUR SAVINGS/i, /\beCpn\b/i, /^\s*\d+\s*@\s*\d+\s*\//,
+         /^\s*\W*[\d.,]+\s*(\(.*\))?\s*([li1]b|kg|oz)\s*@/i, /^\s*(TOTAL|VIP|BALANCE|DEBIT|CHANGE|CASHBACK|PURCHASE)\b/i,
+         /^\s*(US\s+)?(DEBIT|CREDIT)\b/i, /^\s*(REF#|AID|IC|APPROVAL|AUTH|TERMINAL|Entry ID)\b/i,
+         /VERIFIED BY/i, /^\s*Annual Card Savings/i, /Redeem Points|FUEL POINTS|REWARDS\b/i,
+         /Points Earned|Total \w+ Points/i, /^\s*(Visit|Go to|or customer service)/i,
+         /^\s*Time\s*:/i, /^\*{3,}$/, /^-{3,}$/, /^\s*X[X*]{3,}/, /^[^A-Za-z0-9]*$/,
+         /With Our Low Prices/i, /FRESH FOR EVERYONE/i],
+  checks: {
+    count:   /TOTAL NUMBER OF ITEMS SOLD\s*[-—:=]*\s*(\d+)/i,
+    balance: /\bBALANCE\s+\$?\s*(\d+[.,]\d{2})/i,
+    tax:     /^\s*TAX\s+\$?\s*(\d+[.,]\d{2})/i
+  },
+  /* No savings check: Kroger prices already include them, so one would fail on every correct scan. */
+  derived: ['subtotal'],
+  derive: c => { if (c.subtotal == null && c.balance != null && c.tax != null) c.subtotal = Math.round((c.balance - c.tax) * 100) / 100; }
+});
 
+/* A lone comma with two digits after it is a decimal point, not a thousands separator: 174,06 was becoming 17406. */
+function rcMoney(s, dec) {
+  let t = String(s).trim();
+  if (dec !== ',' && /^\d{1,4},\d{2}$/.test(t)) t = t.replace(',', '.');
+  return parseFloat(t.replace(dec === ',' ? /\./g : /,/g, '').replace(',', '.'));
+}
+/* A weighed line is worth a real amount in the pantry rather than one notional package. */
+const RC_TO_G = { lb: 453.592, kg: 1000, oz: 28.3495 };
 function rcDetect(lines) {
   const head = lines.slice(0, 14).join('\n'), whole = lines.join('\n');
   let best = RC_GENERIC, top = 0;
@@ -80,8 +106,12 @@ function rcDetect(lines) {
 function rcParse(text) {
   const lines = String(text || '').split('\n').map(l => l.replace(/\s+$/, '')).filter(l => l.trim());
   const P = rcDetect(lines); const dec = P.decimal || '.';
-  const out = { store: P.id, storeName: P.name, date: null, items: [], discounts: [], checks: {} };
-  let ended = false;
+  /* One profile can cover a chain of banners, so the displayed name comes from whichever
+     wordmark actually read, falling back to the family name. */
+  let name = P.name;
+  if (P.banners) { const whole = lines.join('\n'); const hit = P.banners.find(([re]) => re.test(whole)); if (hit) name = hit[1]; }
+  const out = { store: P.id, storeName: name, date: null, items: [], discounts: [], checks: {} };
+  let ended = false, pending = null;
 
   lines.forEach(raw => {
     const line = raw.replace(/[‘’“”]/g, '');
@@ -102,29 +132,43 @@ function rcParse(text) {
         if (+mm >= 1 && +mm <= 12 && +dd >= 1 && +dd <= 31) out.date = iso;
       }
     }
+    /* A quantity line qualifies the item BELOW it, so it is read before the skip takes it out
+       of consideration as an item of its own. */
+    if (P.pre && !ended) {
+      const hit = (P.pre || []).map(x => ({ kind: x.kind, m: line.match(x.re) })).find(x => x.m);
+      if (hit) {
+        const g = hit.m.groups, q = rcMoney(g.q, dec);
+        const u = /^[li1]b$/i.test(String(g.u || '')) ? 'lb' : String(g.u || '').toLowerCase();
+        if (q > 0) pending = hit.kind === 'weight'
+          ? { g: Math.round(q * (RC_TO_G[u] || 0)), unit: u, q }
+          : { count: q };
+        return;
+      }
+    }
     if (skipped) return;
     if (!ended && P.stop.test(line)) { ended = true; return; }
     if (ended) return;
 
     const m = line.match(P.item); if (!m) return;
     const g = m.groups;
-    /* The trailing tax letter is matched so the line end can be anchored, then thrown away. It
-       only classifies food in states with a reduced grocery rate, an unmatched description
-       already routes a non-food item to the same place, and ignoring it makes OCR reading E as
-       a pound sign harmless. */
-    const desc = (g.d || '').replace(/\*+/g, '').trim();
+    /* Matched only to anchor the line end, then discarded; an unmatched description routes a non-food the same way. */
+    /* Leading punctuation is OCR debris from the next column. The slash stays: it marks a Costco discount. */
+    const desc = (g.d || '').replace(/\*+/g, '').replace(/^[^A-Za-z0-9/]+/, '').trim();
     const rec = { n: g.n || '', d: desc, p: rcMoney(g.p, dec) * (g.neg === '-' ? -1 : 1) };
+    if (pending) { if (pending.g > 0) rec.q = pending; pending = null; }
     if (!(Math.abs(rec.p) > 0)) return;
     if (P.disc && P.disc.test(desc)) { rec.ref = desc.slice(1); out.discounts.push(rec); }
     else out.items.push(rec);
   });
+  if (P.derive) P.derive(out.checks);
   return out;
 }
 
 /* ---------- merging several OCR passes ---------- */
-const rcVote = xs => {
+/* Text ties break long (truncation); money ties break short (a lost decimal point makes the wrong value longer). */
+const rcVote = (xs, numeric) => {
   const c = {}; xs.filter(Boolean).forEach(x => { c[x] = (c[x] || 0) + 1; });
-  const b = Object.keys(c).sort((a, z) => c[z] - c[a] || z.length - a.length)[0];
+  const b = Object.keys(c).sort((a, z) => c[z] - c[a] || (numeric ? a.length - z.length : z.length - a.length))[0];
   return b ? { v: b, n: c[b] } : { v: '', n: 0 };
 };
 const rcJunk = s => (String(s).match(/[^A-Z0-9 ./]/gi) || []).length;
@@ -134,20 +178,23 @@ function rcMerge(texts) {
   if (!runs.length) return { store: 'generic', date: null, items: [], discounts: [], suspect: [], checks: {}, sum: 0, reconcile: {} };
 
   const store = rcVote(runs.map(r => r.store)).v;
+  const storeName = rcVote(runs.map(r => r.storeName)).v || (RC_PROFILES[store] || RC_GENERIC).name;
   const date = rcVote(runs.map(r => r.date)).v || null;
   const checks = {};
-  ['subtotal', 'count', 'savings'].forEach(k => {
-    const v = rcVote(runs.map(r => r.checks[k] == null ? null : String(r.checks[k]))).v;
+  ['subtotal', 'count', 'savings', 'balance', 'tax'].forEach(k => {
+    const v = rcVote(runs.map(r => r.checks[k] == null ? null : String(r.checks[k])), k !== 'count').v;
     if (v) checks[k] = +v;
   });
+  /* Derived fields are recomputed from the voted components, or one bad pass carries its whole derivation. */
+  const DP = RC_PROFILES[store];
+  if (DP) { (DP.derived || []).forEach(k => delete checks[k]); if (DP.derive) DP.derive(checks); }
 
-  /* A receipt is an ordered list, and hashing on price collides — this test receipt has three
-     items at 9.99 — so the passes are aligned in sequence instead.
-     This is a full Needleman-Wunsch alignment rather than a greedy forward scan, and that is
-     not over-engineering: a greedy scan desynchronises permanently the first time a price is
-     misread. On the real photo one 9.99 came back as 999.00 and every line after it mismatched,
-     taking the merge from 26 lines to 18. DP absorbs a bad cell as a gap and recovers. */
-  const rcSame = (a, b) => (Math.abs(a.p - b.p) < 0.005 ? 2 : 0) + (a.n && a.n === b.n ? 2 : 0);
+  /* Prices collide, so passes are aligned in sequence. Full Needleman-Wunsch rather than a greedy
+     scan: a greedy scan desynchronises permanently on the first misread price. */
+  /* Kroger has no item numbers and repeats prices, so the first description word has to carry weight too. */
+  const rcHead = s => String(s || '').trim().split(/\s+/)[0].toUpperCase();
+  const rcSame = (a, b) => (Math.abs(a.p - b.p) < 0.005 ? 2 : 0) + (a.n && a.n === b.n ? 2 : 0)
+    + (a.d && b.d && rcHead(a.d) === rcHead(b.d) ? 1 : 0);
   function rcAlign(spine, list) {
     const n = spine.length, m = list.length, GAP = -1;
     const D = []; for (let i = 0; i <= n; i++) { D.push(new Array(m + 1).fill(0)); D[i][0] = i * GAP; }
@@ -175,19 +222,14 @@ function rcMerge(texts) {
     rcAlign(lists[si], list).forEach(([a, b]) => { groups[a].push(list[b]); taken.add(b); });
     list.forEach((x, b) => { if (!taken.has(b)) extra.push(x); });
   });
-  /* Alignment is only ever spine against one other pass, so a line the spine missed can never
-     corroborate itself no matter how many other passes saw it. The leftovers are matched
-     against each other before anything is judged uncorroborated: two passes agreeing on a line
-     the spine dropped is still two passes agreeing. */
+  /* Leftovers are matched against each other first: two passes agreeing on a line the spine missed still counts. */
   const loose = [];
   extra.forEach(x => {
     const g = loose.find(gr => rcSame(gr[0], x) >= 2);
     if (g) g.push(x); else loose.push([x]);
   });
 
-  /* A line only one pass saw is more often noise than a line the others missed, and letting
-     singletons in wrecked the subtotal check — the one thing that tells a user the scan came
-     up short. They are held back rather than counted. */
+  /* A line only one pass saw is usually noise, and letting singletons in wrecked the subtotal check. */
   const items = [], discounts = [], suspect = [];
   groups.concat(loose).forEach(seen => {
     if (runs.length > 1 && seen.length < 2) {
@@ -197,18 +239,18 @@ function rcMerge(texts) {
     const n = rcVote(seen.map(x => x.n));
     const ds = seen.map(x => x.d).filter(Boolean); const dv = rcVote(ds);
     const d = dv.n > 1 ? dv.v : ds.slice().sort((a, b) => rcJunk(a) - rcJunk(b) || b.length - a.length)[0] || '';
-    /* The price is voted on like everything else. Taking the spine's blindly put a 999.00
-       into the basket on the real photo: the passes had grouped correctly on the item number,
-       and the one misread price still won because it happened to be the spine's. */
-    const pv = rcVote(seen.map(x => x.p.toFixed(2)));
+    /* Voted, not taken from the spine: a correctly grouped line can still carry the spine’s misread price. */
+    const pv = rcVote(seen.map(x => x.p.toFixed(2)), true);
     const rec = { n: n.v, d: d, p: +pv.v, agree: seen.length, of: runs.length,
       conf: seen.length === runs.length && n.n === runs.length && dv.n === runs.length && pv.n === runs.length ? 'high' : 'medium' };
+    /* A weight only one pass read is still better than no weight: the alternative is adding a
+       notional package of loose produce to the pantry. */
+    const qv = rcVote(seen.map(x => x.q && x.q.g > 0 ? String(x.q.g) : null));
+    if (qv.v) { const src = seen.find(x => x.q && x.q.g === +qv.v) || { q: {} }; rec.q = { g: +qv.v, unit: src.q.unit || 'lb', q: src.q.q }; }
     if (/^\//.test(rec.d)) { rec.ref = rec.d.slice(1); discounts.push(rec); } else items.push(rec);
   });
 
-  /* The subtotal can arbitrate. If the corroborated lines fall short by exactly the price of a
-     line that was held back, that line was real and one pass simply caught what the others
-     missed. Two at most: beyond that the combinations stop being evidence. */
+  /* If the gap equals a held-back line exactly, that line was real. Two at most, then it stops being evidence. */
   if (checks.subtotal != null) {
     for (let pass = 0; pass < 2 && suspect.length; pass++) {
       const gap = Math.round((checks.subtotal - items.concat(discounts).reduce((a, x) => a + x.p, 0)) * 100) / 100;
@@ -222,7 +264,7 @@ function rcMerge(texts) {
 
   const all = items.concat(discounts);
   const sum = Math.round(all.reduce((a, x) => a + x.p, 0) * 100) / 100;
-  return { store, storeName: (RC_PROFILES[store] || RC_GENERIC).name, date, items, discounts, suspect, checks, sum,
+  return { store, storeName, date, items, discounts, suspect, checks, sum,
     reconcile: {
       subtotal: checks.subtotal == null ? null : Math.abs(sum - checks.subtotal) < 0.005,
       count: checks.count == null ? null : items.length === checks.count,
@@ -231,10 +273,8 @@ function rcMerge(texts) {
 }
 
 /* ---------- turning a receipt line into a food ---------- */
-/* Consonant drops that prefix matching cannot recover. Truncations like TANGERINE JU or BEEF
-   STROGA are NOT listed: a store caps the description and cuts mid-word, so the cut lands
-   somewhere different every time and a list of them never converges. Those are handled by
-   retrying without the final token. */
+/* Consonant drops only. Truncations like TANGERINE JU are not listed: the cut lands somewhere
+   different every time, so they are handled by retrying without the final token. */
 const RC_ABBR = { CHX: 'chicken', CHKN: 'chicken', BCN: 'bacon', CHS: 'cheese', STKS: 'steaks',
   STK: 'steak', TOM: 'tomato', VEG: 'vegetable', YOGT: 'yogurt', MLK: 'milk', WHL: 'whole',
   LTTUNA: 'light tuna', BRST: 'breast', JU: 'juice', ORG: 'organic', PNT: 'peanut' };
@@ -249,11 +289,17 @@ function rcClean(desc) {
   return s.replace(/\s+/g, ' ').trim();
 }
 
-/* Matching order: a mapping the user confirmed for this exact item number wins outright,
-   because the number is stable across receipts and across OCR runs while the description is
-   neither. Only then does the fuzzy matcher get a look. */
+/* Costco prints a stable item number; Kroger prints none, which left every line sharing one key.
+   The cleaned description is the fallback, and # keeps it from colliding with a numeric key. */
+function rcKey(store, line) {
+  if (line.n) return store + ':' + line.n;
+  const c = rcClean(line.d).toLowerCase();
+  return c ? store + ':#' + c : '';
+}
+/* A confirmed mapping wins outright: the key is stable across receipts, a fuzzy match is not. */
 function rcMatchLine(store, line) {
-  const map = (S.rcptMap || {})[store + ':' + line.n];
+  const key = rcKey(store, line);
+  const map = key ? (S.rcptMap || {})[key] : null;
   if (map === 'skip') return { id: '', st: 'skip', sugg: [], learned: true };
   if (map && ING[map]) return { id: map, st: 'ok', score: 1, sugg: [map], learned: true };
   const clean = rcClean(line.d);
@@ -288,8 +334,14 @@ function rcOtsu(d) {
 
 /* The three passes that between them found every line on the test receipt. */
 const RC_VARIANTS = ['lum', 'max', 'desat'];
+/* Scales up as well as down. The body pass capped at 1x, so a low-resolution photo went into
+   tesseract far below the size it wants. The megapixel ceiling keeps a large photo cheap. */
+const RC_MAX_UP = 3, RC_MAX_PX = 16e6;
+function rcScale(img, maxW) {
+  return Math.min((maxW || 2200) / img.width, RC_MAX_UP, Math.sqrt(RC_MAX_PX / (img.width * img.height)));
+}
 function rcVariant(img, kind, maxW) {
-  const scale = Math.min(1, (maxW || 2200) / img.width);
+  const scale = rcScale(img, maxW);
   const c = document.createElement('canvas');
   c.width = Math.max(1, Math.round(img.width * scale));
   c.height = Math.max(1, Math.round(img.height * scale));
@@ -301,9 +353,7 @@ function rcVariant(img, kind, maxW) {
     const mx = r > g ? (r > b ? r : b) : (g > b ? g : b);
     const mn = r < g ? (r < b ? r : b) : (g < b ? g : b);
     const lum = (r * 299 + g * 587 + b * 114) / 1000;
-    /* max of the channels pushes any saturated ink toward white while black print, which is low
-       in every channel, stays black. Applied everywhere it costs line detection, so "desat"
-       applies it only where the ink is actually coloured. */
+    /* Max-of-channels whitens saturated ink but costs line detection, so desat applies it only where ink is coloured. */
     const v = kind === 'max' ? mx : kind === 'desat' ? ((mx - mn) > 70 ? mx : lum) : lum;
     d[i] = d[i + 1] = d[i + 2] = v;
   }
@@ -316,9 +366,7 @@ function rcVariant(img, kind, maxW) {
   return c.toDataURL('image/png').split(',')[1];
 }
 
-/* The footer holds the item count and the savings total, two of the three checksums, and a
-   whole-page pass loses its right-hand column. It gets its own crop, its own upscale and a
-   different page-segmentation mode. */
+/* The footer carries two of the three checksums and loses its right column in a whole-page pass. */
 function rcFooter(img) {
   const top = Math.round(img.height * 0.80), h = img.height - top;
   const s = Math.min(3, 2400 / img.width);
@@ -402,7 +450,7 @@ async function rcRun(file) {
 function rcRowHTML(r, i) {
   const g = r.food && ING[r.food] ? ING[r.food] : null;
   const exp = g ? defaultExp(r.food, RC.date) : null;
-  const raw = `<div class="rc-raw">${esc(r.line.d)}${r.line.n ? `<span class="tiny muted"> · ${esc(r.line.n)}</span>` : ''}</div>`;
+  const raw = `<div class="rc-raw">${esc(r.line.d)}${r.line.n ? `<span class="tiny muted"> · ${esc(r.line.n)}</span>` : ''}${r.line.q && r.line.q.g > 0 ? `<span class="tiny muted"> · ${esc(fmt(r.line.q.q || r.line.q.g / 453.592, 2))} ${esc(r.line.q.unit || 'lb')}</span>` : ''}</div>`;
 
   if (r.skip) return `<div class="rc-row skipped" data-i="${i}">
     <span class="rc-tick off" aria-hidden="true">${icon('x')}</span>
@@ -518,11 +566,16 @@ function rcCommit() {
   const map = S.rcptMap = S.rcptMap || {};
   RC.rows.forEach(r => {
     if (r.skip || !r.on || !r.food || !ING[r.food]) return;
-    pantryAdd(r.food, null, defaultExp(r.food, RC.date), 'receipt');
+    /* A weighed line printed its actual weight, so the pantry gets that rather than a notional
+       package. Only for foods measured by weight: grams mean nothing to a food counted in
+       items, and a food in ml is not what a per-pound line is selling. */
+    const g = ING[r.food];
+    const qty = r.line.q && r.line.q.g > 0 && !g.u && !g.ml ? r.line.q.g : null;
+    pantryAdd(r.food, qty, defaultExp(r.food, RC.date), 'receipt');
     /* Only a line the user left selected teaches the map. An item number is wrong on roughly a
        fifth of lines, and a mapping learned from an unconfirmed read would bind a real product
        to a wrong key permanently and quietly. */
-    if (r.line.n) map[RC.store + ':' + r.line.n] = r.food;
+    const key = rcKey(RC.store, r.line); if (key) map[key] = r.food;
     n++;
   });
   saveState(); rcClose();
@@ -546,7 +599,8 @@ Object.assign(ACT, {
     const r = RC && RC.rows[+el.dataset.i]; if (!r) return;
     /* Undoing a "not food" has to clear what it remembered too, or the next scan silently
        repeats the decision the user just took back. */
-    if (r.skip === 'always' && r.line.n && S.rcptMap) { delete S.rcptMap[RC.store + ':' + r.line.n]; saveState(); }
+    const k = rcKey(RC.store, r.line);
+    if (r.skip === 'always' && k && S.rcptMap) { delete S.rcptMap[k]; saveState(); }
     r.skip = null; r.on = !!r.food; rcRender();
   },
   'rc-skip-all': () => {
@@ -561,7 +615,8 @@ Object.assign(ACT, {
 function rcSkip(i, kind) {
   const r = RC && RC.rows[i]; if (!r) return;
   r.skip = kind; r.on = false;
-  if (kind === 'always' && r.line.n) { S.rcptMap = S.rcptMap || {}; S.rcptMap[RC.store + ':' + r.line.n] = 'skip'; saveState(); }
+  const k = rcKey(RC.store, r.line);
+  if (kind === 'always' && k) { S.rcptMap = S.rcptMap || {}; S.rcptMap[k] = 'skip'; saveState(); }
   closeModal(); rcRender();
 }
 

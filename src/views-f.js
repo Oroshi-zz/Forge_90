@@ -162,9 +162,7 @@ Object.assign(ACT, { 'onb-back': () => { const f = $('form[data-form="onb"]'); i
   } });
 function bfEstimateNote() {
   if (!bfIsEstimated() || S.weights.some(x => bfSet(x.bf))) return '';
-  /* Two different situations, and the difference matters: a figure was never entered at all, or
-     one was estimated from height, age and sex. The first is the one worth being blunt about,
-     because every calorie target and the whole goal projection rest on it. */
+  /* Never entered, or estimated from height, age and sex. The first is worth being blunt about. */
   const missing = !bfSet(S.settings.startBF);
   return `<div class="note warn bf-est-note">${icon('info')}<span>${missing
     ? `No body fat % is set, so it is being <b>estimated</b> at ${fmt(startBF(), 1)}% from your height, age and sex. Calorie targets and goal tracking both work from that figure, so they are approximate until you measure it.`

@@ -22,7 +22,12 @@ function viewWorkouts() {
   const heat = `<table class="tbl heat"><thead><tr><th>Muscle</th>${ALL_PHASES.map(p => `<th style="text-align:center">${p.key === 'test' ? 'Test' : p.name}</th>`).join('')}</tr></thead><tbody>
     ${ws.groups.map(g => `<tr><td style="font-weight:600">${g}</td>${ws.out[g].map(v => { const a = v / maxV; const bg = v ? `color-mix(in srgb, var(--prot) ${Math.round(15 + a * 80)}%, var(--surface-2))` : 'var(--surface-2)'; return `<td class="hc" style="background:${bg};color:${a > .5 ? '#fff' : 'var(--text)'}">${v ? fmt(v, v % 1 ? 1 : 0) : '–'}</td>`; }).join('')}</tr>`).join('')}</tbody></table>`;
   const weeks = []; for (let w = 1; w <= 26 && weeks.length < (ph.key === 'test' ? 1 : 4); w++) if (phaseForWeek(w).key === ph.key) weeks.push(w);
-  const sessions = ph.templates.map((k, si) => { const t = TEMPLATES[k];
+  /* One session at a time: stacking every session of a phase was the largest block on the page. */
+  const sesIdx = Math.min(Math.max(0, +UI.planSession || 0), ph.templates.length - 1);
+  const sesTabs = ph.templates.length < 2 ? '' : `<div class="lib-tabs" role="tablist" aria-label="Session">${ph.templates.map((k, si) => {
+    const t = TEMPLATES[k];
+    return `<button type="button" role="tab" aria-selected="${si === sesIdx}" class="chipb ${si === sesIdx ? 'on' : ''}" data-act="plan-session" data-v="${si}">${esc(t.name)}<span class="n num">${t.rows.reduce((a, r) => a + r[2], 0)}</span></button>`; }).join('')}</div>`;
+  const sessions = ph.templates.filter((k, si) => si === sesIdx).map((k, i) => { const si = sesIdx; const t = TEMPLATES[k];
     return `<div class="card" style="margin-bottom:14px"><div class="card-h"><span class="pill" style="background:${KIND_VAR(t.kind)};color:#fff">${ph.key === 'test' ? (t.kind === 'test' ? 'Test' : 'Deload') : 'Session ' + (si + 1)}</span><h3>${esc(t.name)}</h3><span class="muted small">${t.rows.reduce((a, r) => a + r[2], 0)} sets</span></div><div class="small sub" style="margin:-6px 0 12px">${esc(t.focus)}</div>
       <div class="scroll-x"><table class="tbl"><thead><tr><th>Slot</th><th>Prescription</th>${weeks.map(w => `<th>Week ${w}${phaseForWeek(w).cycle > 1 ? ` <span class="muted" style="text-transform:none;letter-spacing:0">(cycle ${phaseForWeek(w).cycle})</span>` : ''}</th>`).join('')}</tr></thead><tbody>
       ${t.rows.map(r => { const [slot, type, sets, reps, rest, off, note] = r;
@@ -30,17 +35,44 @@ function viewWorkouts() {
           ${weeks.map(w => { const vv = slotVars(slot, w); const exId = vv[((w - 1 + off) % vv.length + vv.length) % vv.length]; const wip = weekInPhase(w); const rir = type === 'T' ? 'top set' : ph.key === 'test' ? 'RIR 3–4' : 'RIR ' + RIR[type][wip - 1];
             const swapped = S.slotSwap && slotSwapsOn(slot, planWeekStart(w)).some(x => x[1] === exId);
             return `<td><div class="var-cell"><span class="ex-name" data-tip-ex="${exId}">${esc(EX[exId].name)}</span><span class="tiny muted">${rir}${swapped ? ' · <span class="swap-mark">swapped</span>' : ''}</span><button type="button" class="swap-btn" data-act="swap-prog" data-slot="${slot}" data-ex="${exId}" title="Swap ${esc(EX[exId].name)} in the program" aria-label="Swap ${esc(EX[exId].name)} in the program">${icon('loop')}</button></div></td>`; }).join('')}</tr>`; }).join('')}</tbody></table></div></div>`; }).join('');
-  const lib = MUSCLE_GROUPS.map(g => {
-    const exs = Object.values(EX).filter(e => exGroupOf(e) === g); const onN = exs.filter(e => !exOffNow(e.id)).length;
-    const cw = curPlanWeekStart(); const inProg = new Set(Object.keys(S.slotSwap || {}).flatMap(sl => SLOTS[sl] ? slotSwapsOn(sl, cw).map(x => x[1]) : []));
-    return `<div style="margin-bottom:18px"><h3 style="margin-bottom:8px">${g} <span class="muted small" style="font-weight:500">· ${onN} of ${exs.length} in rotation</span></h3><div class="grid g4" style="gap:10px">
-      ${exs.map(e => { const on = !exOffNow(e.id); const last = on && onN <= 1;
-        return `<div class="ex-card ${e.custom ? 'custom' : ''} ${on ? '' : 'off'}" data-tip-ex="${e.id}">${muscleMap(e.primary, e.secondary)}<div style="min-width:0;flex:1"><b>${esc(e.name)}</b><span>${esc(e.equip || '—')}</span><div class="row wrap" style="margin-top:4px;gap:4px">${inProg.has(e.id) ? '<span class="pill acc" style="font-size:10.5px">Swapped in</span>' : ''}<span class="pill" style="font-size:10.5px">${e.compound ? 'Compound' : 'Isolation'}</span>${e.custom ? `<span class="pill acc" style="font-size:10.5px">Yours${e.slot && SLOTS[e.slot] ? ' · in rotation' : ''}</span>` : ''}</div>
-          <label class="ex-tog" title="${last ? `This is the only ${g.toLowerCase()} exercise switched on — every muscle group keeps at least one` : on ? 'Switch off to keep it out of your sessions' : 'Switch on to add it back to the rotation'}"><input type="checkbox" data-input="ex-on" data-id="${e.id}" ${on ? 'checked' : ''} ${last ? 'disabled' : ''}><i class="switch ${on ? 'on' : ''}" aria-hidden="true"><i></i></i><span>${on ? (last ? 'Required' : 'In rotation') : 'Off'}</span></label></div>
-        ${e.custom ? `<button class="ex-edit" data-act="ex-edit" data-id="${e.id}" title="Edit exercise" aria-label="Edit ${esc(e.name)}">${icon('edit')}</button>` : ''}</div>`; }).join('')}
-      <button class="ex-card ex-add" data-act="ex-new" data-group="${g === 'Rear delts' ? 'Shoulders' : g}" aria-label="Add a ${g.toLowerCase()} exercise"><span class="plus">${icon('plus')}</span><span>Add ${g === 'Rear delts' ? 'rear delt' : g.toLowerCase()} exercise</span></button></div></div>`; }).join('');
+  /* One group at a time, with a search across all of them: 203 cards was most of the page. */
+  const LIB_TABS = MUSCLE_GROUPS.concat(['Cardio']);
+  const libQ = String(UI.libQ || '').trim();
+  const libWords = libQ.toLowerCase().split(/\s+/).filter(Boolean);
+  const libTab = LIB_TABS.includes(UI.libTab) ? UI.libTab : LIB_TABS[0];
+  const exHay = e => (e.name + ' ' + (e.equip || '') + ' ' + exGroupOf(e)).toLowerCase();
+  const cdHay = c => (c.name + ' ' + (c.how || '') + ' ' + c.group).toLowerCase();
+  const libMatch = h => libWords.every(w => h.includes(w));
+  const exGroup = g => Object.values(EX).filter(e => exGroupOf(e) === g);
+  /* Counts are of the whole group, so a tab says what is in rotation, not what matches your typing. */
+  const libCount = g => { const xs = g === 'Cardio' ? CARDIO_IDS.map(id => CARDIO[id]) : exGroup(g);
+    const on = g === 'Cardio' ? cardioTypes().length : xs.filter(e => !exOffNow(e.id)).length;
+    return [on, xs.length]; };
+  const exCardHTML = (e, g, onN, inProg) => { const on = !exOffNow(e.id); const last = on && onN <= 1;
+    return `<div class="ex-card ${e.custom ? 'custom' : ''} ${on ? '' : 'off'}" data-tip-ex="${e.id}">${muscleMap(e.primary, e.secondary)}<div style="min-width:0;flex:1"><b>${esc(e.name)}</b><span>${esc(e.equip || '—')}</span><div class="row wrap" style="margin-top:4px;gap:4px">${inProg.has(e.id) ? '<span class="pill acc" style="font-size:10.5px">Swapped in</span>' : ''}<span class="pill" style="font-size:10.5px">${e.compound ? 'Compound' : 'Isolation'}</span>${e.custom ? `<span class="pill acc" style="font-size:10.5px">Yours${e.slot && SLOTS[e.slot] ? ' · in rotation' : ''}</span>` : ''}</div>
+        <label class="ex-tog" title="${last ? `This is the only ${g.toLowerCase()} exercise switched on — every muscle group keeps at least one` : on ? 'Switch off to keep it out of your sessions' : 'Switch on to add it back to the rotation'}"><input type="checkbox" data-input="ex-on" data-id="${e.id}" ${on ? 'checked' : ''} ${last ? 'disabled' : ''}><i class="switch ${on ? 'on' : ''}" aria-hidden="true"><i></i></i><span>${on ? (last ? 'Required' : 'In rotation') : 'Off'}</span></label></div>
+      ${e.custom ? `<button class="ex-edit" data-act="ex-edit" data-id="${e.id}" title="Edit exercise" aria-label="Edit ${esc(e.name)}">${icon('edit')}</button>` : ''}</div>`; };
+  const cw = curPlanWeekStart();
+  const inProg = new Set(Object.keys(S.slotSwap || {}).flatMap(sl => SLOTS[sl] ? slotSwapsOn(sl, cw).map(x => x[1]) : []));
+  const libGroup = g => {
+    const all = exGroup(g); const onN = all.filter(e => !exOffNow(e.id)).length;
+    const exs = libWords.length ? all.filter(e => libMatch(exHay(e))) : all;
+    if (libWords.length && !exs.length) return '';
+    return `<div style="margin-bottom:18px">${libWords.length ? `<h3 style="margin-bottom:8px">${g} <span class="muted small" style="font-weight:500">· ${exs.length} match${exs.length === 1 ? '' : 'es'}</span></h3>` : ''}<div class="grid g4" style="gap:10px">
+      ${exs.map(e => exCardHTML(e, g, onN, inProg)).join('')}
+      ${libWords.length ? '' : `<button class="ex-card ex-add" data-act="ex-new" data-group="${g === 'Rear delts' ? 'Shoulders' : g}" aria-label="Add a ${g.toLowerCase()} exercise"><span class="plus">${icon('plus')}</span><span>Add ${g === 'Rear delts' ? 'rear delt' : g.toLowerCase()} exercise</span></button>`}</div></div>`; };
+  const lib = libWords.length
+    ? (MUSCLE_GROUPS.map(libGroup).join('') + cardioLibHTML(libWords, cdHay, libMatch)) || ''
+    : (libTab === 'Cardio' ? cardioLibHTML(null) : libGroup(libTab));
+  const libHits = libWords.length ? (lib.match(/class="ex-card /g) || []).length : 0;
+  const libTabsHTML = `<div class="lib-bar">
+      <div class="rec-search lib-search">${icon('search')}<input class="inp" type="search" placeholder="Search all ${Object.keys(EX).length + CARDIO_IDS.length} exercises…" data-input="libq" value="${esc(libQ)}" aria-label="Search exercises" autocomplete="off"></div>
+      ${libQ ? `<button type="button" class="btn sm ghost" data-act="lib-clear">${icon('x')}Clear</button>` : ''}</div>
+    ${libQ ? `<div class="small muted" style="margin:0 2px 10px">${libHits} exercise${libHits === 1 ? '' : 's'} match “${esc(libQ)}”${libHits ? '' : ' — try a different word.'}</div>`
+      : `<div class="lib-tabs" role="tablist" aria-label="Muscle group">${LIB_TABS.map(g => { const [on, n] = libCount(g);
+          return `<button type="button" role="tab" aria-selected="${g === libTab}" class="chipb ${g === libTab ? 'on' : ''}" data-act="lib-tab" data-v="${esc(g)}">${esc(g)}<span class="n num">${on}/${n}</span></button>`; }).join('')}</div>`}`;
   const libCard = `<div class="card ${collCls('lib')}" data-coll="lib"><div class="card-h">${collHead('lib', 'Exercise library', `<span class="muted small">Hover for step-by-step form · switch exercises on or off · add your own with the + card</span>`)}</div><div class="coll-body">
-      <div class="note" style="margin-bottom:14px">${icon('info')}<span>Switching an exercise off removes it from the rotation from this plan week on (next week if you’ve already logged it this week); past sessions keep what you did. Every muscle group keeps at least one exercise on — if every variation for a slot is off, the plan borrows another switched-on exercise for the same muscles. Research picks start switched off; hover one to see why it’s included.</span></div>${lib}${cardioLibHTML()}</div></div>`;
+      <div class="tiny muted" style="margin:-4px 0 10px" title="Switching one off removes it from this plan week on (next week if you’ve already logged it this week); past sessions keep what you did. If every variation for a slot is off, the plan borrows another switched-on exercise for the same muscles.">Switching one off takes it out of the rotation from this week on — past sessions keep what you did. Every group keeps at least one on. ${icon('info').replace('<svg', '<svg style="width:12px;height:12px;vertical-align:-2px"')}</div>${libTabsHTML}${lib}</div></div>`;
   return `<div class="page-head"><div class="t"><h1>Workout plan</h1><p>A 90-day launch, then repeating 13-week cycles · ${S.settings.trainDays.length} training day${S.settings.trainDays.length === 1 ? '' : 's'} a week (change it below or in <a href="#/settings">Settings</a>) · Push / Pull / Legs — push and pull never share a session. Every muscle group rotates through 3+ exercise variations.</p></div></div>
     ${trainingCardHTML(true)}<div style="height:16px"></div>
     <section class="${collCls('cycle1')}" data-coll="cycle1"><div class="coll-row">${collHead('cycle1', 'Cycle 1 · the 90-day launch')}</div><div class="coll-body"><div class="grid g4">${phaseCards}</div></div></section><div style="height:18px"></div>
@@ -63,7 +95,7 @@ function viewWorkouts() {
     ${libCard}
     <div style="height:16px"></div>
     <section class="${collCls('sessions')}" data-coll="sessions"><div class="coll-row" style="margin-bottom:12px">${collHead('sessions', 'Sessions & rotation', `<div class="seg">${ALL_PHASES.map(p => `<button class="${ph.key === p.key ? 'on' : ''}" data-act="plan-phase" data-v="${p.key}">${p.name}</button>`).join('')}</div>`)}</div>
-    <div class="coll-body"><div class="tiny muted" style="margin:-4px 0 12px">Use ${icon('loop').replace('<svg', '<svg style="width:12px;height:12px;vertical-align:-2px"')} on any exercise to swap it in the program from this week on.</div>${sessions}</div></section>`;
+    <div class="coll-body">${sesTabs}<div class="tiny muted" style="margin:-4px 0 12px">Use ${icon('loop').replace('<svg', '<svg style="width:12px;height:12px;vertical-align:-2px"')} on any exercise to swap it in the program from this week on.</div>${sessions}</div></section>`;
 }
 
 /* ---------------- DIET ---------------- */
@@ -458,19 +490,24 @@ function styleApply(msg) {
 /* Cardio sits in the exercise library with the lifts rather than buried in settings: it is the
    same question (what is in my rotation), asked about the same thing. The switches write to the
    cardio plan's list of kinds, and the library is the only place they live now. */
-function cardioLibHTML() {
+/* Two callers: the Cardio tab, and one more block in a search across every group. */
+function cardioLibHTML(words, hay, match) {
   const on = cardioOn(); const picked = cardioTypes(); const w = latestStats().w;
+  const searching = !!(words && words.length);
   const sec = CARDIO_GROUPS.map(g => {
-    const list = CARDIO_IDS.filter(id => CARDIO[id].group === g); const nOn = list.filter(id => picked.includes(id)).length;
-    return `<div style="margin-bottom:18px"><h3 style="margin-bottom:8px">${esc(g)} <span class="muted small" style="font-weight:500">· ${nOn} of ${list.length} in rotation</span></h3><div class="grid g4" style="gap:10px">
+    const all = CARDIO_IDS.filter(id => CARDIO[id].group === g); const nOn = all.filter(id => picked.includes(id)).length;
+    const list = searching ? all.filter(id => match(hay(CARDIO[id]))) : all;
+    if (searching && !list.length) return '';
+    return `<div style="margin-bottom:18px"><h3 style="margin-bottom:8px">${esc(g)} <span class="muted small" style="font-weight:500">· ${searching ? `${list.length} match${list.length === 1 ? '' : 'es'}` : `${nOn} of ${all.length} in rotation`}</span></h3><div class="grid g4" style="gap:10px">
       ${list.map(id => { const c = CARDIO[id]; const isOn = picked.includes(id); const last = isOn && picked.length <= 1;
         return `<div class="ex-card cd-ex ${c.custom ? 'custom' : ''} ${isOn ? '' : 'off'}" data-tip="${esc(c.how)}"><span class="cd-ic">${icon('heart')}</span><div style="min-width:0;flex:1"><b>${esc(c.name)}</b><span>${esc(c.how)}</span>
           <div class="row wrap" style="margin-top:4px;gap:4px">${c.custom ? '<span class="pill acc" style="font-size:10.5px">Yours</span>' : ''}<span class="pill" style="font-size:10.5px">MET ${c.met}</span><span class="pill" style="font-size:10.5px">~${fmt(cardioKcal(id, 30, w))} kcal / 30 min</span>${c.laps ? '<span class="pill" style="font-size:10.5px">Laps</span>' : ''}</div>
           <label class="ex-tog" title="${last ? 'This is the only kind switched on — the rotation keeps at least one' : isOn ? 'Switch off to keep it out of the rotation' : 'Switch on to add it to the rotation'}"><input type="checkbox" data-input="cd-type" data-v="${id}" ${isOn ? 'checked' : ''} ${last ? 'disabled' : ''}><i class="switch ${isOn ? 'on' : ''}" aria-hidden="true"><i></i></i><span>${isOn ? (last ? 'Required' : 'In rotation') : 'Off'}</span></label></div>
         ${c.custom ? `<button class="ex-edit" data-act="cd-edit" data-id="${id}" title="Edit ${esc(c.name)}" aria-label="Edit ${esc(c.name)}">${icon('edit')}</button>` : ''}</div>`; }).join('')}
-      <button class="ex-card ex-add" data-act="cd-new" data-group="${esc(g)}" aria-label="Add your own ${g.toLowerCase()} cardio"><span class="plus">${icon('plus')}</span><span>Add your own</span></button></div></div>`; }).join('');
-  return `<hr class="sep"><div class="row wrap" style="gap:10px;margin-bottom:10px"><h3 style="margin:0;flex:1">Cardio</h3>${on ? '' : '<span class="pill">Cardio is switched off</span>'}</div>
-    <div class="note" style="margin-bottom:14px">${icon('heart')}<span>${on ? `Your plan rotates through the kinds switched on here, ${cardioPlan().perWeek} time${cardioPlan().perWeek === 1 ? '' : 's'} a week at ${cardioPlan().minutes} minutes. Sessions a week and minutes are in <a href="#/settings/training">Settings</a>. Add your own kind with the + card in any group — it joins the rotation straight away.` : `Switch cardio on in <a href="#/settings/training">Settings</a> to put these in your plan. The burn figures are an estimate from your body weight and the clock, not a measurement.`}</span></div>${sec}`;
+      ${searching ? '' : `<button class="ex-card ex-add" data-act="cd-new" data-group="${esc(g)}" aria-label="Add your own ${g.toLowerCase()} cardio"><span class="plus">${icon('plus')}</span><span>Add your own</span></button>`}</div></div>`; }).join('');
+  if (searching && !sec) return '';
+  return `${searching ? '<hr class="sep"><div class="row wrap" style="gap:10px;margin-bottom:10px"><h3 style="margin:0;flex:1">Cardio</h3></div>' : ''}
+    ${searching ? '' : `<div class="note" style="margin-bottom:14px">${icon('heart')}<span>${on ? `Your plan rotates through the kinds switched on here, ${cardioPlan().perWeek} time${cardioPlan().perWeek === 1 ? '' : 's'} a week at ${cardioPlan().minutes} minutes. Sessions a week and minutes are in <a href="#/settings/training">Settings</a>. Add your own kind with the + card in any group — it joins the rotation straight away.` : `Switch cardio on in <a href="#/settings/training">Settings</a> to put these in your plan. The burn figures are an estimate from your body weight and the clock, not a measurement.`}</span></div>`}${sec}`;
 }
 /* The days picker is its own body so the combined Training card can fold it in. */
 function trainingDaysBodyHTML() { const st = S.settings; const f = setField;
@@ -533,8 +570,7 @@ function bodyGoalsCardHTML() { const st = S.settings; const f = setField; const 
   return `<div class="card"><div class="card-h"><h2>Body & goals</h2></div>
         <div class="set-tog set-units" style="margin-bottom:12px"><b class="small">Units</b><span class="u ${met ? '' : 'on'}">Imperial</span>${sw(met, 'units-tog')}<span class="u ${met ? 'on' : ''}">Metric</span></div>
         <form data-form="body" class="grid g2" style="gap:12px">
-        ${/* Blank rather than 0 when unset: 0 in this field used to read as a measurement, which
-              made lean mass equal body weight and the goal look already met. */''}
+        ${/* Blank, not 0: a 0 here read as a measurement and made the goal look already met. */''}
         ${f(`Starting weight (${wU()})`, 'startWeight', wNum(st.startWeight), 'type="number" step="0.1"')}${f('Starting body fat %', 'startBF', bfSet(st.startBF) ? st.startBF : '', 'type="number" step="0.1" min="0" max="70" placeholder="Leave blank to estimate"')}
         ${goalKind() === 'maintain' ? '' : f(`Goal weight (${wU()})`, 'goalWeight', wNum(st.goalWeight), 'type="number" step="0.1"')}${f('Goal body fat %', 'goalBF', bfSet(st.goalBF) ? st.goalBF : '', 'type="number" step="0.1" min="0" max="70" placeholder="Optional"')}
         ${goalBFWarnHTML()}
@@ -599,8 +635,7 @@ function settingsFootHTML() { return `<div style="margin-top:16px;text-align:cen
   <div class="tiny muted" style="margin-top:14px;text-align:center">FORGE 90 ${APP_VERSION} · <a href="${SOURCE_URL}/blob/main/LICENSE" target="_blank" rel="noopener">AGPL-3.0</a> · <a href="${SOURCE_URL}" target="_blank" rel="noopener">Source code</a></div>`; }
 
 /* ---------------- router ---------------- */
-/* Pantry left this list when it became a tab of Foods & recipes; its expiring-soon badge moved
-   onto that entry. */
+/* Pantry is a tab of Foods & recipes now; its expiring badge moved to that entry. */
 const NAV = [['', 'Dashboard', 'grid'], ['calendar', 'Calendar', 'cal'], ['workouts', 'Workout plan', 'dumbbell'], ['diet', 'Diet plan', 'food'], ['foods', 'Foods & recipes', 'book'], ['grocery', 'Grocery & prep', 'cart'], ['progress', 'Progress', 'trend'], ['settings', 'Settings', 'sliders']];
 function shell() {
   document.body.innerHTML = `<div id="bg" aria-hidden="true"><div class="bg-layer"></div><div class="bg-layer"></div></div><div class="app"><aside class="side"><div class="brand"><a class="brand-link" href="#/" title="FORGE 90 — Dashboard">${LOGO}<b class="wm">FORGE<em>90</em></b></a><button class="side-toggle" data-act="nav-toggle" id="side-toggle"></button></div>
@@ -623,16 +658,13 @@ function render() {
   const h = location.hash.replace(/^#\/?/, ''); const [page, arg] = h.split('/');
   const phone = isPhone(); document.body.classList.toggle('phone', phone);
   if (page === 'plan') { location.replace('#/' + (phone ? (UI.lastPlan || 'calendar') : 'calendar')); return; }
-  /* lastKit can still hold 'pantry' from before it became a tab, so it is checked against the hub
-     rather than trusted. */
+  /* lastKit can still hold a page that is now a tab, so it is checked against the hub. */
   if (page === 'kitchen') { const k = phone && hubOf(String(UI.lastKit || '').split('/')[0]) === 'kitchen' ? UI.lastKit : 'grocery'; location.replace('#/' + k); return; }
   if (page === 'prep' && !phone) { location.replace('#/grocery'); return; }
-  /* The pantry became a tab of Foods & recipes. Old links, bookmarks and the tour still point at
-     #/pantry, so it redirects rather than 404ing to the dashboard. */
+  /* Old links and bookmarks still point at #/pantry, so it redirects rather than falling to the dashboard. */
   if (page === 'pantry') { location.replace('#/foods/pantry'); return; }
   if (phone && hubOf(page) === 'plan' && UI.lastPlan !== page) { UI.lastPlan = page; saveUI(); }
-  /* Remember the tab as well as the page, so coming back to Kitchen returns to the pantry if
-     that is where you were. */
+  /* Remember the tab too, so Kitchen returns to the pantry if that is where you were. */
   if (phone && hubOf(page) === 'kitchen' && page !== 'recipe') { const k = page === 'foods' && arg ? page + '/' + arg : page; if (UI.lastKit !== k) { UI.lastKit = k; saveUI(); } }
   document.body.classList.toggle('compact', !!UI.navCollapsed);
   if (page === 'day' && arg) ensurePlanThrough(arg);
@@ -691,7 +723,13 @@ const ACT = {
   'lib-tab': el => { UI.libTab = el.dataset.v; saveUI(); render(); },
   'lib-filter': el => { UI.libFilter = el.dataset.v; saveUI(); render(); },
   'diet-filter': el => { UI.dietFilter = el.dataset.v; saveUI(); render(); },
-  'plan-phase': el => { UI.planPhase = el.dataset.v; saveUI(); render(); },
+  'plan-phase': el => { UI.planPhase = el.dataset.v; UI.planSession = 0; saveUI(); render(); },
+  'plan-session': el => { UI.planSession = +el.dataset.v; saveUI(); render(); },
+  /* Keeps the scroll position: the library sits far down the page. */
+  'lib-tab': el => { UI.libTab = el.dataset.v; UI.libQ = ''; saveUI(); render(); },
+  'lib-clear': () => { UI.libQ = ''; saveUI(); render(); const i = $('[data-input="libq"]'); if (i) i.focus(); },
+  'food-cat': el => { UI.foodCat = el.dataset.v; UI.foodQ = ''; saveUI(); render(); },
+  'foodq-clear': () => { UI.foodQ = ''; saveUI(); render(); const i = $('[data-input="foodq"]'); if (i) i.focus(); },
   recipe: el => recipeModal(el.dataset.rid),
   'recipe-print': el => printRecipe(el.dataset.rid),
   'cd-per': el => { const c = cardioPlan(); S.settings.cardio = Object.assign(c, { perWeek: clamp(c.perWeek + (+el.dataset.v || 0), 0, 7) }); styleApply('Cardio sessions updated'); },
@@ -785,7 +823,7 @@ document.addEventListener('change', e => {
   }
   else if (inp === 'bg-photos') { S.settings.bgPhotos = el.checked; saveState(); bgCurrent = null; applyBackground(document.body.dataset.sec || 'settings'); render(); toast(el.checked ? 'Background photos on' : 'Background photos off'); }
   else if (inp === 'bg-dim') { S.settings.bgDim = +(1 - el.value).toFixed(2); saveState(); document.documentElement.style.setProperty('--dim', S.settings.bgDim); }
-  else if (inp === 'foodcat') { UI.foodCat = el.value; saveUI(); render(); }
+
   else if (inp === 'bg-file') { const f = el.files[0]; if (!f) return; bgUpload(el.dataset.sec, f); el.value = ''; }
   else if (inp === 'import') {
     const file = el.files[0]; if (!file) return; const rd = new FileReader();
@@ -798,7 +836,9 @@ document.addEventListener('input', e => {
   if (e.target.dataset.input === 'bulkpct') { const v = +e.target.value; const pill = $('#rate-pill'); if (pill) pill.textContent = fmt(v, 2) + ' % / week'; const prev = S.settings.bulkPct; S.settings.bulkPct = v; const ri = $('#rate-info'); if (ri) ri.innerHTML = bulkInfoHTML(v); S.settings.bulkPct = prev; }
   if (e.target.dataset.input === 'bg-dim') document.documentElement.style.setProperty('--dim', 1 - e.target.value);
   if (e.target.dataset.input === 'recq') { UI.recQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('[data-input="recq"]'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) { } } return; }
-  if (e.target.dataset.input === 'foodq') { UI.foodQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('[data-input="foodq"]'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } return; }
+  /* A full render replaces the input, so the caret has to be put back. */
+  if (e.target.dataset.input === 'libq') { UI.libQ = e.target.value; saveUI(); const pos = e.target.selectionStart; render(); const n = $('[data-input="libq"]'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) { } } return; }
+  if (e.target.dataset.input === 'foodq') { UI.foodQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('[data-input="foodq"]'); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch (x) { } } return; }
   if (e.target.dataset.input === 'libq') { UI.libQ = e.target.value; const pos = e.target.selectionStart; render(); const n = $('[data-input="libq"]'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } } });
 document.addEventListener('submit', e => {
   const f = e.target; const kind = f.dataset.form; if (!kind) return; e.preventDefault(); const fd = new FormData(f);
@@ -816,8 +856,7 @@ document.addEventListener('submit', e => {
         UI.calMonth = null; UI.calWeek = null; UI.groWeek = null; UI.groWeekFor = null; S.grocery = {}; saveUI(); saveState(); render(); toast('Plan rebuilt'); };
       if (syncActive()) syncFetch(true).then(go); else go(); });
   } else if (kind === 'body' || kind === 'nut') {
-    /* Clearing the body-fat field, or typing 0 into it, means "I have not measured this" — so the
-       height/age/sex estimate comes back rather than the app recording a measurement of zero. */
+    /* Blank or 0 means "not measured", so the estimate comes back rather than a recorded zero. */
     if (kind === 'body') {
       const typed = fd.get('startBF');
       if (!bfSet(typed)) S.settings.bfEstimated = true;
